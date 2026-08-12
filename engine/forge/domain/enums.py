@@ -219,6 +219,22 @@ class ExtractionStatus(str, Enum):
     SKIPPED_CACHED = "skipped_cached"
 
 
+class IdentityState(str, Enum):
+    """How an extracted name relates to canonical concept identity.
+
+    Finer-grained than :class:`MatchKind`, which describes the matcher's
+    *action*; this describes the *evidence* for identity, so a reviewer can
+    see whether a match rests on an exact name, a registered alias, or a
+    user's explicit decision.
+    """
+
+    EXACT_MATCH = "exact_match"
+    ALIAS_MATCH = "alias_match"
+    RESOLVED_BY_USER = "resolved_by_user"
+    NEW = "new"
+    AMBIGUOUS = "ambiguous"
+
+
 class MatchKind(str, Enum):
     """Result of matching an extracted concept against existing concepts.
 
@@ -240,8 +256,18 @@ class ProposalType(str, Enum):
 
 
 class ProposalStatus(str, Enum):
+    """Proposal lifecycle.
+
+    ``ACTIVATED`` is distinct from ``APPROVED`` on purpose. Approval is a
+    human decision; activation is the persistence of canonical knowledge that
+    followed from it. Collapsing them would make "approved" ambiguous about
+    whether anything actually exists in the model — and would let a failed
+    write masquerade as success.
+    """
+
     PENDING = "pending"
     APPROVED = "approved"
+    ACTIVATED = "activated"
     REJECTED = "rejected"
     SUPERSEDED = "superseded"
 

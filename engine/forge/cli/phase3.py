@@ -1,0 +1,615 @@
+"""Phase 3 CLI: activation, identity, graph, evaluation, embeddings.
+
+Registered onto the existing app, so Phase 1 and Phase 2 commands are
+unchanged. Every command supports ``--json`` and returns a non-zero exit code
+on failure, so the whole workflow is scriptable.
+"""
+
+from __future__ import annotations
+
+import json as jsonlib
+from pathlib import Path
+from typing import Any, Optional
+
+import typer
+
+from ..activation import ProposalActivator, RelationshipActivator
+from ..domain import LinkType, ProposalStatus, ProposalType, SafetyClass
+from ..embeddings import HashingEmbeddingProvider, NullEmbeddingProvider, OllamaEmbeddingProvider
+from ..evaluation import DEFAULT_DATASET, EvalDataset, RetrievalEvaluator
+from ..graph import KnowledgeGraph, check_integrity
+from ..identity import IdentityConfig, IdentityService
+from ..matching import build_ambiguity_index
+from ..proposals import ProposalService
+from ..retrieval import SearchService
+from ..storage.sqlite_store import SqliteStore
+
+graph_app = typer.Typer(no_args_is_help=True, help="Traverse and inspect the knowledge graph.")
+identity_app = typer.Typer(
+    no_args_is_help=True, help="Record explicit decisions about concept naming."
+)
+embeddings_app = typer.Typer(no_args_is_help=True, help="Optional local embeddings.")
+
+
+def _emit(payload: Any, as_json: bool) -> bool:
+    if as_json:
+        typer.echo(jsonlib.dumps(payload, indent=2, sort_keys=True, default=str))
+        return True
+    return False
+
+
+def _identity_service(settings: Any) -> IdentityService:
+    return IdentityService(IdentityConfig.load(settings.vault_path / "config" / "concept-identity.yaml"))
+
+
+def _embedding_provider(settings: Any, name: str):
+    if name == "hashing":
+        return HashingEmbeddingProvider()
+    if name == "ollama":
+        return OllamaEmbeddingProvider(settings.llm.base_url)
+    return NullEmbeddingProvider()
+
+
+def register(app: typer.Typer, settings_factory: Any) -> None:
+    """Attach Phase 3 commands."""
+
+    # -- activation --------------------------------------------------------
+
+    @app.command()
+    def activate(
+        proposal_id: Optional[str] = typer.Argument(
+            None, help="Proposal to activate. Omit to activate every approved proposal."
+        ),
+        vault: Optional[Path] = typer.Option(None),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Turn approved proposals into canonical Concepts and Claims."""
+        settings = settings_factory(vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        activator = ProposalActivator(store, identity=_identity_service(settings))
+
+        if proposal_id:
+            proposal, ambiguous = ProposalService(store).resolve(proposal_id)
+            if proposal is None:
+                typer.echo(
+                    f"{proposal_id!r} matches {len(ambiguous)} proposals"
+                    if ambiguous
+                    else f"no proposal {proposal_id!r}",
+                    err=True,
+                )
+                store.close()
+                raise typer.Exit(code=1)
+            report = activator.activate_all([proposal])
+        else:
+            report = activator.activate_approved()
+
+        if _emit(report.to_dict(), json_out):
+            store.close()
+            return
+
+        if not report.results:
+            typer.echo("nothing to activate (no approved proposals awaiting activation)")
+        for result in report.results:
+            marker = {"created": "+", "already_active": "=", "refused": "-", "failed": "!"}[
+                result.outcome.value
+            ]
+            typer.echo(f"[{marker}] {result.proposal_id[:12]}  {result.outcome.value}")
+            typer.echo(f"      {result.reason}")
+        typer.echo(f"\ncounts: {report.counts()}")
+        store.close()
+
+        if report.failed:
+            raise typer.Exit(code=1)
+
+    @app.command()
+    def relationships(
+        vault: Optional[Path] = typer.Option(None),
+        min_cooccurrence: int = typer.Option(2, help="Shared spans required for RELATED_TO."),
+        apply: bool = typer.Option(False, "--apply", help="Create the relationships."),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Discover evidence-backed concept relationships. Dry-run by default."""
+        settings = settings_factory(vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        activator = RelationshipActivator(store, min_cooccurrence=min_cooccurrence)
+
+        candidates = activator.discover_cooccurrence()
+        names = {c.id: c.qualified_name for c in store.list_concepts()}
+
+        if not apply:
+            payload = {
+                "dry_run": True,
+                "candidates": [
+                    {**c.to_dict(), "from_name": names.get(c.from_concept_id), "to_name": names.get(c.to_concept_id)}
+                    for c in candidates
+                ],
+            }
+            if not _emit(payload, json_out):
+                typer.echo(f"{len(candidates)} candidate relationship(s) — nothing created (pass --apply)")
+                for c in candidates:
+                    typer.echo(
+                        f"  {names.get(c.from_concept_id, c.from_concept_id)} <-> "
+                        f"{names.get(c.to_concept_id, c.to_concept_id)}  "
+                        f"[{c.type.value}] {c.rationale}"
+                    )
+            store.close()
+            return
+
+        report = activator.activate(candidates)
+        if not _emit(report.to_dict(), json_out):
+            typer.echo(
+                f"considered {report.candidates_considered}, created {report.created}, "
+                f"already present {report.already_present}, rejected {len(report.rejected)}"
+            )
+            for rejection in report.rejected[:10]:
+                typer.echo(f"  rejected: {rejection['reason']}")
+        store.close()
+
+    # -- knowledge lookups -------------------------------------------------
+
+    @app.command()
+    def concept(
+        name: str = typer.Argument(..., help="Concept name, optionally namespace/Name."),
+        vault: Optional[Path] = typer.Option(None),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Show a canonical concept: origin, evidence, claims, relationships."""
+        settings = settings_factory(vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        graph = KnowledgeGraph(store)
+
+        namespace, _, bare = name.rpartition("/")
+        matches = store.concepts_named(bare)
+        if namespace:
+            matches = [c for c in matches if c.namespace == namespace]
+        if not matches:
+            matches = [c for c in SearchService(store).concepts(bare, limit=5)]
+
+        if not matches:
+            typer.echo(f"no concept named {name!r}", err=True)
+            store.close()
+            raise typer.Exit(code=1)
+
+        if len(matches) > 1 and not namespace:
+            # Two concepts share this bare name. Show both rather than picking.
+            payload = {
+                "ambiguous": True,
+                "candidates": [c.qualified_name for c in matches],
+            }
+            if not _emit(payload, json_out):
+                typer.echo(f"{name!r} names {len(matches)} distinct concepts — specify one:")
+                for c in matches:
+                    typer.echo(f"  {c.qualified_name}   ({c.kind.value})")
+            store.close()
+            return
+
+        detail = graph.explain_concept(matches[0].id)
+        if _emit(detail, json_out):
+            store.close()
+            return
+
+        info = detail["concept"]
+        typer.echo(f"concept   : {info['qualified_name']}  [{info['kind']}]")
+        if info["aliases"]:
+            typer.echo(f"aliases   : {', '.join(info['aliases'])}")
+        if info["vault_path"]:
+            typer.echo(f"vault     : {info['vault_path']}")
+        prov = detail["provenance"]
+        typer.echo(
+            f"provenance: {prov['tier']} via {prov['derivation']}"
+            + (f" ({prov['model_id']})" if prov["model_id"] else "")
+        )
+        if origin := detail["origin_proposal"]:
+            typer.echo(
+                f"origin    : proposal {origin['id'][:12]} [{origin['status']}] "
+                f"decided by {origin['decided_by']}"
+            )
+            typer.echo(f"            {origin['reason']}")
+        if detail["origin_spans"]:
+            typer.echo("evidence  :")
+            for span in detail["origin_spans"]:
+                typer.echo(f"  {span['citation']}")
+                typer.echo(f"    {span['text'][:100]}")
+        if detail["claims"]:
+            typer.echo("claims    :")
+            for claim in detail["claims"]:
+                typer.echo(f"  [{claim['tier']}] {claim['statement']}")
+        if detail["relationships"]:
+            typer.echo("related   :")
+            for rel in detail["relationships"]:
+                typer.echo(f"  -[{rel['type']}]- {rel['label']}  ({rel['rationale']})")
+        store.close()
+
+    @app.command()
+    def claim(
+        claim_id: str = typer.Argument(..., help="Claim id (may be abbreviated)."),
+        vault: Optional[Path] = typer.Option(None),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Show a claim and walk its evidence back to the source page."""
+        settings = settings_factory(vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+
+        found = store.get_claim(claim_id) or next(
+            (c for c in store.list_claims() if c.id.startswith(claim_id)), None
+        )
+        if found is None:
+            typer.echo(f"no claim {claim_id!r}", err=True)
+            store.close()
+            raise typer.Exit(code=1)
+
+        evidence = KnowledgeGraph(store).get_claim_evidence(found.id)
+        payload = {
+            "id": found.id,
+            "statement": found.statement,
+            "status": found.status.value,
+            "tier": found.provenance.tier.value,
+            "derivation": found.provenance.derivation.value,
+            "model_id": found.provenance.model_id,
+            "origin_proposal_id": found.origin_proposal_id,
+            "subject_concept_id": found.subject_concept_id,
+            "evidence": evidence,
+        }
+        if _emit(payload, json_out):
+            store.close()
+            return
+
+        typer.echo(f"claim     : {found.statement}")
+        typer.echo(f"tier      : {found.provenance.tier.value} ({found.provenance.derivation.value})")
+        typer.echo(f"status    : {found.status.value}")
+        if found.origin_proposal_id:
+            typer.echo(f"origin    : proposal {found.origin_proposal_id[:12]}")
+        typer.echo("evidence  :")
+        for item in evidence:
+            typer.echo(f"  [{item['relation']}] {item['citation']}")
+            typer.echo(f"      source : {item['source_id'][:12] if item['source_id'] else '?'} "
+                       f"({item['source_kind']}, {item['trust_tier']})")
+            if item["text"]:
+                typer.echo(f"      text   : {item['text'][:120]}")
+        store.close()
+
+    # -- graph -------------------------------------------------------------
+
+    app.add_typer(graph_app, name="graph")
+
+    @graph_app.command("show")
+    def graph_show(
+        entity: str = typer.Argument(..., help="Concept name or entity id."),
+        vault: Optional[Path] = typer.Option(None),
+        depth: int = typer.Option(2, help="Traversal depth (bounded)."),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Show a concept's neighbourhood, bounded by depth."""
+        settings = settings_factory(vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        graph = KnowledgeGraph(store)
+
+        target = _resolve_entity(store, entity)
+        if target is None:
+            typer.echo(f"no concept or entity {entity!r}", err=True)
+            store.close()
+            raise typer.Exit(code=1)
+
+        neighbors = graph.get_neighbors(target)
+        related = graph.get_related_concepts(target, max_depth=depth)
+        payload = {
+            "entity_id": target,
+            "neighbors": [n.to_dict() for n in neighbors],
+            "related_within_depth": [
+                {"concept": c.qualified_name, "distance": d} for c, d in related
+            ],
+        }
+        if _emit(payload, json_out):
+            store.close()
+            return
+
+        concept_obj = store.get_concept(target)
+        typer.echo(f"entity: {concept_obj.qualified_name if concept_obj else target}")
+        typer.echo(f"direct neighbours ({len(neighbors)}):")
+        for n in neighbors:
+            typer.echo(f"  -[{n.link.type.value}]-> {n.label}   {n.link.rationale or ''}")
+        if related:
+            typer.echo(f"reachable within depth {depth}:")
+            for c, d in related:
+                typer.echo(f"  {d} hop(s): {c.qualified_name}")
+        store.close()
+
+    @graph_app.command("path")
+    def graph_path(
+        source: str = typer.Argument(...),
+        target: str = typer.Argument(...),
+        vault: Optional[Path] = typer.Option(None),
+        max_depth: int = typer.Option(3),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Find the shortest path between two entities, within a depth bound."""
+        settings = settings_factory(vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        graph = KnowledgeGraph(store)
+
+        src, tgt = _resolve_entity(store, source), _resolve_entity(store, target)
+        if src is None or tgt is None:
+            typer.echo(f"could not resolve {'source' if src is None else 'target'}", err=True)
+            store.close()
+            raise typer.Exit(code=1)
+
+        path = graph.find_path(src, tgt, max_depth=max_depth)
+        payload = {
+            "found": path is not None,
+            "max_depth": max_depth,
+            "path": path.to_dict() if path else None,
+        }
+        if not _emit(payload, json_out):
+            if path is None:
+                typer.echo(f"no path within {max_depth} hops (this does not prove none exists)")
+            else:
+                labels = graph.node_labels(path.nodes)
+                typer.echo(path.describe(labels))
+        store.close()
+
+    @graph_app.command("stats")
+    def graph_stats(
+        vault: Optional[Path] = typer.Option(None),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Measure the graph. These numbers decide whether Neo4j is ever needed."""
+        settings = settings_factory(vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        metrics = KnowledgeGraph(store).metrics()
+
+        if not _emit(metrics.to_dict(), json_out):
+            data = metrics.to_dict()
+            for key in (
+                "nodes",
+                "edges",
+                "max_degree",
+                "mean_degree",
+                "branching_factor",
+                "isolated_nodes",
+                "neighbor_query_ms",
+                "path_query_ms",
+            ):
+                typer.echo(f"{key:20}: {data[key]}")
+            typer.echo(f"{'by_type':20}: {data['by_type']}")
+        store.close()
+
+    # -- identity ----------------------------------------------------------
+
+    app.add_typer(identity_app, name="identity")
+
+    @identity_app.command("scaffold")
+    def identity_scaffold(
+        vault: Optional[Path] = typer.Option(None),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Record the vault's name collisions in the identity file, undecided."""
+        from ..corpus.indexer import CorpusIndexer
+
+        settings = settings_factory(vault)
+        service = _identity_service(settings)
+        index = build_ambiguity_index(CorpusIndexer(settings).discover())
+        added, skipped = service.scaffold(index)
+        path = service.config.save(settings.vault_path / "config" / "concept-identity.yaml")
+
+        payload = {
+            "added": added,
+            "skipped_existing": skipped,
+            "path": str(path),
+            "unresolved": [r.name for r in service.unresolved()],
+        }
+        if not _emit(payload, json_out):
+            typer.echo(f"documented {added} collision(s), preserved {skipped} existing decision(s)")
+            typer.echo(f"written to {path}")
+            typer.echo("\nNothing was decided. Resolve one with:")
+            typer.echo("  forge identity decide <name> <namespace>/<Name>")
+
+    @identity_app.command("list")
+    def identity_list(
+        vault: Optional[Path] = typer.Option(None),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """List known collisions and how they are resolved."""
+        settings = settings_factory(vault)
+        service = _identity_service(settings)
+        payload = {
+            "collisions": [r.to_dict() for r in service.config.collisions.values()],
+            "aliases": service.alias_map(),
+        }
+        if _emit(payload, json_out):
+            return
+        if not service.config.collisions:
+            typer.echo("no collisions recorded — run `forge identity scaffold`")
+        for resolution in service.config.collisions.values():
+            status = resolution.default or "UNDECIDED"
+            typer.echo(f"{resolution.name:<20} -> {status}")
+            for identity in resolution.identities:
+                marker = "*" if identity.qualified_name == resolution.default else " "
+                typer.echo(f"   {marker} {identity.qualified_name:<28} {identity.vault_path or ''}")
+
+    @identity_app.command("decide")
+    def identity_decide(
+        name: str = typer.Argument(..., help="The colliding name, e.g. Heap."),
+        qualified: str = typer.Argument(..., help="Chosen identity, e.g. data-structure/Heap."),
+        vault: Optional[Path] = typer.Option(None),
+        by: str = typer.Option("cli"),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Decide which identity a bare name means."""
+        settings = settings_factory(vault)
+        service = _identity_service(settings)
+        try:
+            resolution = service.decide(name, qualified, by=by)
+        except (KeyError, ValueError) as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=1)
+        path = service.config.save(settings.vault_path / "config" / "concept-identity.yaml")
+
+        if not _emit({**resolution.to_dict(), "path": str(path)}, json_out):
+            typer.echo(f"{name!r} now resolves to {qualified!r}")
+            typer.echo(f"recorded in {path}")
+
+    @identity_app.command("clear")
+    def identity_clear(
+        name: str = typer.Argument(...),
+        vault: Optional[Path] = typer.Option(None),
+    ) -> None:
+        """Return a decided collision to the undecided state."""
+        settings = settings_factory(vault)
+        service = _identity_service(settings)
+        try:
+            service.clear(name)
+        except KeyError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=1)
+        service.config.save(settings.vault_path / "config" / "concept-identity.yaml")
+        typer.echo(f"{name!r} is undecided again")
+
+    # -- embeddings --------------------------------------------------------
+
+    app.add_typer(embeddings_app, name="embeddings")
+
+    @embeddings_app.command("status")
+    def embeddings_status(
+        vault: Optional[Path] = typer.Option(None),
+        provider: str = typer.Option("ollama", help="ollama | hashing | none"),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Report embedding availability and the retrieval degradation mode."""
+        settings = settings_factory(vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        embedder = _embedding_provider(settings, provider)
+        service = SearchService(store, embeddings=embedder)
+
+        payload = {
+            "provider": provider,
+            "model_id": embedder.model_id,
+            "dimensions": embedder.dimensions,
+            "available": embedder.available,
+            "stored_vectors": store.count_embeddings(),
+            "semantic_available": service.semantic_available,
+            "degradation": service.degradation_note(),
+        }
+        if not _emit(payload, json_out):
+            for key, value in payload.items():
+                typer.echo(f"{key:20}: {value}")
+        store.close()
+
+    @embeddings_app.command("build")
+    def embeddings_build(
+        vault: Optional[Path] = typer.Option(None),
+        provider: str = typer.Option("hashing", help="ollama | hashing"),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Embed every stored span. Optional — lexical retrieval works without it."""
+        settings = settings_factory(vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        embedder = _embedding_provider(settings, provider)
+        service = SearchService(store, embeddings=embedder)
+
+        if not embedder.available:
+            typer.echo(
+                f"provider {provider!r} unavailable; lexical retrieval continues unaffected",
+                err=True,
+            )
+            store.close()
+            raise typer.Exit(code=1)
+
+        spans = []
+        for source in store.list_sources():
+            for document in store.documents_for_source(source.id):
+                spans.extend(store.spans_for_document(document.id))
+        embedded = service.index_embeddings(spans)
+
+        payload = {"provider": provider, "model_id": embedder.model_id, "embedded": embedded}
+        if not _emit(payload, json_out):
+            typer.echo(f"embedded {embedded} span(s) with {embedder.model_id}")
+        store.close()
+
+    # -- evaluation --------------------------------------------------------
+
+    @app.command(name="retrieval-eval")
+    def retrieval_eval(
+        vault: Optional[Path] = typer.Option(None),
+        dataset: Optional[Path] = typer.Option(None, help="Labelled query set."),
+        methods: str = typer.Option("lexical", help="Comma-separated: lexical,semantic,hybrid"),
+        provider: str = typer.Option("hashing", help="Embedding provider for semantic/hybrid."),
+        detail: bool = typer.Option(False, help="Include per-query scores."),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Measure retrieval against the labelled evaluation set."""
+        settings = settings_factory(vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+
+        # The default set lives in the repository, so resolve it against the
+        # vault rather than the working directory — otherwise the command only
+        # works when run from the repository root.
+        target = dataset or (settings.vault_path / DEFAULT_DATASET)
+        try:
+            data = EvalDataset.load(target)
+        except Exception as exc:
+            typer.echo(str(exc), err=True)
+            store.close()
+            raise typer.Exit(code=2)
+
+        rotted = data.verify_labels(settings.vault_path)
+        wanted = tuple(m.strip() for m in methods.split(",") if m.strip())
+        embedder = _embedding_provider(settings, provider) if wanted != ("lexical",) else None
+
+        run = RetrievalEvaluator(store, embeddings=embedder).run(data, methods=wanted)
+        payload = run.to_dict(include_scores=detail)
+        payload["label_rot"] = rotted
+
+        if _emit(payload, json_out):
+            store.close()
+            return
+
+        typer.echo(f"dataset: {data.path} (v{data.version}, {len(data)} queries, {data.label_count()} labels)")
+        typer.echo(f"categories: {data.categories()}")
+        if rotted:
+            typer.echo(f"WARNING: {len(rotted)} label(s) no longer resolve: {rotted[:3]}")
+        typer.echo("")
+        for summary in run.summaries:
+            typer.echo("  " + summary.headline())
+        if run.comparisons:
+            typer.echo("\nvs lexical baseline:")
+            for comparison in run.comparisons:
+                typer.echo(f"  {comparison['candidate']:<20} {comparison['verdict']:<24} {comparison['deltas']}")
+        for note in run.notes:
+            typer.echo(f"\nnote: {note}")
+        if detail:
+            typer.echo("\nper-category (best method):")
+            best = run.best()
+            if best:
+                for category, values in best.by_category.items():
+                    typer.echo(
+                        f"  {category:18} R@5={values['recall@5']:.3f} "
+                        f"R@10={values['recall@10']:.3f} MRR={values['mrr']:.3f}"
+                    )
+        store.close()
+
+
+def _resolve_entity(store: SqliteStore, token: str) -> str | None:
+    """Resolve a concept name, qualified name, or raw id to an entity id."""
+    if store.get_concept(token) is not None:
+        return token
+    namespace, _, bare = token.rpartition("/")
+    matches = store.concepts_named(bare)
+    if namespace:
+        matches = [c for c in matches if c.namespace == namespace]
+    if len(matches) == 1:
+        return matches[0].id
+    if matches:
+        return matches[0].id
+    if store.get_claim(token) is not None:
+        return token
+    return None

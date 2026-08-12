@@ -291,7 +291,25 @@ forge proposals show <id>              # full detail incl. evidence
 forge proposals approve <id>           # records the decision only
 forge proposals approve <id> --apply   # ALSO writes to the vault
 forge proposals reject <id> --note "wrong"
+forge proposals approve-all --safety deterministic_verified          # dry run
+forge proposals approve-all --safety deterministic_verified --no-dry-run
 ```
+
+**Batch approval is guarded twice.** `approve-all` is a dry run by default —
+it prints what *would* be approved and decides nothing until `--no-dry-run`.
+And it refuses ambiguous proposals outright:
+
+```
+$ forge proposals approve-all --safety ambiguous
+refusing to bulk-approve ambiguous proposals; pass --include-ambiguous
+if that is genuinely what you want
+$ echo $?
+2
+```
+
+Bulk-approving an ambiguous semantic proposal is approving a decision nobody
+made. Safety class stays derived from provenance and evidence — a model cannot
+assert it about its own output.
 
 `show` prints the change as a diff, the reason, its origin (deterministic vs
 which model), the evidence spans with citations, and — for ambiguous concepts —
@@ -319,6 +337,178 @@ none of them and lists the candidates.
 
 ---
 
+## `forge activate [proposal]`
+
+Turn approved proposals into canonical Concepts and Claims. With no argument,
+activates every approved proposal awaiting activation.
+
+```bash
+forge activate                    # all approved proposals
+forge activate 4t5k5g9us655       # one (ids may be abbreviated)
+forge activate --json
+```
+
+Four outcomes, none of them silent:
+
+```
+[+] 4t5k5g9us65  created
+      created concept 'Retrieval Augmented Generation'
+[=] 9e3b45dcuk63  already_active
+      concept 'Chunking Strategy' already exists
+[-] 71fb28cc0a11  refused
+      'Heap' is an unresolved collision and cannot be activated;
+      decide it first: forge identity decide 'Heap' <one of [...]>
+[!] 33ad91bb7e02  failed
+      OperationalError: database is locked
+```
+
+`failed` leaves the proposal `APPROVED` so the same command retries it, and
+exits non-zero. Activation is idempotent: running it twice creates nothing the
+second time. **Nothing is written to Markdown** — canonical knowledge lives in
+the derived store.
+
+---
+
+## `forge concept <name>` / `forge claim <id>`
+
+Ask what Forge knows, and why.
+
+```bash
+forge concept "Retrieval Augmented Generation"
+forge concept data-structure/Heap        # qualified, when the name collides
+forge claim 3umn0uf7g0hd --json
+```
+
+`concept` prints the origin proposal, the evidence spans that caused it, its
+claims, and its relationships. If a bare name matches several concepts it
+**lists them and picks none**:
+
+```
+$ forge concept Heap
+'Heap' names 2 distinct concepts — specify one:
+  data-structure/Heap   (data_structure)
+  pattern/Heap          (pattern)
+```
+
+`claim` walks the chain the other way — claim → evidence → span → page →
+document → source — with the citation and trust tier at each step.
+
+---
+
+## `forge relationships`
+
+Discover evidence-backed relationships between concepts. **Dry run by default.**
+
+```bash
+forge relationships                       # show candidates, create nothing
+forge relationships --apply
+forge relationships --min-cooccurrence 3  # raise the evidence bar
+```
+
+Rejections are printed with their reason, because the refusals are the point:
+
+```
+considered 3, created 1, rejected 2
+  rejected: only 1 shared span(s); RELATED_TO requires at least 2
+```
+
+---
+
+## `forge graph`
+
+```bash
+forge graph show "Retrieval Augmented Generation" --depth 2
+forge graph path "Chunking Strategy" "Vector Database" --max-depth 3
+forge graph stats --json
+```
+
+Every traversal is bounded by depth **and** a node budget. `path` reports
+absence honestly:
+
+```
+no path within 3 hops (this does not prove none exists)
+```
+
+`stats` prints the measurements that decide whether a graph database is ever
+justified — node and edge counts, branching factor, and query latency in
+milliseconds.
+
+---
+
+## `forge identity`
+
+Record explicit decisions about colliding concept names. No LLM is involved.
+
+```bash
+forge identity scaffold                          # document collisions, decide none
+forge identity list
+forge identity decide Heap data-structure/Heap
+forge identity clear Heap                        # back to undecided
+```
+
+`scaffold` writes `config/concept-identity.yaml` with every collision found in
+the vault and **no defaults set**. Re-running it preserves decisions already
+made. `decide` refuses a qualified name that is not one of the collision's
+actual identities.
+
+---
+
+## `forge embeddings`
+
+Optional, off by default, and never required.
+
+```bash
+forge embeddings status
+forge embeddings build --provider hashing   # deterministic, no download
+forge embeddings build --provider ollama    # requires a local Ollama
+```
+
+`hashing` is a lexical-statistical vectorizer, **not** a neural embedding — it
+exists so the embedding pathway can be measured without a model download. See
+[the retrieval baseline](./research/retrieval-baseline.md).
+
+---
+
+## `forge retrieval-eval`
+
+Measure retrieval against the labelled evaluation set.
+
+```bash
+forge retrieval-eval
+forge retrieval-eval --methods lexical,semantic,hybrid --detail
+forge retrieval-eval --json
+```
+
+```
+dataset: tests/fixtures/eval/retrieval-v1.yaml (v1, 24 queries, 48 labels)
+
+  lexical                R@5=0.406  R@10=0.650  P@5=0.158  MRR=0.471  misses=5  13.8ms/q
+  semantic               R@5=0.301  R@10=0.601  P@5=0.133  MRR=0.344  misses=6  187.7ms/q
+  hybrid(w=0.25)         R@5=0.378  R@10=0.524  P@5=0.158  MRR=0.338  misses=7  202.7ms/q
+
+vs lexical baseline:
+  semantic             regression   {...}
+  hybrid(w=0.25)       regression   {...}
+```
+
+Labels are verified against the filesystem on every run; any that no longer
+resolve are reported as `label_rot` rather than silently lowering recall.
+
+---
+
+## `forge diagnostics graph`
+
+Structural integrity of the knowledge graph — nine codes, **report only**.
+
+```bash
+forge diagnostics graph --json
+```
+
+Nothing is repaired automatically. An automatic repair to a knowledge graph is
+an unreviewed change to what the user believes.
+
+---
+
 ## What the CLI will not do
 
 No command calls a paid API, deletes a note, or writes to the vault — with
@@ -334,5 +524,8 @@ and after running the read commands.
 ## Related
 
 - [Phase 1 implementation architecture](./architecture/phase-1-implementation.md)
+- [Phase 2 implementation architecture](./architecture/phase-2-implementation.md)
+- [Phase 3 implementation architecture](./architecture/phase-3-implementation.md)
+- [Retrieval baseline](./research/retrieval-baseline.md)
 - [Test strategy](./test-strategy.md)
 - [ADR-001](./decisions/001-forge-knowledge-os.md)

@@ -26,6 +26,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Sequence
 
+from ..logging import get_logger
 from ..domain import (
     Claim,
     ClaimLink,
@@ -49,7 +50,9 @@ from ..domain import (
     validate_supersession,
 )
 
-SCHEMA_VERSION = 2
+log = get_logger(__name__)
+
+SCHEMA_VERSION = 3
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -87,14 +90,22 @@ CREATE TABLE IF NOT EXISTS spans (
 );
 CREATE INDEX IF NOT EXISTS idx_spans_document ON spans(document_id, ordinal);
 
+-- Phase 3: `canonical_name` alone is NOT unique. Resolving the vault's
+-- collisions means `pattern/Heap` and `data-structure/Heap` are two genuinely
+-- different concepts that legitimately share a bare name; a UNIQUE constraint
+-- on the name alone would force one to overwrite the other, which is exactly
+-- the silent merge the whole design refuses.
 CREATE TABLE IF NOT EXISTS concepts (
     id             TEXT PRIMARY KEY,
-    canonical_name TEXT NOT NULL UNIQUE,
+    canonical_name TEXT NOT NULL,
+    namespace      TEXT,
     kind           TEXT NOT NULL,
     vault_path     TEXT,
     data           TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_concepts_kind ON concepts(kind);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_concepts_qualified
+    ON concepts(canonical_name, IFNULL(namespace, ''));
 
 CREATE TABLE IF NOT EXISTS claims (
     id                 TEXT PRIMARY KEY,
@@ -210,16 +221,30 @@ class SqliteStore:
         database preserves all of its sources, documents, spans, and revisions.
         """
         previous = self.schema_version
+
+        # Structural migrations run BEFORE the schema script. The v3 script
+        # creates an index over `concepts.namespace`, which does not exist on a
+        # v2 table — and CREATE TABLE IF NOT EXISTS will not add it. The table
+        # has to be reshaped first, or initialize() fails on an upgrade.
+        if previous and previous < SCHEMA_VERSION:
+            self._migrate_structure(previous)
+
         with self._conn:
             self._conn.executescript(_SCHEMA)
             self._conn.execute(
                 "INSERT OR REPLACE INTO meta(key, value) VALUES('schema_version', ?)",
                 (str(SCHEMA_VERSION),),
             )
-        if previous and previous < SCHEMA_VERSION:
-            self._migrate_from(previous)
 
-    def _migrate_from(self, previous: int) -> None:
+        if previous and previous < SCHEMA_VERSION:
+            self._migrate_derived(previous)
+
+    def _migrate_structure(self, previous: int) -> None:
+        """Schema changes that must precede the idempotent schema script."""
+        if previous < 3:
+            self._migrate_concepts_to_namespaced()
+
+    def _migrate_derived(self, previous: int) -> None:
         """Bring derived-only structures into line after a schema upgrade.
 
         The FTS index is derived from spans, so a v1 database arrives with it
@@ -232,6 +257,49 @@ class SqliteStore:
             indexed = int(self._one("SELECT COUNT(*) AS n FROM span_fts")["n"])  # type: ignore[index]
             if spans and not indexed:
                 self.rebuild_search_index()
+
+    def _migrate_concepts_to_namespaced(self) -> None:
+        """v2 -> v3: drop UNIQUE(canonical_name), add a namespace column.
+
+        SQLite cannot alter a constraint in place, so the table is rebuilt.
+        Existing rows are preserved and carry ``namespace = NULL``, which is
+        correct: a concept created before namespaces existed was, by
+        definition, not disambiguated.
+        """
+        columns = {
+            row["name"] for row in self._all("PRAGMA table_info(concepts)")
+        }
+        if "namespace" in columns:
+            return
+
+        rows = self._all("SELECT id, canonical_name, kind, vault_path, data FROM concepts")
+        with self._conn:
+            self._conn.execute("ALTER TABLE concepts RENAME TO concepts_v2")
+            self._conn.executescript(
+                """
+                CREATE TABLE concepts (
+                    id             TEXT PRIMARY KEY,
+                    canonical_name TEXT NOT NULL,
+                    namespace      TEXT,
+                    kind           TEXT NOT NULL,
+                    vault_path     TEXT,
+                    data           TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_concepts_kind ON concepts(kind);
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_concepts_qualified
+                    ON concepts(canonical_name, IFNULL(namespace, ''));
+                """
+            )
+            self._conn.executemany(
+                "INSERT INTO concepts(id, canonical_name, namespace, kind, vault_path, data)"
+                " VALUES(?,?,NULL,?,?,?)",
+                [
+                    (r["id"], r["canonical_name"], r["kind"], r["vault_path"], r["data"])
+                    for r in rows
+                ],
+            )
+            self._conn.execute("DROP TABLE concepts_v2")
+        log.info("concepts_migrated_to_namespaced", rows=len(rows))
 
     def reset(self) -> None:
         """Drop every table. Derived state only — nothing unrecoverable here."""
@@ -415,11 +483,15 @@ class SqliteStore:
         existing = self.get_concept(concept.id)
         with self._conn:
             self._conn.execute(
-                "INSERT OR REPLACE INTO concepts(id, canonical_name, kind, vault_path, data)"
-                " VALUES(?,?,?,?,?)",
+                "INSERT INTO concepts(id, canonical_name, namespace, kind, vault_path, data)"
+                " VALUES(?,?,?,?,?,?)"
+                " ON CONFLICT(id) DO UPDATE SET"
+                "   canonical_name=excluded.canonical_name, namespace=excluded.namespace,"
+                "   kind=excluded.kind, vault_path=excluded.vault_path, data=excluded.data",
                 (
                     concept.id,
                     concept.canonical_name,
+                    concept.namespace,
                     concept.kind.value,
                     concept.vault_path,
                     _dump(concept),
@@ -427,14 +499,52 @@ class SqliteStore:
             )
             if existing is None:
                 self._append(record_create(EntityType.CONCEPT, concept.id, _as_dict(concept)))
+            elif _as_dict(existing) != _as_dict(concept):
+                # An activated proposal that changes a concept (adding an alias,
+                # say) must leave a CHANGE revision, not silently overwrite.
+                self._append(
+                    record_change(
+                        EntityType.CONCEPT,
+                        concept.id,
+                        _as_dict(existing),
+                        _as_dict(concept),
+                        note="concept updated",
+                    )
+                )
 
     def get_concept(self, concept_id: str) -> Concept | None:
         row = self._one("SELECT data FROM concepts WHERE id = ?", (concept_id,))
         return Concept.model_validate_json(row["data"]) if row else None
 
-    def get_concept_by_name(self, canonical_name: str) -> Concept | None:
-        row = self._one("SELECT data FROM concepts WHERE canonical_name = ?", (canonical_name,))
+    def get_concept_by_name(
+        self, canonical_name: str, namespace: str | None = None
+    ) -> Concept | None:
+        """Look up by name, optionally within a namespace.
+
+        Without a namespace this returns the first match in a stable order.
+        Callers that care about which `Heap` they mean must pass the namespace
+        — the ambiguity is real and the API does not hide it.
+        """
+        if namespace is not None:
+            row = self._one(
+                "SELECT data FROM concepts WHERE canonical_name = ? AND namespace = ?",
+                (canonical_name, namespace),
+            )
+        else:
+            row = self._one(
+                "SELECT data FROM concepts WHERE canonical_name = ?"
+                " ORDER BY IFNULL(namespace, '') LIMIT 1",
+                (canonical_name,),
+            )
         return Concept.model_validate_json(row["data"]) if row else None
+
+    def concepts_named(self, canonical_name: str) -> list[Concept]:
+        """Every concept sharing this bare name, across namespaces."""
+        rows = self._all(
+            "SELECT data FROM concepts WHERE canonical_name = ? ORDER BY IFNULL(namespace, '')",
+            (canonical_name,),
+        )
+        return [Concept.model_validate_json(r["data"]) for r in rows]
 
     def list_concepts(self) -> Sequence[Concept]:
         rows = self._all("SELECT data FROM concepts ORDER BY canonical_name")
@@ -552,6 +662,19 @@ class SqliteStore:
     def links_to(self, entity_id: str) -> Sequence[ClaimLink]:
         rows = self._all("SELECT data FROM claim_links WHERE to_id = ?", (entity_id,))
         return [ClaimLink.model_validate_json(r["data"]) for r in rows]
+
+    def get_link(self, link_id: str) -> ClaimLink | None:
+        row = self._one("SELECT data FROM claim_links WHERE id = ?", (link_id,))
+        return ClaimLink.model_validate_json(row["data"]) if row else None
+
+    def all_links(self, *, active_only: bool = True) -> list[ClaimLink]:
+        """Every relationship. Small graph; a full read is cheap and simpler
+        than paginating something that fits in memory many times over."""
+        sql = "SELECT data FROM claim_links"
+        if active_only:
+            sql += " WHERE active = 1"
+        sql += " ORDER BY id"
+        return [ClaimLink.model_validate_json(r["data"]) for r in self._all(sql)]
 
     def count_links(self) -> int:
         return int(self._one("SELECT COUNT(*) AS n FROM claim_links")["n"])  # type: ignore[index]

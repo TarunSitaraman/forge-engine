@@ -38,7 +38,10 @@ _ALLOWED_TRANSITIONS: dict[ProposalStatus, frozenset[ProposalStatus]] = {
     ProposalStatus.PENDING: frozenset(
         {ProposalStatus.APPROVED, ProposalStatus.REJECTED, ProposalStatus.SUPERSEDED}
     ),
-    ProposalStatus.APPROVED: frozenset({ProposalStatus.SUPERSEDED}),
+    # APPROVED -> ACTIVATED is the Phase 3 addition: the decision has been
+    # made, and canonical knowledge now exists because of it.
+    ProposalStatus.APPROVED: frozenset({ProposalStatus.ACTIVATED, ProposalStatus.SUPERSEDED}),
+    ProposalStatus.ACTIVATED: frozenset({ProposalStatus.SUPERSEDED}),
     ProposalStatus.REJECTED: frozenset({ProposalStatus.SUPERSEDED}),
     ProposalStatus.SUPERSEDED: frozenset(),
 }
@@ -89,6 +92,14 @@ class Proposal(BaseModel):
     decision_note: str | None = None
     superseded_by: str | None = None
 
+    #: Canonical entity this proposal produced, once activated. This is the
+    #: link that answers "which proposal created this concept?" from either
+    #: direction — the entity records its origin proposal, and the proposal
+    #: records what it created.
+    activated_entity_type: EntityType | None = None
+    activated_entity_id: str | None = None
+    activated_at: datetime | None = None
+
     @staticmethod
     def make_id(proposal_type: ProposalType, target: str, fingerprint: str) -> str:
         """Deterministic identity.
@@ -124,6 +135,16 @@ class Proposal(BaseModel):
         if self.status in (ProposalStatus.APPROVED, ProposalStatus.REJECTED):
             if self.decided_at is None:
                 raise ValueError(f"{self.status.value} proposal must record decided_at")
+
+        # An activated proposal must name what it created. Without this, the
+        # status would assert that canonical knowledge exists while leaving no
+        # way to find it — which is exactly the "successfully activated but
+        # nothing persisted" failure this phase must make impossible.
+        if self.status is ProposalStatus.ACTIVATED and not self.activated_entity_id:
+            raise ValueError(
+                f"proposal {self.id} is ACTIVATED but records no activated_entity_id; "
+                f"activation status must name the entity it produced"
+            )
         return self
 
     # -- transitions -------------------------------------------------------
@@ -142,6 +163,28 @@ class Proposal(BaseModel):
                 "decided_by": by,
                 "decision_note": note,
                 "superseded_by": superseded_by,
+            }
+        )
+
+    def activate(
+        self, entity_type: EntityType, entity_id: str, *, by: str = "activation"
+    ) -> Proposal:
+        """Mark this proposal as having produced canonical knowledge.
+
+        Only ever called *after* the entity is persisted, so the status can
+        never claim more than actually happened.
+        """
+        moved = self._transition(ProposalStatus.ACTIVATED, by=by, note=None)
+        return moved.model_copy(
+            update={
+                "activated_entity_type": entity_type,
+                "activated_entity_id": entity_id,
+                "activated_at": utc_now(),
+                # Preserve the original human decision rather than overwriting
+                # it with the activation timestamp.
+                "decided_at": self.decided_at,
+                "decided_by": self.decided_by,
+                "decision_note": self.decision_note,
             }
         )
 
@@ -166,7 +209,15 @@ class Proposal(BaseModel):
 
     @property
     def is_decided(self) -> bool:
-        return self.status in (ProposalStatus.APPROVED, ProposalStatus.REJECTED)
+        return self.status in (
+            ProposalStatus.APPROVED,
+            ProposalStatus.ACTIVATED,
+            ProposalStatus.REJECTED,
+        )
+
+    @property
+    def is_activated(self) -> bool:
+        return self.status is ProposalStatus.ACTIVATED
 
     @property
     def auto_applicable(self) -> bool:
@@ -179,6 +230,15 @@ class Proposal(BaseModel):
         return (
             self.safety is SafetyClass.DETERMINISTIC_VERIFIED
             and self.status is ProposalStatus.APPROVED
+        )
+
+    @property
+    def awaiting_activation(self) -> bool:
+        """Approved semantic proposals that should become canonical knowledge."""
+        return self.status is ProposalStatus.APPROVED and self.type in (
+            ProposalType.NEW_CONCEPT,
+            ProposalType.NEW_CLAIM,
+            ProposalType.CONCEPT_MATCH,
         )
 
     def summary(self) -> str:

@@ -100,7 +100,7 @@ class IngestionPipeline:
         started = time.perf_counter()
         report = IngestionReport(cache=CacheStats())
 
-        targets = self.registry.discover(path) if path.is_dir() else [path]
+        targets = self._discover(path) if path.is_dir() else [path]
         if not targets:
             report.add(
                 SourceReport(
@@ -122,6 +122,28 @@ class IngestionPipeline:
         report.duration_seconds = time.perf_counter() - started
         log.info("ingestion_run_complete", **report.totals())
         return report
+
+    def _discover(self, root: Path) -> list[Path]:
+        """Find ingestible files under a directory, honouring the exclude list.
+
+        The adapter registry globs everything it can parse; it has no notion of
+        which directories belong to the vault. Without this filter, ingesting
+        the vault root also sweeps in `tests/fixtures/`, `engine/`, and
+        `.forge/` — turning the engine's own test data into user knowledge.
+        """
+        excludes = set(self.settings.exclude_dirs)
+        out: list[Path] = []
+        for candidate in self.registry.discover(root):
+            try:
+                relative = candidate.resolve().relative_to(self.settings.vault_path)
+            except ValueError:
+                out.append(candidate)  # outside the vault: caller asked for it explicitly
+                continue
+            parts = relative.parts[:-1]
+            if any(part in excludes or part.startswith(".") for part in parts):
+                continue
+            out.append(candidate)
+        return out
 
     # -- per-source --------------------------------------------------------
 

@@ -33,6 +33,10 @@ DEFAULT_EXCLUDES: tuple[str, ...] = (
     "engine",
     "tests",
     "scripts",
+    # Engine configuration, not knowledge. `config/concept-identity.yaml`
+    # lives in the vault so it is versioned with the notes, but indexing it
+    # would make the engine's own settings a retrievable "source".
+    "config",
     "docker",
     "node_modules",
     "__pycache__",

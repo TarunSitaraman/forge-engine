@@ -108,31 +108,58 @@ approval gate would have meant building the unsafe version first.
 
 ---
 
-## Phase 3 — Local embeddings and retrieval
+## Phase 3 — Knowledge activation & retrieval *(complete)*
 
-**Scope**
-- Embedding provider (local), batched, cached by span hash.
-- Vector store behind protocol; lexical search (FTS5); metadata filters.
-- Hybrid retrieval + reciprocal rank fusion.
-- CLI: `forge search`.
+Scope shifted during planning: activation — turning approved proposals into
+canonical knowledge — turned out to be the missing link, and embeddings became
+a *measurement* rather than a deliverable.
+
+**Delivered**
+- Proposal activation (`APPROVED → ACTIVATED`) with deterministic identity,
+  evidence links, provenance, and revisions
+- Concept identity states plus a persisted user decision file for the vault's
+  four real collisions
+- Evidence-gated relationship activation over a five-type vocabulary
+- A SQLite knowledge graph with bounded traversal and integrity diagnostics
+- A labelled retrieval evaluation set (24 queries / 48 labels) and a metrics
+  harness
+- Embeddings built, measured, and **rejected** on the evidence
 
 **Gate**
-- [ ] Hybrid retrieval beats each single method on a hand-labeled query
-      set drawn from the corpus
-- [ ] Every result carries a resolvable provenance chain
-- [ ] **Retrieval works with the LLM entirely disabled**
-- [ ] Re-embedding is detectable and scriptable when the model changes
+- [x] Approved proposals become canonical Concepts and Claims
+- [x] Activation is idempotent across approve / re-index / re-activate
+- [x] Every result carries a resolvable provenance chain
+- [x] **Retrieval works with the LLM entirely disabled**
+- [x] Re-embedding is detectable when the model changes (vectors are keyed by
+      model id, so a model change invalidates rather than mixes)
+- [x] Hybrid retrieval adopted **only if measured better** — it was not.
+      Lexical R@10 = 0.650 beat semantic (0.601) and every swept fusion weight
+      (0.524 / 0.496 / 0.428). See
+      [retrieval baseline](./research/retrieval-baseline.md).
+
+*Caveat carried forward:* the semantic measurement used a non-neural hashing
+vectorizer, because no model could be downloaded in this environment. It shows
+that vocabulary-overlap vectors do not help; it cannot speak to real
+embeddings. Re-running the sweep with a neural model is a one-command job and
+is the first thing to do when one is reachable.
 
 ---
 
 ## Phase 4 — Knowledge graph
 
+Phase 3 delivered the graph *substrate* — storage, bounded traversal,
+integrity, and the measurement that says SQLite suffices (0.24 ms neighbour
+lookup at 5,000 nodes / 20,000 edges). Phase 4 is about *populating* it at
+corpus scale.
+
 **Scope**
 - Concept resolution: alias/lexical/vector candidate narrowing, LLM only
   for genuine ambiguity.
-- Relationship discovery over the typed vocabulary.
-- Graph store behind protocol; traversal queries.
+- Relationship discovery beyond co-occurrence, over the typed vocabulary.
 - Bootstrap concepts from filenames; seed edges from the 4,100 wikilinks.
+- Deterministic retrieval improvements measured against the Phase 3 set:
+  title/heading boosting, and alias-driven query expansion reusing the
+  identity config.
 
 **Gate**
 - [ ] Concept extraction scored against the ~500 filename-derived
@@ -142,8 +169,8 @@ approval gate would have meant building the unsafe version first.
       pattern-vs-algorithm resolve correctly (the known hard cases)
 - [ ] `RELATED_TO` edges carry similarity scores and are excluded from
       reasoning traversals
-- [ ] **Neo4j decision made on measured hop-depth** (technology
-      decisions §5.3)
+- [x] **Neo4j decision made on measured hop-depth** — measured in Phase 3 and
+      answered *no*; `scripts/measure_graph_scale.py` re-runs the measurement
 
 ---
 

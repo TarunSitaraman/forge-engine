@@ -28,8 +28,9 @@ from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Any, Iterable, Sequence
 
-from ..domain import Concept, MatchKind
+from ..domain import Concept, IdentityState, MatchKind
 from ..logging import get_logger
+from ..identity.service import IdentityService
 from ..parsing.links import normalize
 
 log = get_logger(__name__)
@@ -51,10 +52,13 @@ class MatchCandidate:
 
     concept_id: str | None
     canonical_name: str
-    #: Which signal produced it: exact | alias | normalized | lexical | embedding | vault_path
+    #: Which signal produced it: exact | alias | normalized | lexical |
+    #: embedding | vault_path | proposed | user_decision
     signal: str
     score: float
     vault_path: str | None = None
+    #: Namespace when the identity config supplies one, e.g. "data-structure".
+    namespace: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -63,7 +67,13 @@ class MatchCandidate:
             "signal": self.signal,
             "score": round(self.score, 4),
             "vault_path": self.vault_path,
+            "namespace": self.namespace,
+            "qualified_name": self.qualified_name,
         }
+
+    @property
+    def qualified_name(self) -> str:
+        return f"{self.namespace}/{self.canonical_name}" if self.namespace else self.canonical_name
 
 
 @dataclass
@@ -74,6 +84,9 @@ class MatchResult:
     kind: MatchKind
     candidates: list[MatchCandidate] = field(default_factory=list)
     reason: str = ""
+    #: How identity was established. Finer-grained than ``kind``: it records
+    #: *why* the matcher reached its answer, including whether a human decided.
+    identity_state: IdentityState = IdentityState.NEW
 
     @property
     def is_ambiguous(self) -> bool:
@@ -94,6 +107,7 @@ class MatchResult:
         return {
             "name": self.name,
             "kind": self.kind.value,
+            "identity_state": self.identity_state.value,
             "reason": self.reason,
             "candidates": [c.to_dict() for c in self.candidates],
         }
@@ -118,12 +132,15 @@ def build_ambiguity_index(
     Structural filenames are excluded by default (see ``_STRUCTURAL_STEM``).
     Pass ``include_structural=True`` to see the raw picture.
     """
-    by_stem: dict[str, list[str]] = {}
+    by_stem: dict[str, set[str]] = {}
     for path in paths:
         stem = PurePosixPath(path).stem
         if not include_structural and _STRUCTURAL_STEM.match(stem.strip()):
             continue
-        by_stem.setdefault(normalize(stem), []).append(path)
+        # A set, not a list: callers legitimately pass overlapping path
+        # collections (stored sources plus a fresh vault scan), and counting
+        # the same file twice would report a two-way collision as four-way.
+        by_stem.setdefault(normalize(stem), set()).add(path)
     return {stem: sorted(hits) for stem, hits in by_stem.items() if len(hits) > 1}
 
 
@@ -138,12 +155,17 @@ class ConceptMatcher:
         *,
         ambiguity_index: dict[str, list[str]] | None = None,
         proposed_concepts: Sequence[tuple[str, str]] = (),
+        identity: IdentityService | None = None,
         embeddings: dict[str, list[float]] | None = None,
         lexical_threshold: float = LEXICAL_THRESHOLD,
         embedding_threshold: float = EMBEDDING_THRESHOLD,
     ) -> None:
         self.concepts = list(concepts)
         self.ambiguity_index = ambiguity_index or {}
+        #: The user's persisted identity decisions. Consulted *before* the
+        #: ambiguity index, so that deciding a collision actually changes what
+        #: the matcher does — otherwise the decision would be decorative.
+        self.identity = identity or IdentityService()
         #: ``(name, proposal_id)`` for concepts already *proposed* but not yet
         #: accepted. In Phase 2 nothing creates a Concept — extraction produces
         #: proposals — so without this, every source would rediscover the same
@@ -181,13 +203,40 @@ class ConceptMatcher:
 
         normalized = normalize(cleaned)
 
-        # 1. Vault collisions dominate everything. If the corpus itself holds
-        #    two canonical homes for this name, no similarity score can resolve
-        #    which one was meant.
+        # 0. An explicit user decision outranks everything, including a vault
+        #    collision — deciding the collision is precisely what it is for.
+        decision = self.identity.resolve(cleaned)
+        if decision.state is IdentityState.RESOLVED_BY_USER and decision.identity is not None:
+            chosen = decision.identity
+            return MatchResult(
+                name=cleaned,
+                kind=MatchKind.MATCH_CANDIDATE,
+                identity_state=IdentityState.RESOLVED_BY_USER,
+                candidates=[
+                    MatchCandidate(
+                        concept_id=self._id_for_path(chosen.vault_path or ""),
+                        canonical_name=chosen.canonical_name,
+                        signal="user_decision",
+                        score=1.0,
+                        vault_path=chosen.vault_path,
+                        namespace=chosen.namespace,
+                    )
+                ],
+                reason=decision.reason,
+            )
+        if decision.state is IdentityState.ALIAS_MATCH and decision.identity is not None:
+            return self._match_alias_target(cleaned, decision)
+
+        # 1. Vault collisions dominate everything else. If the corpus itself
+        #    holds two canonical homes for this name and the user has not
+        #    decided between them, no similarity score can resolve which was
+        #    meant.
         if colliding := self.ambiguity_index.get(normalized):
+            documented = {i.vault_path: i for i in decision.candidates}
             return MatchResult(
                 name=cleaned,
                 kind=MatchKind.AMBIGUOUS,
+                identity_state=IdentityState.AMBIGUOUS,
                 candidates=[
                     MatchCandidate(
                         concept_id=self._id_for_path(path),
@@ -195,12 +244,14 @@ class ConceptMatcher:
                         signal="vault_path",
                         score=1.0,
                         vault_path=path,
+                        namespace=(documented[path].namespace if path in documented else None),
                     )
                     for path in colliding
                 ],
                 reason=(
                     f"{len(colliding)} canonical homes exist for this name in the vault; "
-                    f"the intended one cannot be determined automatically"
+                    f"the intended one cannot be determined automatically. "
+                    f"Resolve with: forge identity decide {cleaned!r} <namespace>/{cleaned}"
                 ),
             )
 
@@ -209,6 +260,7 @@ class ConceptMatcher:
             return MatchResult(
                 name=cleaned,
                 kind=MatchKind.MATCH_CANDIDATE,
+                identity_state=IdentityState.EXACT_MATCH,
                 candidates=[_candidate(exact, "exact", 1.0)],
                 reason="exact canonical name match",
             )
@@ -247,6 +299,7 @@ class ConceptMatcher:
                 return MatchResult(
                     name=cleaned,
                     kind=MatchKind.MATCH_CANDIDATE,
+                    identity_state=IdentityState.ALIAS_MATCH,
                     candidates=[_candidate(aliased[0], "alias", 0.98)],
                     reason="matched a registered alias",
                 )
@@ -282,6 +335,7 @@ class ConceptMatcher:
             return MatchResult(
                 name=cleaned,
                 kind=MatchKind.NEW_CONCEPT,
+                identity_state=IdentityState.NEW,
                 reason="no existing concept matched on any signal",
             )
 
@@ -297,6 +351,7 @@ class ConceptMatcher:
             return MatchResult(
                 name=cleaned,
                 kind=MatchKind.AMBIGUOUS,
+                identity_state=IdentityState.AMBIGUOUS,
                 candidates=ranked[:5],
                 reason=(
                     f"top candidates score within {AMBIGUITY_MARGIN} of each other "
@@ -337,6 +392,25 @@ class ConceptMatcher:
             if score >= self.embedding_threshold:
                 out.append(_candidate(concept, "embedding", score))
         return out
+
+    def _match_alias_target(self, name: str, decision: Any) -> MatchResult:
+        """Follow a config-declared alias to whatever it points at."""
+        target = decision.identity.canonical_name
+        existing = self._by_exact.get(target.casefold())
+        candidate = (
+            _candidate(existing, "user_decision", 1.0)
+            if existing is not None
+            else MatchCandidate(
+                concept_id=None, canonical_name=target, signal="user_decision", score=1.0
+            )
+        )
+        return MatchResult(
+            name=name,
+            kind=MatchKind.MATCH_CANDIDATE,
+            identity_state=IdentityState.ALIAS_MATCH,
+            candidates=[candidate],
+            reason=decision.reason,
+        )
 
     def _id_for_path(self, path: str) -> str | None:
         for concept in self.concepts:

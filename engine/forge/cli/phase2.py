@@ -365,6 +365,85 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             typer.echo(f"rejected {decided.id[:12]} ({decided.type.value})")
         store.close()
 
+    @proposals_app.command("approve-all")
+    def proposals_approve_all(
+        vault: Optional[Path] = typer.Option(None),
+        safety: str = typer.Option(
+            "deterministic_verified",
+            help="Safety class to approve in bulk. Ambiguous proposals are refused.",
+        ),
+        type_: Optional[str] = typer.Option(None, "--type"),
+        source: Optional[str] = typer.Option(None, help="Limit to one source id."),
+        limit: int = typer.Option(500),
+        include_ambiguous: bool = typer.Option(
+            False,
+            "--include-ambiguous",
+            help="Explicitly allow bulk approval of ambiguous proposals. Off by default.",
+        ),
+        dry_run: bool = typer.Option(True, help="Preview without approving."),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Approve many proposals at once, with a guard on ambiguous ones.
+
+        Bulk-approving an ambiguous semantic proposal would be approving a
+        decision nobody made, so it requires an explicit flag. Everything else
+        is filtered by safety class, which is derived from provenance and
+        cannot be asserted by a model.
+        """
+        settings = settings_factory(vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        service = ProposalService(store)
+
+        try:
+            wanted = SafetyClass(safety)
+        except ValueError:
+            typer.echo(f"unknown safety class {safety!r}", err=True)
+            store.close()
+            raise typer.Exit(code=2)
+
+        if wanted is SafetyClass.AMBIGUOUS and not include_ambiguous:
+            typer.echo(
+                "refusing to bulk-approve ambiguous proposals; pass --include-ambiguous "
+                "if that is genuinely what you want",
+                err=True,
+            )
+            store.close()
+            raise typer.Exit(code=2)
+
+        candidates = [
+            p
+            for p in service.list(
+                status=ProposalStatus.PENDING,
+                type=ProposalType(type_) if type_ else None,
+                source_id=source,
+                limit=limit,
+            )
+            if p.safety is wanted
+        ]
+
+        if dry_run:
+            payload = {
+                "dry_run": True,
+                "matched": len(candidates),
+                "safety": wanted.value,
+                "targets": [p.operation.target for p in candidates[:20]],
+            }
+            if not _emit(payload, json_out):
+                typer.echo(f"{len(candidates)} proposal(s) match safety={wanted.value} — none approved")
+                for p in candidates[:10]:
+                    typer.echo(f"  {p.id[:12]}  {p.type.value:<16} {p.operation.target}")
+                typer.echo("\nRe-run with --no-dry-run to approve them.")
+            store.close()
+            return
+
+        approved = [service.approve(p.id, note=f"batch approval (safety={wanted.value})") for p in candidates]
+        payload = {"approved": len(approved), "safety": wanted.value}
+        if not _emit(payload, json_out):
+            typer.echo(f"approved {len(approved)} proposal(s) with safety={wanted.value}")
+            typer.echo("Nothing was written to the vault or activated.")
+        store.close()
+
     @proposals_app.command("generate")
     def proposals_generate(
         vault: Optional[Path] = typer.Option(None),

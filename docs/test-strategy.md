@@ -59,9 +59,14 @@ tests/
     test_change_detection.py       hashing, change classification
     test_llm_provider.py           abstraction, structured output, failure modes
     test_spike.py                  spike harness honesty
+    test_activation.py             proposal activation, idempotency, identity, gating
+    test_graph.py                  bounded traversal, evidence chains, integrity
+    test_evaluation.py             retrieval metrics, dataset, embeddings
   integration/
     test_real_corpus.py            everything, against the real vault
     test_pipeline_and_cli.py       end-to-end pipeline + every CLI command
+    test_phase2_ingestion.py       ingestion, cost control, ambiguity, CLI
+    test_phase3_activation.py      the activation loop through the CLI, batch ops
 ```
 
 `reset_call_counter` is autouse, so **every test starts with `CALLS.count == 0`**
@@ -178,11 +183,44 @@ interfaces. Everything except the model itself is the shipped path.
 
 ---
 
+## Phase 3 additions
+
+| Module | Tests |
+|---|---|
+| `tests/unit/test_activation.py` | Concept/claim activation, origin tracking, the approve→activate→reindex→activate idempotency cycle, FAILED reporting, ambiguity protection, identity round-trip, relationship gating |
+| `tests/unit/test_graph.py` | Neighbour direction, type filters, depth and node-budget bounds, cycle termination, shortest path, evidence chains, metrics, all nine integrity codes |
+| `tests/unit/test_evaluation.py` | Hand-computed Recall@k / Precision@k / MRR, dataset validation, embedding determinism and cache invalidation, evaluator degradation |
+| `tests/integration/test_phase3_activation.py` | The loop through the CLI, batch approval guards, identity commands, embeddings, `retrieval-eval`, and a `git status` proof that the real vault is untouched |
+
+Three properties are asserted repeatedly rather than once, because they are the
+ones a future change is most likely to break quietly:
+
+- **Metrics are checked against hand-computed values**, never against whatever
+  the implementation currently returns. A measuring instrument that agrees with
+  itself measures nothing.
+- **Degradation is asserted as hard as the happy path.** A missing embedding
+  model must produce an explicit, reported absence — `test_semantic_is_skipped_with_an_explicit_note_when_unavailable`
+  fails if the runner silently falls back and looks successful.
+- **Diagnostics never repair.** `test_integrity_check_repairs_nothing` counts
+  entities before and after a check that finds problems.
+
+### Phase 3 regression tests for bugs found during development
+
+| Bug | Test |
+|---|---|
+| `concepts.canonical_name UNIQUE` made namespaced concepts impossible | `TestIdentityConfig` round-trip; schema v3 migration |
+| Migration ran the schema script before reshaping the table (`no such column: namespace`) | exercised by every v2→v3 store open |
+| A resolved collision still refused to activate ("match target is not a canonical concept") | `TestAmbiguityProtection` |
+| The ambiguity index double-counted paths, reporting "4 canonical homes" for Heap | `test_a_model_supplied_namespace_is_ignored`, demo step 16 |
+| `retrieval-eval` resolved its default dataset relative to the working directory | `test_eval_runs_the_labelled_set_and_reports_metrics` |
+
+---
+
 ## Coverage
 
-92% overall. `llm/ollama.py` sits at 64% because its success paths need a live
-server; every other module is 90%+, and `domain/` — where the invariants live —
-is 98–100%.
+89% overall across 595 tests. `llm/ollama.py` and `embeddings/ollama_embeddings.py`
+are lowest because their success paths need a live server; `domain/` — where the
+invariants live — is 98–100%.
 
 ---
 
@@ -190,3 +228,5 @@ is 98–100%.
 
 - [CLI usage](./cli.md)
 - [Phase 1 implementation architecture](./architecture/phase-1-implementation.md)
+- [Phase 3 implementation architecture](./architecture/phase-3-implementation.md)
+- [Retrieval baseline](./research/retrieval-baseline.md)

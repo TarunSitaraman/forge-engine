@@ -198,12 +198,33 @@ class Concept(Entity):
     #: Canonical Markdown home in the vault, when one exists. READ-ONLY in
     #: Phase 1 (ADR-001 D2: segregated write-back, no in-place enrichment).
     vault_path: str | None = None
+    #: Namespace that disambiguates a shared bare name, e.g. "data-structure".
+    #: Set from the user's identity decision; ``None`` when unambiguous.
+    namespace: str | None = None
+    #: Proposal that created this concept. Phase 3: no canonical entity may be
+    #: an unexplained orphan — every one traces back to the decision that
+    #: created it, and from there to the source spans that justified it.
+    origin_proposal_id: str | None = None
+    #: Spans that evidenced this concept's creation.
+    origin_span_ids: tuple[str, ...] = ()
     provenance: Provenance
     updated_at: datetime = Field(default_factory=utc_now)
 
     @staticmethod
-    def make_id(canonical_name: str) -> str:
-        return deterministic_id("concept", canonical_name.strip().casefold())
+    def make_id(canonical_name: str, namespace: str | None = None) -> str:
+        """Deterministic identity, namespaced when the user has decided one.
+
+        The namespace participates so that `pattern/Heap` and
+        `data-structure/Heap` are genuinely different concepts rather than one
+        overwriting the other — which is the whole point of resolving the
+        collision instead of picking a winner.
+        """
+        key = canonical_name.strip().casefold()
+        return deterministic_id("concept", f"{namespace}/{key}" if namespace else key)
+
+    @property
+    def qualified_name(self) -> str:
+        return f"{self.namespace}/{self.canonical_name}" if self.namespace else self.canonical_name
 
 
 class Claim(Entity):
@@ -221,6 +242,8 @@ class Claim(Entity):
     valid_from: datetime = Field(default_factory=utc_now)
     valid_to: datetime | None = None
     superseded_by: str | None = None
+    #: Proposal that created this claim (Phase 3).
+    origin_proposal_id: str | None = None
 
     @staticmethod
     def make_id(statement: str, source_ref: str) -> str:

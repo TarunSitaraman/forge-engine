@@ -191,7 +191,7 @@ def corpus_stats(
 
 @app.command()
 def diagnostics(
-    what: str = typer.Argument("all", help="all | frontmatter | links | conventions"),
+    what: str = typer.Argument("all", help="all | frontmatter | links | conventions | graph"),
     vault: Optional[Path] = typer.Option(None),
     json_out: bool = typer.Option(False, "--json"),
     limit: int = typer.Option(15, help="Rows shown in text mode."),
@@ -207,6 +207,14 @@ def diagnostics(
         payload["links"] = link_report(index).to_dict()
     if what in ("all", "conventions"):
         payload["conventions"] = analyze_conventions(index).to_dict()
+    if what in ("all", "graph"):
+        from ..graph import check_integrity
+        from ..storage.sqlite_store import SqliteStore
+
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        payload["graph"] = check_integrity(store).to_dict()
+        store.close()
     if not payload:
         err(f"unknown diagnostics target {what!r}", err=True)
         raise typer.Exit(code=2)
@@ -254,6 +262,15 @@ def diagnostics(
             )
         for c in cr.conflicts:
             typer.echo(f"    conflict [{c['kind']}]: repo={c['repo_wide']!r} vs dsa={c['dsa_local']!r}")
+
+    if "graph" in payload:
+        gr = payload["graph"]
+        typer.echo(f"\nGRAPH INTEGRITY — {'clean' if gr['clean'] else str(gr['errors']) + ' error(s)'}")
+        typer.echo(f"  checked: {gr['checked']}")
+        for code, count in gr["by_code"].items():
+            typer.echo(f"    {code}: {count}")
+        for finding in gr["findings"][:limit]:
+            typer.echo(f"    [{finding['severity']}] {finding['code']} {finding['entity_id'][:12]}: {finding['detail']}")
 
 
 @app.command()
@@ -380,8 +397,10 @@ def model_test(
 # Phase 2 commands (ingest, search, concepts, documents, proposals) are
 # registered here so Phase 1's commands stay exactly as they were.
 from .phase2 import register as _register_phase2  # noqa: E402
+from .phase3 import register as _register_phase3  # noqa: E402
 
 _register_phase2(app, _settings)
+_register_phase3(app, _settings)
 
 
 def main() -> None:  # pragma: no cover

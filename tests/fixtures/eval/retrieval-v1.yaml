@@ -1,0 +1,222 @@
+# Forge retrieval evaluation set — v1
+#
+# An INTERNAL evaluation fixture, not a benchmark platform. Its only job is to
+# let Forge answer "did this retrieval change help?" with a number instead of
+# an opinion.
+#
+# ---------------------------------------------------------------------------
+# HOW THESE QUERIES WERE SELECTED
+# ---------------------------------------------------------------------------
+#
+# Every query is a question this corpus's owner would plausibly ask it, drawn
+# from the six categories Phase 3 requires. They were chosen as follows:
+#
+# 1. `exact_concept`  — the canonical name of a page that exists. Tests that
+#    naming a thing retrieves that thing. Trivially easy on purpose: a
+#    retrieval system failing these is broken, so they are the floor.
+#
+# 2. `fuzzy_concept`  — the same idea phrased as a user would say it, never
+#    using the page's exact title. This is where lexical retrieval is expected
+#    to struggle and where semantic retrieval, if it helps at all, should show
+#    it.
+#
+# 3. `related_concept` — a query whose answer spans several pages that are
+#    conceptually linked but do not share a title. Tests breadth.
+#
+# 4. `dsa` / `technology` / `project` — domain questions against the three
+#    substantial sections of the corpus.
+#
+# RELEVANCE LABELS were assigned by locating documents that actually contain a
+# substantive treatment of the query's subject — verified by reading the file,
+# not by keyword count. A file that merely mentions a term in a link list is
+# NOT relevant. Where a judgement was close, the file was left out: a smaller,
+# defensible label set produces honest metrics, whereas padding relevance
+# inflates recall for free.
+#
+# `relevant` paths are vault-relative and must exist. `scripts/eval_check.py`
+# verifies that, so a corpus reorganization cannot silently rot this file into
+# meaninglessness.
+#
+# NOT DONE HERE: tuning any retrieval parameter against these labels. The set
+# exists to measure, and measuring against a set you optimized on measures
+# nothing.
+
+version: 1
+corpus: forge-vault
+unit: source          # relevance is judged per source document, not per span
+
+queries:
+  # ----------------------------------------------------- exact concept lookup
+  - id: exact-sliding-window
+    category: exact_concept
+    query: Sliding Window
+    relevant:
+      - DSA/01_Patterns/Sliding Window.md
+      - DSA/09_CheatSheets/Sliding Window Cheat Sheet.md
+      - DSA/07_Interview/Sliding Window Interview Guide.md
+
+  - id: exact-union-find
+    category: exact_concept
+    query: Union Find
+    relevant:
+      - DSA/01_Patterns/Union Find.md
+      - DSA/09_CheatSheets/Union Find Cheat Sheet.md
+      - DSA/07_Interview/Union Find Interview Guide.md
+
+  - id: exact-rag
+    category: exact_concept
+    query: Retrieval Augmented Generation
+    relevant:
+      - Technologies/Docs/rag.md
+
+  - id: exact-vector-databases
+    category: exact_concept
+    query: Vector Databases
+    relevant:
+      - Technologies/Docs/vector-databases.md
+
+  - id: exact-topological-sort
+    category: exact_concept
+    query: Topological Sort
+    relevant:
+      - DSA/01_Patterns/Topological Sort.md
+      - DSA/09_CheatSheets/Topological Sort Cheat Sheet.md
+      - DSA/07_Interview/Topological Sort Interview Guide.md
+
+  # ----------------------------------------------------- fuzzy concept lookup
+  # Phrased as a user would ask, deliberately avoiding the page title.
+  - id: fuzzy-contiguous-subarray
+    category: fuzzy_concept
+    query: technique for finding the best contiguous subarray without recomputing
+    relevant:
+      - DSA/01_Patterns/Sliding Window.md
+      - DSA/09_CheatSheets/Sliding Window Cheat Sheet.md
+
+  - id: fuzzy-disjoint-sets
+    category: fuzzy_concept
+    query: keeping track of which items belong to the same group as they merge
+    relevant:
+      - DSA/01_Patterns/Union Find.md
+      - DSA/03_DataStructures/Disjoint Set.md
+
+  - id: fuzzy-grounding-llm
+    category: fuzzy_concept
+    query: stopping a language model from making things up by giving it real passages
+    relevant:
+      - Technologies/Docs/rag.md
+
+  - id: fuzzy-similarity-index
+    category: fuzzy_concept
+    query: storing numeric representations of text so similar things can be found
+    relevant:
+      - Technologies/Docs/vector-databases.md
+
+  - id: fuzzy-task-ordering
+    category: fuzzy_concept
+    query: ordering tasks so every prerequisite comes before what depends on it
+    relevant:
+      - DSA/01_Patterns/Topological Sort.md
+
+  # ---------------------------------------------------- related concept lookup
+  - id: related-graph-traversal
+    category: related_concept
+    query: graph traversal depth first breadth first
+    relevant:
+      - DSA/01_Patterns/Graph Traversal.md
+      - DSA/01_Patterns/DFS.md
+      - DSA/01_Patterns/BFS.md
+      - DSA/02_Algorithms/Depth First Search.md
+      - DSA/02_Algorithms/Breadth First Search.md
+
+  - id: related-agent-frameworks
+    category: related_concept
+    query: agent frameworks and orchestration for language models
+    relevant:
+      - Technologies/Docs/ai-agents.md
+      - Technologies/Docs/langchain.md
+
+  - id: related-heap-priority
+    category: related_concept
+    query: priority queue heap top k elements
+    relevant:
+      - DSA/03_DataStructures/Heap.md
+      - DSA/03_DataStructures/Priority Queue.md
+      - DSA/01_Patterns/Heap.md
+
+  # ------------------------------------------------------------ DSA questions
+  - id: dsa-cycle-detection
+    category: dsa
+    query: detecting a cycle in a linked list
+    relevant:
+      - DSA/01_Patterns/Fast & Slow Pointers.md
+      - DSA/04_Problems/Fast & Slow Pointers - Cycle Detection.md
+
+  - id: dsa-memoization
+    category: dsa
+    query: caching recursive subproblem results to avoid recomputation
+    relevant:
+      - DSA/01_Patterns/Memoization.md
+      - DSA/01_Patterns/Dynamic Programming.md
+
+  - id: dsa-binary-search-answer
+    category: dsa
+    query: binary searching over the answer space rather than an array
+    relevant:
+      - DSA/04_Problems/Binary Search - Search Answer Space.md
+      - DSA/01_Patterns/Binary Search.md
+
+  - id: dsa-off-by-one
+    category: dsa
+    query: common off by one mistakes with loop boundaries
+    relevant:
+      - DSA/08_Mistakes/Off-by-One.md
+      - DSA/08_Mistakes/Boundary Errors.md
+
+  # ----------------------------------------------------- technology questions
+  - id: tech-chunking
+    category: technology
+    query: how chunk size affects retrieval quality
+    relevant:
+      - Technologies/Docs/rag.md
+
+  - id: tech-docker-layers
+    category: technology
+    query: docker image layers and caching
+    relevant:
+      - Technologies/Docs/docker.md
+
+  - id: tech-prompt-injection
+    category: technology
+    query: defending prompts against injection
+    relevant:
+      - Technologies/Docs/prompt-engineering.md
+      - Technologies/Prompt-Library/Prompt-Engineering/prompt-injection-hardening.md
+
+  # --------------------------------------------------------- project questions
+  - id: project-circuit-breaker
+    category: project
+    query: circuit breaker and retry behaviour in the dispatch system
+    relevant:
+      - Projects/smartresq/03-reliability.md
+      - Projects/smartresq/02-architecture.md
+
+  - id: project-medallion
+    category: project
+    query: medallion architecture data pipeline
+    relevant:
+      - Projects/macro-platform/04-data-pipeline.md
+      - Projects/macro-platform/02-architecture.md
+
+  - id: project-parametric-payout
+    category: project
+    query: parametric insurance automatic payouts for gig workers
+    relevant:
+      - Projects/quickcover/01-overview.md
+      - Projects/quickcover/03-financial-model.md
+
+  - id: project-whatsapp-agent
+    category: project
+    query: whatsapp personal assistant with memory
+    relevant:
+      - Projects/personal-agent/01-overview.md
+      - Projects/personal-agent/04-memory-system.md
