@@ -1,6 +1,6 @@
 # ADR-001 — Evolve Forge into a Knowledge Operating System
 
-- **Status:** Proposed — *sections 6.1 (D1) and 6.2 (D2) require human approval before implementation begins*
+- **Status:** **Accepted** — D1 and D2 approved 2026-08-12; Phase 1 implemented against this ADR. D3–D5 remain open.
 - **Date:** 2026-08-12
 - **Deciders:** repository owner (pending)
 - **Context commit:** `bb88c35`
@@ -161,11 +161,27 @@ adding capabilities none of the others can.
 
 ---
 
-## 6. Open decisions — **human approval required before Phase 1**
+## 6. Decisions
 
-These are recorded as open rather than guessed.
+D1 and D2 were **approved on 2026-08-12** and are recorded below as resolved.
+D3–D5 remain open.
 
-### 6.1 D1 — Repository layout *(blocks all implementation)*
+### 6.1 D1 — Repository layout — **APPROVED: option (a), monorepo**
+
+> The repository root remains the Obsidian vault. Existing Markdown paths are
+> immutable unless an explicit migration is approved. The engine lives
+> alongside the corpus in `engine/`, `tests/`, `scripts/`, `docs/`, `.forge/`.
+
+Implemented as approved. All 621 original paths are unchanged;
+`test_indexing_does_not_modify_the_vault` enforces it against `git status`.
+
+`docker/` was **not** created: Phase 1 requires no containers (SQLite + stdlib
+only), and an empty directory documenting a future need is the kind of
+placeholder that goes stale. It arrives at Phase 4 with the first service.
+
+*Original options, retained for the record:*
+
+### 6.1.1 D1 options as considered *(blocked all implementation)*
 
 The repo root **is** the Obsidian vault. Adding `engine/` and `docs/`
 means Obsidian indexes engineering docs as vault notes — they appear in
@@ -177,11 +193,27 @@ quick-switcher and graph view.
 | (b) Move vault under `vault/` | Cleanest separation; rewrites every path and breaks external links. Violates preservation point P1 |
 | (c) Separate engine repository | Cleanest of all; splits the corpus from the code that maintains it and complicates local-first setup |
 
-**This ADR introduces `docs/` under option (a)** as the minimum needed
-to deliver the required documentation. That choice is reversible and
-does not commit the engine's location.
+### 6.2 D2 — Write-back policy — **APPROVED: segregated write-back**
 
-### 6.2 D2 — Write-back policy *(the highest-stakes decision)*
+> The corpus remains the canonical human-readable source of truth. The engine
+> may read it freely and must not silently modify it. AI-generated changes
+> exist first as proposed/derived state. A future human-approval workflow may
+> apply approved changes. **No automatic in-place enrichment in Phase 1.**
+
+Implemented as approved:
+
+- No engine code path writes to a `.md` file. The only directory written is
+  `.forge/`.
+- Frontmatter repairs are generated, applied *in memory*, re-parsed to confirm
+  validity, and reported as `verified: true` proposals. 283 files have verified
+  proposals; **zero have been applied.**
+- Ambiguous links produce candidates, never a chosen target.
+- `test_cli_never_writes_to_the_vault` byte-compares every Markdown file before
+  and after running all read commands.
+
+*Original options, retained for the record:*
+
+### 6.2.1 D2 options as considered
 
 Does the engine ever write into the vault?
 
@@ -219,6 +251,21 @@ Relational adjacency vs Neo4j. Lowest-confidence recommendation in the
 technology decisions (§5.3). *Recommendation: defer to a measurement at
 the Phase-4 gate — adopt Neo4j only if queries routinely exceed 3 hops
 or need path-finding.*
+
+Phase 1 deferred it as recommended: storage sits behind protocols in
+`forge/storage/base.py` with a SQLite implementation. No graph or vector
+database was introduced.
+
+### 6.6 D6 — Truncated-wikilink frontmatter *(new, raised by Phase 1)*
+
+Implementation found a **third** malformed-frontmatter shape the Phase 0 audit
+did not characterize: 18 files whose final wikilink is truncated to one closing
+bracket (`related: [[A]], [[B]`). Diagnosed as `FM008` with verified repairs,
+none applied.
+
+No decision is required to proceed — it is handled — but it is recorded here
+because it revises the audit's "two defect shapes" finding, and because the
+same authoring slip may exist in files that happen to still parse.
 
 ---
 
