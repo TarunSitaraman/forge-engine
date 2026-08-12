@@ -377,6 +377,13 @@ def model_test(
     typer.echo(f"overall structured-output success: {report.overall_success_rate:.0%}")
 
 
+# Phase 2 commands (ingest, search, concepts, documents, proposals) are
+# registered here so Phase 1's commands stay exactly as they were.
+from .phase2 import register as _register_phase2  # noqa: E402
+
+_register_phase2(app, _settings)
+
+
 def main() -> None:  # pragma: no cover
     try:
         app()

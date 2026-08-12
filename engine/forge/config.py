@@ -131,15 +131,20 @@ class Settings(BaseModel):
             },
         )
 
+        # Built as a dict so explicit overrides win rather than colliding with
+        # the defaults derived above. Passing both as keyword arguments raised
+        # "got multiple values for keyword argument".
+        values: dict[str, object] = {
+            "vault_path": root,
+            "state_dir": state,
+            "log_level": os.environ.get("FORGE_LOG_LEVEL", "INFO"),
+            "log_format": os.environ.get("FORGE_LOG_FORMAT", "console"),
+            "llm": llm,
+        }
+        values.update(overrides)
+
         try:
-            return cls(
-                vault_path=root,
-                state_dir=state,
-                log_level=os.environ.get("FORGE_LOG_LEVEL", "INFO"),
-                log_format=os.environ.get("FORGE_LOG_FORMAT", "console"),  # type: ignore[arg-type]
-                llm=llm,
-                **overrides,  # type: ignore[arg-type]
-            )
+            return cls(**values)  # type: ignore[arg-type]
         except Exception as exc:
             raise ConfigError(str(exc)) from exc
 

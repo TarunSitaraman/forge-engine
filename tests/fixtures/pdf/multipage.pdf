@@ -1,0 +1,85 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R 7 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 9 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 234 >>
+stream
+BT
+/F1 20 Tf
+1 0 0 1 72 740 Tm
+(Retrieval Augmented Generation) Tj
+/F1 11 Tf
+1 0 0 1 72 704 Tm
+(RAG grounds generation in retrieved passages.) Tj
+/F1 11 Tf
+1 0 0 1 72 683 Tm
+(This reduces hallucination on open-domain questions.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 6 0 R /Resources << /Font << /F1 9 0 R >> >> >>
+endobj
+6 0 obj
+<< /Length 230 >>
+stream
+BT
+/F1 18 Tf
+1 0 0 1 72 740 Tm
+(Chunking Strategy) Tj
+/F1 11 Tf
+1 0 0 1 72 708 Tm
+(Chunk size materially affects retrieval quality.) Tj
+/F1 11 Tf
+1 0 0 1 72 687 Tm
+(Small chunks lose context; large chunks dilute embeddings.) Tj
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 8 0 R /Resources << /Font << /F1 9 0 R >> >> >>
+endobj
+8 0 obj
+<< /Length 145 >>
+stream
+BT
+/F1 18 Tf
+1 0 0 1 72 740 Tm
+(Hybrid Search) Tj
+/F1 11 Tf
+1 0 0 1 72 708 Tm
+(Combining BM25 with dense vectors outperforms either alone.) Tj
+ET
+endstream
+endobj
+9 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+10 0 obj
+<< /Title (Retrieval Augmented Generation) /Author (Forge Test Suite) /Creator (make_pdf_fixtures.py) >>
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000253 00000 n 
+0000000538 00000 n 
+0000000664 00000 n 
+0000000945 00000 n 
+0000001071 00000 n 
+0000001267 00000 n 
+0000001337 00000 n 
+trailer
+<< /Size 11 /Root 1 0 R /Info 10 0 R >>
+startxref
+1458
+%%EOF

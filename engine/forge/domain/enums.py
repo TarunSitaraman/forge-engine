@@ -177,6 +177,88 @@ class EntityType(str, Enum):
     CLAIM = "Claim"
     EVIDENCE_LINK = "EvidenceLink"
     CLAIM_LINK = "ClaimLink"
+    #: Phase 2. A proposal is a *recorded intention* to change something, and
+    #: has its own revision history, so it is an entity rather than a note.
+    PROPOSAL = "Proposal"
+
+
+# --------------------------------------------------------------------------
+# Phase 2 — ingestion, extraction, and proposals
+# --------------------------------------------------------------------------
+
+
+class IngestionStatus(str, Enum):
+    """Outcome of ingesting one source.
+
+    ``OCR_REQUIRED`` is a first-class outcome, not a failure: the PDF is valid
+    and was read successfully, it simply carries no extractable text. Reporting
+    it as success with zero spans would be a lie; reporting it as a parse error
+    would send the user looking for the wrong problem.
+    """
+
+    INGESTED = "ingested"
+    UNCHANGED = "unchanged"
+    OCR_REQUIRED = "ocr_required"
+    UNSUPPORTED = "unsupported"
+    PARSE_FAILED = "parse_failed"
+    NOT_FOUND = "not_found"
+
+
+class ExtractionStatus(str, Enum):
+    """Outcome of an LLM extraction pass.
+
+    ``PARTIAL`` exists so a run that produced some valid objects and some
+    invalid ones is not rounded up to success or down to failure. Fabricating
+    the missing pieces is never an option.
+    """
+
+    SUCCEEDED = "succeeded"
+    PARTIAL = "partial"
+    FAILED = "failed"
+    SKIPPED_NO_PROVIDER = "skipped_no_provider"
+    SKIPPED_CACHED = "skipped_cached"
+
+
+class MatchKind(str, Enum):
+    """Result of matching an extracted concept against existing concepts.
+
+    There is deliberately no ``MERGED``. Deciding that two concepts are the
+    same is a human judgement in Phase 2, so the matcher's strongest possible
+    output is a candidate.
+    """
+
+    NEW_CONCEPT = "new_concept"
+    MATCH_CANDIDATE = "match_candidate"
+    AMBIGUOUS = "ambiguous"
+
+
+class ProposalType(str, Enum):
+    METADATA_REPAIR = "metadata_repair"
+    NEW_CONCEPT = "new_concept"
+    CONCEPT_MATCH = "concept_match"
+    NEW_CLAIM = "new_claim"
+
+
+class ProposalStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    SUPERSEDED = "superseded"
+
+
+class SafetyClass(str, Enum):
+    """How much trust a proposal's content warrants.
+
+    ``DETERMINISTIC_VERIFIED`` is reserved for changes computed by ordinary
+    software *and* verified by re-parsing the result — the Phase 1 frontmatter
+    repairs. An LLM-generated proposal can never carry it, no matter how
+    confident the model was.
+    """
+
+    DETERMINISTIC_VERIFIED = "deterministic_verified"
+    DETERMINISTIC_UNVERIFIED = "deterministic_unverified"
+    MODEL_GENERATED = "model_generated"
+    AMBIGUOUS = "ambiguous"
 
 
 class ChangeStatus(str, Enum):

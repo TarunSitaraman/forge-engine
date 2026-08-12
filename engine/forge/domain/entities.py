@@ -108,11 +108,22 @@ class Span(Entity):
 
     Without spans, "traceable to evidence" degrades to document-level
     attribution, which is not traceability.
+
+    A span must carry enough location to answer "where exactly did this come
+    from?" in a form a human can check against the original:
+
+        Document: "Attention Is All You Need"
+        Evidence: page 3, section "Model Architecture", lines 40-58
+
+    Phase 2 added ``page``, ``char_start``/``char_end``, and ``page_span`` as
+    **optional** fields. Phase 1 Markdown spans set none of them and are
+    unaffected; ``make_id`` is unchanged, so existing span identities are
+    stable.
     """
 
     document_id: str
     ordinal: int
-    #: Human-readable location, e.g. "L12-L48" or "p.3" or "## Mental Model".
+    #: Human-readable location, e.g. "L12-L48" or "p.3 L1-L12".
     locator: str
     #: Heading path from document root, e.g. ("Architecture", "Storage").
     heading_path: tuple[str, ...] = ()
@@ -122,6 +133,19 @@ class Span(Entity):
     content_hash: str
     chunk_strategy: str = "heading"
 
+    # -- Phase 2 additions, all optional -----------------------------------
+
+    #: 1-based page number for paginated sources. ``None`` for Markdown, which
+    #: has no pages — recorded as absent rather than faked as page 1.
+    page: int | None = None
+    #: ``(first_page, last_page)`` when a span crosses a page boundary.
+    page_span: tuple[int, int] | None = None
+    #: Character offsets into the document's extracted text. Practical and
+    #: useful; deliberately not token offsets, which would bind provenance to a
+    #: tokenizer version.
+    char_start: int | None = None
+    char_end: int | None = None
+
     @staticmethod
     def make_id(document_id: str, ordinal: int, locator: str) -> str:
         return deterministic_id("span", document_id, str(ordinal), locator)
@@ -130,7 +154,29 @@ class Span(Entity):
     def _line_order(self) -> Span:
         if self.end_line < self.start_line:
             raise ValueError(f"span end_line {self.end_line} precedes start_line {self.start_line}")
+        if self.char_start is not None and self.char_end is not None:
+            if self.char_end < self.char_start:
+                raise ValueError(
+                    f"span char_end {self.char_end} precedes char_start {self.char_start}"
+                )
+        if self.page is not None and self.page < 1:
+            raise ValueError(f"page numbers are 1-based; got {self.page}")
+        if self.page_span is not None and self.page_span[1] < self.page_span[0]:
+            raise ValueError(f"page_span end precedes start: {self.page_span}")
         return self
+
+    def citation(self) -> str:
+        """Human-readable provenance string, e.g. 'p.3 > Model Architecture'."""
+        parts: list[str] = []
+        if self.page_span is not None and self.page_span[0] != self.page_span[1]:
+            parts.append(f"pp.{self.page_span[0]}-{self.page_span[1]}")
+        elif self.page is not None:
+            parts.append(f"p.{self.page}")
+        if self.heading_path:
+            parts.append(" > ".join(self.heading_path))
+        if not parts:
+            parts.append(self.locator)
+        return " | ".join(parts)
 
 
 # --------------------------------------------------------------------------

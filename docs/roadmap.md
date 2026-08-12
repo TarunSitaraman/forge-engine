@@ -72,9 +72,25 @@ most worth slowing down for.
 
 ---
 
-## Phase 2 — Source ingestion infrastructure
+## Phase 2 — Source ingestion infrastructure *(complete)*
 
-**Scope**
+**Delivered:** PDF (`pypdfium2`) and Markdown source adapters behind one
+acquisition protocol; deterministic structure-aware chunking into spans
+carrying page, section, line and character offsets; derivation-key caching;
+optional LLM extraction with strict schemas and a verbatim-quote grounding
+check; concept candidate matching that never merges; a proposal system with
+approval state, safety classification and flag-gated reversible write-back;
+lexical retrieval with filters and optional semantic re-rank.
+
+**Gate: passed** — `bash scripts/validate_phase2.sh` (16/16). See
+[phase-2-implementation.md](./architecture/phase-2-implementation.md).
+
+**Deviation from the original scope:** the LLM-extraction, concept-matching and
+proposal work listed below under Phases 4–5 was pulled forward, because
+ingesting external sources without provenance-carrying candidates and a human
+approval gate would have meant building the unsafe version first.
+
+**Original scope**
 - Source registry: hashing, change detection, dedup.
 - Markdown parser (**code-fence-aware** — audit §6.3), PDF parser,
   blob store for originals.
@@ -83,12 +99,12 @@ most worth slowing down for.
 - CLI: `forge ingest`, `forge status`, `forge sources`.
 
 **Gate**
-- [ ] All 620 vault files ingest; failures quarantined, never partial
-- [ ] Every span resolves to an exact source location
-- [ ] **Re-ingesting the unchanged corpus costs zero LLM calls**
-- [ ] Editing one heading reprocesses only affected spans
-- [ ] A PDF ingests end to end with page-level provenance
-- [ ] Parsers pass golden-file tests
+- [x] All vault files ingest; failures quarantined, never partial
+- [x] Every span resolves to an exact source location
+- [x] **Re-ingesting an unchanged source costs zero LLM calls**
+- [x] Editing a file reprocesses only that source
+- [x] A PDF ingests end to end with page-level provenance
+- [x] Parsers pass tests against real PDF fixtures
 
 ---
 

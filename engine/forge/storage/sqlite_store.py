@@ -34,6 +34,9 @@ from ..domain import (
     Document,
     EntityType,
     EvidenceLink,
+    Proposal,
+    ProposalStatus,
+    ProposalType,
     Revision,
     Source,
     Span,
@@ -46,7 +49,7 @@ from ..domain import (
     validate_supersession,
 )
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -134,6 +137,55 @@ CREATE TABLE IF NOT EXISTS revisions (
 );
 CREATE INDEX IF NOT EXISTS idx_revisions_entity ON revisions(entity_type, entity_id, seq);
 CREATE INDEX IF NOT EXISTS idx_revisions_seq ON revisions(seq);
+
+-- ---------------------------------------------------------------- Phase 2
+
+CREATE TABLE IF NOT EXISTS proposals (
+    id         TEXT PRIMARY KEY,
+    type       TEXT NOT NULL,
+    status     TEXT NOT NULL,
+    safety     TEXT NOT NULL,
+    target     TEXT NOT NULL,
+    source_id  TEXT,
+    created_at TEXT NOT NULL,
+    data       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_proposals_status ON proposals(status, type);
+CREATE INDEX IF NOT EXISTS idx_proposals_source ON proposals(source_id);
+
+-- Derivation cache. Keyed on everything that can invalidate a derived result:
+-- source content, processor version, model, and prompt/schema version. If any
+-- component changes the key changes, and the work is redone.
+CREATE TABLE IF NOT EXISTS derivations (
+    key          TEXT PRIMARY KEY,
+    kind         TEXT NOT NULL,
+    source_id    TEXT,
+    content_hash TEXT NOT NULL,
+    payload      TEXT NOT NULL,
+    created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_derivations_source ON derivations(source_id, kind);
+
+-- Lexical search over spans. FTS5 is stdlib-available and removes any need for
+-- an external search service at this corpus size.
+CREATE VIRTUAL TABLE IF NOT EXISTS span_fts USING fts5(
+    span_id UNINDEXED,
+    document_id UNINDEXED,
+    text,
+    tokenize = 'unicode61'
+);
+
+-- Optional embeddings. Absent rows simply mean vector search is unavailable;
+-- lexical retrieval and deterministic matching continue regardless.
+CREATE TABLE IF NOT EXISTS embeddings (
+    owner_type TEXT NOT NULL,
+    owner_id   TEXT NOT NULL,
+    model      TEXT NOT NULL,
+    dimensions INTEGER NOT NULL,
+    vector     BLOB NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (owner_type, owner_id, model)
+);
 """
 
 
@@ -151,12 +203,35 @@ class SqliteStore:
     # -- lifecycle ---------------------------------------------------------
 
     def initialize(self) -> None:
+        """Create or upgrade the schema. Idempotent.
+
+        Phase 1 -> Phase 2 is a purely additive migration: every v1 table is
+        untouched and the new tables are created alongside. Upgrading a v1
+        database preserves all of its sources, documents, spans, and revisions.
+        """
+        previous = self.schema_version
         with self._conn:
             self._conn.executescript(_SCHEMA)
             self._conn.execute(
                 "INSERT OR REPLACE INTO meta(key, value) VALUES('schema_version', ?)",
                 (str(SCHEMA_VERSION),),
             )
+        if previous and previous < SCHEMA_VERSION:
+            self._migrate_from(previous)
+
+    def _migrate_from(self, previous: int) -> None:
+        """Bring derived-only structures into line after a schema upgrade.
+
+        The FTS index is derived from spans, so a v1 database arrives with it
+        empty. Left alone that would make ``forge search`` silently return
+        nothing on an upgraded database — a wrong answer rather than an error,
+        which is the worse failure. Rebuilding is cheap and self-healing.
+        """
+        if previous < 2:
+            spans = int(self._one("SELECT COUNT(*) AS n FROM spans")["n"])  # type: ignore[index]
+            indexed = int(self._one("SELECT COUNT(*) AS n FROM span_fts")["n"])  # type: ignore[index]
+            if spans and not indexed:
+                self.rebuild_search_index()
 
     def reset(self) -> None:
         """Drop every table. Derived state only — nothing unrecoverable here."""
@@ -170,10 +245,27 @@ class SqliteStore:
                 "spans",
                 "documents",
                 "sources",
+                "proposals",
+                "derivations",
+                "embeddings",
+                "span_fts",
                 "meta",
             ):
                 self._conn.execute(f"DROP TABLE IF EXISTS {table}")
         self.initialize()
+
+    @property
+    def schema_version(self) -> int:
+        """Stored schema version, or 0 when the database has no schema yet.
+
+        Tolerates a missing ``meta`` table: ``sqlite3.connect`` creates the file
+        on construction, so a brand-new database exists on disk but is empty.
+        """
+        try:
+            row = self._one("SELECT value FROM meta WHERE key = 'schema_version'")
+        except sqlite3.OperationalError:
+            return 0
+        return int(row["value"]) if row else 0
 
     def close(self) -> None:
         self._conn.close()
@@ -190,8 +282,17 @@ class SqliteStore:
         existing = self.get_source(source.id)
         with self._conn:
             self._conn.execute(
-                "INSERT OR REPLACE INTO sources(id, locator, kind, content_hash, trust_tier, data)"
-                " VALUES(?,?,?,?,?,?)",
+                # ON CONFLICT DO UPDATE, not INSERT OR REPLACE. SQLite implements
+                # REPLACE as DELETE-then-INSERT, which fires ON DELETE CASCADE and
+                # would silently destroy every document and span belonging to a
+                # source the moment its content changed — exactly the historical
+                # provenance Phase 2 must preserve.
+                "INSERT INTO sources(id, locator, kind, content_hash, trust_tier, data)"
+                " VALUES(?,?,?,?,?,?)"
+                " ON CONFLICT(id) DO UPDATE SET"
+                "   locator=excluded.locator, kind=excluded.kind,"
+                "   content_hash=excluded.content_hash, trust_tier=excluded.trust_tier,"
+                "   data=excluded.data",
                 (
                     source.id,
                     source.locator,
@@ -247,8 +348,12 @@ class SqliteStore:
     def put_document(self, document: Document) -> None:
         with self._conn:
             self._conn.execute(
-                "INSERT OR REPLACE INTO documents(id, source_id, version, content_hash, data)"
-                " VALUES(?,?,?,?,?)",
+                # Upsert for the same reason: documents cascade to spans.
+                "INSERT INTO documents(id, source_id, version, content_hash, data)"
+                " VALUES(?,?,?,?,?)"
+                " ON CONFLICT(id) DO UPDATE SET"
+                "   version=excluded.version, content_hash=excluded.content_hash,"
+                "   data=excluded.data",
                 (
                     document.id,
                     document.source_id,
@@ -269,11 +374,29 @@ class SqliteStore:
         return [Document.model_validate_json(r["data"]) for r in rows]
 
     def put_spans(self, spans: Sequence[Span]) -> None:
+        """Persist spans and keep the lexical index in step.
+
+        FTS rows are rewritten alongside the span in the same transaction, so
+        the search index can never drift from the spans it indexes.
+        """
         with self._conn:
             self._conn.executemany(
-                "INSERT OR REPLACE INTO spans(id, document_id, ordinal, content_hash, data)"
-                " VALUES(?,?,?,?,?)",
+                "INSERT INTO spans(id, document_id, ordinal, content_hash, data)"
+                " VALUES(?,?,?,?,?)"
+                " ON CONFLICT(id) DO UPDATE SET"
+                "   ordinal=excluded.ordinal, content_hash=excluded.content_hash,"
+                "   data=excluded.data",
                 [(s.id, s.document_id, s.ordinal, s.content_hash, _dump(s)) for s in spans],
+            )
+            ids = [s.id for s in spans]
+            if ids:
+                placeholders = ",".join("?" * len(ids))
+                self._conn.execute(
+                    f"DELETE FROM span_fts WHERE span_id IN ({placeholders})", ids
+                )
+            self._conn.executemany(
+                "INSERT INTO span_fts(span_id, document_id, text) VALUES(?,?,?)",
+                [(s.id, s.document_id, s.text) for s in spans],
             )
 
     def get_span(self, span_id: str) -> Span | None:
@@ -475,6 +598,191 @@ class SqliteStore:
     def count_revisions(self) -> int:
         return int(self._one("SELECT COUNT(*) AS n FROM revisions")["n"])  # type: ignore[index]
 
+    # -- proposals (Phase 2) -----------------------------------------------
+
+    def put_proposal(self, proposal: Proposal) -> None:
+        """Persist a proposal, recording creation and every status change.
+
+        Re-generating an identical proposal is idempotent: identity is derived
+        from the proposal's content, so a rejected proposal is not silently
+        resurrected as a new PENDING one by the next ingestion run.
+        """
+        existing = self.get_proposal(proposal.id)
+        with self._conn:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO proposals"
+                "(id, type, status, safety, target, source_id, created_at, data)"
+                " VALUES(?,?,?,?,?,?,?,?)",
+                (
+                    proposal.id,
+                    proposal.type.value,
+                    proposal.status.value,
+                    proposal.safety.value,
+                    proposal.operation.target,
+                    proposal.source_id,
+                    proposal.created_at.isoformat(),
+                    _dump(proposal),
+                ),
+            )
+            if existing is None:
+                self._append(record_create(EntityType.PROPOSAL, proposal.id, _as_dict(proposal)))
+            elif existing.status is not proposal.status:
+                self._append(
+                    record_change(
+                        EntityType.PROPOSAL,
+                        proposal.id,
+                        _as_dict(existing),
+                        _as_dict(proposal),
+                        cause=proposal.decided_by,
+                        note=f"{existing.status.value} -> {proposal.status.value}",
+                    )
+                )
+
+    def put_proposal_if_absent(self, proposal: Proposal) -> bool:
+        """Store only if unseen. Returns True when it was actually created."""
+        if self.get_proposal(proposal.id) is not None:
+            return False
+        self.put_proposal(proposal)
+        return True
+
+    def get_proposal(self, proposal_id: str) -> Proposal | None:
+        row = self._one("SELECT data FROM proposals WHERE id = ?", (proposal_id,))
+        return Proposal.model_validate_json(row["data"]) if row else None
+
+    def find_proposal(self, prefix: str) -> list[Proposal]:
+        """Resolve a possibly-abbreviated id, so the CLI can accept short ids."""
+        rows = self._all(
+            "SELECT data FROM proposals WHERE id LIKE ? ORDER BY created_at LIMIT 10",
+            (prefix + "%",),
+        )
+        return [Proposal.model_validate_json(r["data"]) for r in rows]
+
+    def list_proposals(
+        self,
+        *,
+        status: ProposalStatus | None = None,
+        type: ProposalType | None = None,
+        source_id: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[Proposal]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if status is not None:
+            clauses.append("status = ?")
+            params.append(status.value)
+        if type is not None:
+            clauses.append("type = ?")
+            params.append(type.value)
+        if source_id is not None:
+            clauses.append("source_id = ?")
+            params.append(source_id)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.extend([limit, offset])
+        rows = self._all(
+            f"SELECT data FROM proposals {where} ORDER BY created_at, id LIMIT ? OFFSET ?",
+            tuple(params),
+        )
+        return [Proposal.model_validate_json(r["data"]) for r in rows]
+
+    def count_proposals(self) -> dict[str, int]:
+        rows = self._all("SELECT status, COUNT(*) AS n FROM proposals GROUP BY status")
+        return {r["status"]: int(r["n"]) for r in rows}
+
+    # -- derivation cache (Phase 2) ----------------------------------------
+
+    def get_derivation(self, key: str) -> dict[str, Any] | None:
+        row = self._one("SELECT payload FROM derivations WHERE key = ?", (key,))
+        return json.loads(row["payload"]) if row else None
+
+    def put_derivation(
+        self, key: str, kind: str, content_hash: str, payload: dict[str, Any], *, source_id: str | None = None
+    ) -> None:
+        with self._conn:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO derivations(key, kind, source_id, content_hash, payload, created_at)"
+                " VALUES(?,?,?,?,?,?)",
+                (key, kind, source_id, content_hash, json.dumps(payload, sort_keys=True),
+                 utc_now().isoformat()),
+            )
+
+    def invalidate_derivations(self, source_id: str) -> int:
+        with self._conn:
+            cur = self._conn.execute("DELETE FROM derivations WHERE source_id = ?", (source_id,))
+            return int(cur.rowcount)
+
+    # -- lexical search (Phase 2) ------------------------------------------
+
+    def search_spans(
+        self, query: str, *, limit: int = 20, document_ids: Sequence[str] | None = None
+    ) -> list[tuple[Span, float]]:
+        """FTS5 lexical search. Returns (span, score) with lower score = better.
+
+        Uses bm25(), whose sign convention is "more negative is more relevant";
+        it is negated here so callers can sort ascending on a positive rank.
+        """
+        sql = (
+            "SELECT span_fts.span_id AS sid, bm25(span_fts) AS rank FROM span_fts "
+            "WHERE span_fts MATCH ?"
+        )
+        params: list[Any] = [query]
+        if document_ids:
+            placeholders = ",".join("?" * len(document_ids))
+            sql += f" AND span_fts.document_id IN ({placeholders})"
+            params.extend(document_ids)
+        sql += " ORDER BY rank LIMIT ?"
+        params.append(limit)
+
+        out: list[tuple[Span, float]] = []
+        for row in self._all(sql, tuple(params)):
+            span = self.get_span(row["sid"])
+            if span is not None:
+                out.append((span, float(row["rank"])))
+        return out
+
+    def rebuild_search_index(self) -> int:
+        """Rebuild the FTS index from spans. Derived state; safe to run anytime."""
+        with self._conn:
+            self._conn.execute("DELETE FROM span_fts")
+            rows = self._all("SELECT data FROM spans")
+            spans = [Span.model_validate_json(r["data"]) for r in rows]
+            self._conn.executemany(
+                "INSERT INTO span_fts(span_id, document_id, text) VALUES(?,?,?)",
+                [(s.id, s.document_id, s.text) for s in spans],
+            )
+        return len(spans)
+
+    # -- embeddings (Phase 2, optional) ------------------------------------
+
+    def put_embedding(
+        self, owner_type: str, owner_id: str, model: str, vector: Sequence[float]
+    ) -> None:
+        import struct
+
+        blob = struct.pack(f"<{len(vector)}f", *vector)
+        with self._conn:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO embeddings"
+                "(owner_type, owner_id, model, dimensions, vector, created_at)"
+                " VALUES(?,?,?,?,?,?)",
+                (owner_type, owner_id, model, len(vector), blob, utc_now().isoformat()),
+            )
+
+    def get_embeddings(self, owner_type: str, model: str) -> list[tuple[str, list[float]]]:
+        import struct
+
+        rows = self._all(
+            "SELECT owner_id, dimensions, vector FROM embeddings WHERE owner_type = ? AND model = ?",
+            (owner_type, model),
+        )
+        return [
+            (r["owner_id"], list(struct.unpack(f"<{r['dimensions']}f", r["vector"])))
+            for r in rows
+        ]
+
+    def count_embeddings(self) -> int:
+        return int(self._one("SELECT COUNT(*) AS n FROM embeddings")["n"])  # type: ignore[index]
+
     # -- helpers -----------------------------------------------------------
 
     def counts(self) -> dict[str, int]:
@@ -489,6 +797,9 @@ class SqliteStore:
                 "evidence_links",
                 "claim_links",
                 "revisions",
+                "proposals",
+                "derivations",
+                "embeddings",
             )
         }
 

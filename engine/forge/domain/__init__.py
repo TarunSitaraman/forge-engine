@@ -16,11 +16,22 @@ from .enums import (
     Derivation,
     EntityType,
     EvidenceRelation,
+    ExtractionStatus,
+    IngestionStatus,
     LinkType,
+    MatchKind,
+    ProposalStatus,
+    ProposalType,
     ProvenanceTier,
     RevisionOp,
+    SafetyClass,
     SourceKind,
     TrustTier,
+)
+from .proposal import (
+    Proposal,
+    ProposalTransitionError,
+    ProposedOperation,
 )
 from .provenance import (
     Provenance,
@@ -49,6 +60,10 @@ __all__ = [
     "Claim",
     "EvidenceLink",
     "ClaimLink",
+    # proposals (Phase 2)
+    "Proposal",
+    "ProposedOperation",
+    "ProposalTransitionError",
     # provenance
     "Provenance",
     "ProvenanceInput",
@@ -75,6 +90,12 @@ __all__ = [
     "RevisionOp",
     "EntityType",
     "ChangeStatus",
+    "IngestionStatus",
+    "ExtractionStatus",
+    "MatchKind",
+    "ProposalType",
+    "ProposalStatus",
+    "SafetyClass",
     "TIER_STRENGTH",
     "TIERS_WITHOUT_EVIDENCE",
     "DETERMINISTIC_LINK_TYPES",

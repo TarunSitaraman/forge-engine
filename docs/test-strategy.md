@@ -1,9 +1,9 @@
 # Test Strategy
 
-*243 tests, 95% coverage, no model required. What is tested, why it is tested that way, and what is deliberately not tested.*
+*435 tests, 92% coverage, no model required. What is tested, why it is tested that way, and what is deliberately not tested.*
 
 ```bash
-pytest                                    # full suite, offline, ~12s
+pytest                                    # full suite, offline, ~20s
 pytest tests/unit -q                      # fast
 pytest --cov=forge --cov-report=term      # coverage
 ```
@@ -18,9 +18,10 @@ genuinely needing a live model is marked `requires_model` and skipped — nothin
 currently is.
 
 **2. Real corpus over synthetic fixtures.** Integration tests run against the
-actual 630-file vault. Synthetic examples cannot demonstrate that the parser
-survives 555 code blocks of Python literals, or that link resolution copes with
-three real stem collisions. Ideal inputs prove very little.
+actual 630-file vault, and PDF tests run against real PDFs. Synthetic examples
+cannot demonstrate that the parser survives 555 code blocks of Python literals,
+that link resolution copes with three real stem collisions, or that a truncated
+PDF fails cleanly. Ideal inputs prove very little.
 
 **3. Fixtures reproduce real defect shapes verbatim.** Where a small vault is
 needed, its files carry the exact malformed strings found in the corpus —
@@ -134,7 +135,7 @@ def test_python_literals_do_not_become_links(real_index):
   tested against a dead port, which is the state most developers hit first; its
   success path is covered by the spike harness against the mock. This is the
   suite's largest genuine gap and is stated rather than papered over.
-- **Concept/claim extraction quality.** Phase 2+; nothing extracts yet.
+- **Concept/claim extraction *quality*.** The extraction path is fully tested for correctness (schemas, grounding, provenance, failure modes) against a scripted provider, but whether a real local model extracts *good* concepts is unmeasured — no model was reachable here.
 - **Performance.** The corpus indexes in ~0.7s. A threshold test would be noise
   at this size.
 - **`logging.py` internals** (57% covered). Configuration plumbing; its one
@@ -143,9 +144,43 @@ def test_python_literals_do_not_become_links(real_index):
 
 ---
 
+## Phase 2 additions
+
+| Module | Tests |
+|---|---|
+| `tests/unit/test_pdf_adapter.py` | Real PDF fixtures: normal, multipage, empty pages, image-only, malformed, non-PDF |
+| `tests/unit/test_phase2_units.py` | Markdown adapter, registry, chunking, derivation keys, extraction, embeddings |
+| `tests/unit/test_proposals.py` | Lifecycle, safety classification, matching, write-back |
+| `tests/unit/test_retrieval.py` | Lexical search, filters, semantic path via a fake embedding provider |
+| `tests/integration/test_phase2_ingestion.py` | End-to-end ingestion, cost control, overlap, ambiguity, CLI |
+
+**PDF fixtures are real PDFs**, generated from raw PDF syntax by
+`scripts/make_pdf_fixtures.py` and committed. A PDF parser tested against mocks
+tests nothing. The fixtures deliberately include the failure cases: an
+image-only page (`OCR_REQUIRED`), a truncated file, and a text file with a
+`.pdf` extension.
+
+**The semantic path is tested without a model.** `scripted_extractor` and
+`FakeEmbeddings` drive the production code through the real provider
+interfaces. Everything except the model itself is the shipped path.
+
+### Phase 2 regression tests for bugs found during development
+
+| Bug | Test |
+|---|---|
+| `INSERT OR REPLACE` cascading DELETE destroyed prior documents and spans on re-ingest | `test_modification_creates_a_new_document_version` |
+| FTS5 query injection: `quote"inside` raised `unterminated string` | `test_operator_characters_are_neutralized`, `test_embedded_quotes_are_doubled` |
+| PDF line cursor advanced on skipped blank lines, drifting every citation | `test_line_numbers_index_into_the_extracted_text` |
+| Directory links and `%20` targets reported broken (Phase 1) | `test_directory_link_is_not_broken`, `test_url_encoded_link_resolves` |
+| A dropped ungrounded claim failed the whole span and blocked caching | `test_ungrounded_quote_is_dropped_and_reported` |
+| 120-char span floor silently discarded short meaningful sections | `test_short_spans_are_still_extracted` |
+| `Settings.load` kwargs collided with `**overrides` | exercised by every `Settings.load(state_dir=...)` call |
+
+---
+
 ## Coverage
 
-95% overall. `llm/ollama.py` sits at 64% because its success paths need a live
+92% overall. `llm/ollama.py` sits at 64% because its success paths need a live
 server; every other module is 90%+, and `domain/` — where the invariants live —
 is 98–100%.
 
