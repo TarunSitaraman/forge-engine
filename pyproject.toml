@@ -15,7 +15,8 @@ license = { text = "MIT" }
 #   typer     — CLI
 #   structlog — structured logging
 #   PyYAML    — frontmatter parsing (the corpus is YAML-frontmattered)
-#   httpx     — Ollama HTTP transport
+#   httpx     — Ollama and cloud HTTP transport
+#   pypdfium2 — PDF text extraction (Apache/BSD; chosen over AGPL PyMuPDF)
 # Storage uses stdlib sqlite3. Markdown parsing is stdlib `re` (see
 # docs/architecture/phase-1-implementation.md for why, not laziness).
 dependencies = [
@@ -24,6 +25,7 @@ dependencies = [
     "structlog>=24.1",
     "PyYAML>=6.0",
     "httpx>=0.27",
+    "pypdfium2>=4.0",
 ]
 
 [project.optional-dependencies]
