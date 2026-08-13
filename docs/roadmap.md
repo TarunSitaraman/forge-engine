@@ -145,59 +145,92 @@ is the first thing to do when one is reachable.
 
 ---
 
-## Phase 4 — Knowledge graph
+## Phase 4 — Agentic knowledge evolution *(complete)*
 
-Phase 3 delivered the graph *substrate* — storage, bounded traversal,
-integrity, and the measurement that says SQLite suffices (0.24 ms neighbour
-lookup at 5,000 nodes / 20,000 edges). Phase 4 is about *populating* it at
-corpus scale.
+The plan had Phase 4 as "knowledge graph population" and Phase 5 as "LangGraph
+workflow". Those were swapped in execution, for a reason worth recording: the
+capability that mattered was not *more* knowledge, it was Forge noticing when
+new evidence **changes** knowledge it already holds. Graph population without
+that is a bigger pile of facts nobody is maintaining.
 
-**Scope**
-- Concept resolution: alias/lexical/vector candidate narrowing, LLM only
-  for genuine ambiguity.
-- Relationship discovery beyond co-occurrence, over the typed vocabulary.
-- Bootstrap concepts from filenames; seed edges from the 4,100 wikilinks.
-- Deterministic retrieval improvements measured against the Phase 3 set:
-  title/heading boosting, and alias-driven query expansion reusing the
-  identity config.
+**Delivered**
+- A stateful LangGraph workflow: observe evidence → identify affected concepts
+  → retrieve claims → assess → classify impact → propose → **pause for a
+  human** → activate → revise
+- Deterministic-first candidate narrowing, with a recorded reason per candidate
+  and zero model calls
+- Grounded semantic assessment: five classifications, no `CONTRADICTS`,
+  citations verified against real stored spans, ungrounded output rejected
+- Three evolution proposal types — corroborate, refine (supersede,
+  non-destructively), flag as disputed (never retract)
+- Checkpointing and resume across a real process restart
+- A provider-agnostic layer: local Ollama, remote Ollama, cloud, mock — with
+  no silent downgrade for knowledge mutation
 
 **Gate**
-- [ ] Concept extraction scored against the ~500 filename-derived
-      ground-truth concepts
-- [ ] Relationship discovery scored against the existing wikilink graph
-- [ ] `Graph Traversal` vs `DFS`/`BFS` and `Binary Search`
-      pattern-vs-algorithm resolve correctly (the known hard cases)
-- [ ] `RELATED_TO` edges carry similarity scores and are excluded from
-      reasoning traversals
-- [x] **Neo4j decision made on measured hop-depth** — measured in Phase 3 and
-      answered *no*; `scripts/measure_graph_scale.py` re-runs the measurement
+- [x] LangGraph genuinely orchestrates; services remain plain Python
+- [x] Typed, serializable, checkpointed state
+- [x] Human interruption and resume, verified across a process restart
+- [x] New evidence can change existing knowledge, only via approval
+- [x] Candidate narrowing is deterministic-first (0 model calls, asserted)
+- [x] Assessments are grounded in real spans; hallucinated citations rejected
+- [x] Potential conflicts require human review
+- [x] Provenance records provider, model, prompt version, schema version
+- [x] Ollama, remote Ollama, and cloud all work through one abstraction
+- [x] No provider is required for deterministic operation
+- [x] Assessments cached; provider/model/prompt/schema changes invalidate
+- [x] Duplicate execution is safe — 0 new entities, 0 model calls
+- [x] CI is fully offline
+- [ ] **Real-model evaluation** — not run. No Ollama server and no cloud
+      credential were available in the development environment; the pipeline
+      is measured, model quality is not. See
+      [provider availability](./research/provider-availability.md).
+
+*Deferred from the original Phase 4 scope, now the leading candidates for
+Phase 5:* bootstrapping concepts from filenames, seeding edges from the ~4,100
+wikilinks, relationship discovery beyond co-occurrence, and the two
+deterministic retrieval improvements the Phase 3 miss analysis identified
+(title/heading boosting, alias-driven query expansion).
 
 ---
 
-## Phase 5 — LangGraph ingestion & evolution workflow
+## Phase 5 — Real-model validation and graph population
 
-Where Forge stops being a RAG pipeline.
+Phase 4 delivered the workflow this phase was originally scoped to build, so
+Phase 5 becomes the two things Phase 4 could not do: **prove the pipeline works
+with a real model**, and populate the graph at corpus scale.
 
 **Scope**
-- W1 ingestion/evolution graph: typed state, checkpointing, conditional
-  routing, retries, quarantine.
-- Change analysis: known / supports / contradicts / refines / new.
-- Contradiction detection → `Contradiction` entities.
-- Supersession with history retention.
-- Synthesis staleness marking (deterministic traversal).
-- Approval gates for high-severity contradictions and above-threshold
-  merges.
-- W2 contradiction resolution workflow.
+- Run `scripts/assessment_eval.py` against a real local model and a real cloud
+  model. Report them as two rows, never averaged — they are different
+  instruments.
+- Measure the **false-positive conflict rate** specifically. Forge's
+  conservatism rules exist to keep it low; whether they succeed is untested and
+  is the largest open risk carried out of Phase 4.
+- Expand the assessment set beyond 5 cases once a real model shows where it is
+  weak.
+- Bootstrap concepts from filenames; seed edges from the ~4,100 wikilinks
+  (deferred from the original Phase 4 scope).
+- Relationship discovery beyond co-occurrence.
+- The two deterministic retrieval improvements the Phase 3 miss analysis
+  identified: title/heading boosting and alias-driven query expansion.
+- Evolution beyond claims: let new evidence refine a *concept* or a
+  relationship, not only a claim.
 
 **Gate**
-- [ ] **The MVP acceptance scenario passes end to end (§MVP below)**
-- [ ] A second overlapping document updates the model rather than
-      duplicating it
-- [ ] A contradicting document produces a `Contradiction`, not a silent
-      overwrite
-- [ ] Interrupting mid-ingestion and resuming does not duplicate work
-- [ ] Every model change traces to a `run_id` and a `Revision`
-- [ ] No node is named for a persona
+- [ ] Assessment metrics measured on a real local model and a real cloud model
+- [ ] False-positive conflict rate measured and judged acceptable
+- [ ] A second overlapping document updates the model rather than duplicating it
+- [ ] Interrupting mid-ingestion and resuming does not duplicate work *(already
+      true for evolution; needs proving for ingestion)*
+- [ ] Every model change traces to a workflow id and a `Revision` *(already true)*
+- [ ] Concept extraction scored against the ~500 filename-derived concepts
+- [ ] Retrieval improvements measured against the Phase 3 labelled set
+
+*Still deliberately not built:* contradiction *detection* as an autonomous
+capability. Phase 4's `POTENTIAL_CONFLICT` routes to a human by design, and
+promoting it to an asserted `Contradiction` entity should wait until the
+false-positive rate is measured.
 
 ---
 

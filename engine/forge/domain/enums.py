@@ -180,6 +180,11 @@ class EntityType(str, Enum):
     #: Phase 2. A proposal is a *recorded intention* to change something, and
     #: has its own revision history, so it is an entity rather than a note.
     PROPOSAL = "Proposal"
+    #: Phase 4. A workflow run is the durable record of *why* knowledge
+    #: changed — which evidence, which candidates, which model, which
+    #: decision. Without it, an approved change is unexplainable after the
+    #: fact, which defeats the point of provenance.
+    WORKFLOW = "Workflow"
 
 
 # --------------------------------------------------------------------------
@@ -253,6 +258,65 @@ class ProposalType(str, Enum):
     NEW_CONCEPT = "new_concept"
     CONCEPT_MATCH = "concept_match"
     NEW_CLAIM = "new_claim"
+    # Phase 4 — knowledge *evolution*. These target knowledge that already
+    # exists, which is what distinguishes them from everything above: the
+    # types before this line only ever add.
+    CLAIM_EVIDENCE = "claim_evidence"  # corroborating evidence for a live claim
+    CLAIM_REFINEMENT = "claim_refinement"  # a more precise statement, superseding
+    CLAIM_CONFLICT = "claim_conflict"  # evidence that appears to disagree
+
+
+class AssessmentClass(str, Enum):
+    """How new evidence relates to one existing claim.
+
+    Deliberately **no ``CONTRADICTS``**. The strongest thing the model may say
+    is ``POTENTIAL_CONFLICT``, which routes to a human. A false contradiction
+    costs more trust than a missed one: the first makes the user distrust
+    everything Forge asserts, the second only leaves them where they were.
+
+    ``INSUFFICIENT_EVIDENCE`` is a first-class outcome, not a failure. A model
+    forced to choose between five substantive options will pick one; giving it
+    an honest way to decline is what keeps the other four meaningful.
+    """
+
+    SUPPORTS = "SUPPORTS"
+    REFINES = "REFINES"
+    POTENTIAL_CONFLICT = "POTENTIAL_CONFLICT"
+    IRRELEVANT = "IRRELEVANT"
+    INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
+
+
+class ImpactClass(str, Enum):
+    """What an assessment means for the knowledge base as a whole.
+
+    Distinct from :class:`AssessmentClass` because they answer different
+    questions. An assessment is about one claim; an impact is about what Forge
+    should now *do*. The mapping between them is deterministic code, not a
+    second model call — see :mod:`forge.evolution.impact`.
+    """
+
+    NO_MATERIAL_CHANGE = "NO_MATERIAL_CHANGE"
+    SUPPORTS = "SUPPORTS"
+    REFINES = "REFINES"
+    POTENTIAL_CONFLICT = "POTENTIAL_CONFLICT"
+    NEW_KNOWLEDGE = "NEW_KNOWLEDGE"
+
+
+class WorkflowStatus(str, Enum):
+    """Lifecycle of one knowledge-evolution run.
+
+    ``WAITING_FOR_REVIEW`` is the state that makes the workflow agentic in the
+    way that matters: the run stops itself, persists, and waits for a human,
+    rather than proceeding on its own judgement.
+    """
+
+    RUNNING = "running"
+    WAITING_FOR_REVIEW = "waiting_for_review"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    #: The configured provider could not serve a semantic step. Resumable —
+    #: never silently downgraded to a weaker model.
+    SEMANTIC_ANALYSIS_UNAVAILABLE = "semantic_analysis_unavailable"
 
 
 class ProposalStatus(str, Enum):

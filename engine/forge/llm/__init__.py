@@ -20,6 +20,7 @@ from .base import (
     extract_json,
     parse_structured,
 )
+from .cloud import CloudProvider
 from .mock import MockProvider, fixture_provider, malformed_provider, unavailable_provider
 from .ollama import OllamaProvider
 
@@ -27,22 +28,86 @@ from .ollama import OllamaProvider
 def get_provider(settings: Settings) -> LLMProvider:
     """Build the configured provider.
 
-    The only place in the engine that knows which providers exist.
+    The only place in the engine that knows which providers exist. Selection is
+    **explicit**: an unavailable provider is reported as unavailable, never
+    quietly replaced by a different one. See :func:`require_provider`.
     """
     if settings.llm.provider == "mock":
         return MockProvider()
     if settings.llm.provider == "ollama":
+        # `llm.base_url` remains the Phase 1-3 spelling and stays authoritative
+        # when it has been set away from the default; `llm.ollama.base_url` is
+        # the preferred one and wins otherwise.
+        default = type(settings.llm).model_fields["base_url"].default
+        base_url = (
+            settings.llm.base_url
+            if settings.llm.base_url != default
+            else settings.llm.ollama.base_url
+        )
         return OllamaProvider(
-            settings.llm.base_url,
+            base_url,
             models=dict(settings.llm.models),
-            timeout=settings.llm.timeout_seconds,
-            max_retries=settings.llm.max_retries,
+            timeout=settings.llm.ollama.timeout_seconds,
+            max_retries=settings.llm.ollama.max_retries,
+        )
+    if settings.llm.provider == "cloud":
+        cloud = settings.llm.cloud
+        return CloudProvider(
+            vendor=cloud.vendor,
+            model=cloud.model,
+            api_key_env=cloud.api_key_env,
+            base_url=cloud.base_url,
+            timeout=cloud.timeout_seconds,
+            max_retries=cloud.max_retries,
+            max_tokens=cloud.max_tokens,
+            supports_structured_output=cloud.supports_structured_output,
         )
     raise LLMError(f"unknown provider {settings.llm.provider!r}")
 
 
+def provider_identity(provider: LLMProvider, role: str = "analysis") -> tuple[str, str]:
+    """``(provider_id, model_id)`` for provenance and derivation keys.
+
+    Both halves matter. Two assessments produced by the same *model name* on
+    different providers are still two different things, and an assessment must
+    never be reused across a provider change just because the model string
+    happened to match.
+    """
+    name = provider.capabilities.name
+    resolve = getattr(provider, "resolve_model", None)
+    try:
+        model = resolve(role) if callable(resolve) else name
+    except Exception:  # pragma: no cover - unbound role on a partial config
+        model = "unknown"
+    return name, model
+
+
+def require_provider(settings: Settings, *, role: str = "analysis") -> LLMProvider:
+    """Return the configured provider, or raise :class:`ProviderUnavailable`.
+
+    This is the gate in front of every high-risk semantic operation. It exists
+    to make one behaviour impossible: quietly answering a knowledge-mutation
+    question with whatever model happens to be reachable. If the configured
+    provider is not usable, the caller gets an explicit unavailability — never
+    a substitute.
+    """
+    provider = get_provider(settings)
+    reachable, detail = provider.health()
+    if not reachable:
+        raise ProviderUnavailable(detail)
+    provider_id, model_id = provider_identity(provider, role)
+    if not model_id or model_id == "unknown":
+        raise ProviderUnavailable(
+            f"provider {provider_id!r} has no model bound to role {role!r}"
+        )
+    return provider
+
+
 __all__ = [
     "get_provider",
+    "provider_identity",
+    "require_provider",
+    "CloudProvider",
     "LLMProvider",
     "LLMError",
     "ProviderUnavailable",

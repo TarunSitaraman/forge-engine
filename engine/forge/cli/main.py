@@ -398,9 +398,11 @@ def model_test(
 # registered here so Phase 1's commands stay exactly as they were.
 from .phase2 import register as _register_phase2  # noqa: E402
 from .phase3 import register as _register_phase3  # noqa: E402
+from .phase4 import register as _register_phase4  # noqa: E402
 
 _register_phase2(app, _settings)
 _register_phase3(app, _settings)
+_register_phase4(app, _settings)
 
 
 def main() -> None:  # pragma: no cover

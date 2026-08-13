@@ -509,9 +509,128 @@ an unreviewed change to what the user believes.
 
 ---
 
+## `forge evolve <source>`
+
+Evaluate how an ingested source's evidence affects existing knowledge. This is
+the Phase 4 command — the one that makes Forge evaluate rather than only store.
+
+```bash
+forge evolve paper-b.pdf          # id, vault locator, or bare filename
+forge evolve paper-b.pdf --json
+```
+
+```
+Forge Knowledge Evolution
+──────────────────────────────
+
+Source:
+  papers/paper-b.pdf
+
+Concepts affected:
+  ✓ Retrieval Augmented Generation   [exact_name]
+
+Claims examined:
+  1
+
+Semantic assessments:
+  Potential Conflict: 1
+
+Proposals:
+  1
+
+Status:
+  WAITING_FOR_REVIEW
+
+Workflow:
+  6cjiiqmffd5fcdtdtkcrq24136
+
+Waiting for review. Decide the proposals, then resume:
+  forge proposals list --status pending
+  forge workflow resume 6cjiiqmffd5f
+```
+
+**Nothing is applied.** The workflow pauses whenever it has produced a
+proposal, and knowledge changes only after you approve it and resume.
+
+Exit codes: `1` the source is not ingested or the run failed, `2` the semantic
+provider is unavailable, `3` LangGraph is not installed (`pip install -e '.[agent]'`).
+
+---
+
+## `forge workflow`
+
+```bash
+forge workflow list --status waiting_for_review
+forge workflow status <id>
+forge workflow inspect <id>          # "why did Forge propose this?"
+forge workflow resume <id>
+```
+
+`inspect` is the accountability command. It prints which concepts were
+considered **and the selector that found each one**, which claims were
+examined, what the model concluded and on which spans, the proposals that
+resulted, what a human decided, the revisions that followed, and the cost:
+
+```
+concepts considered, and why:
+  Retrieval Augmented Generation   [exact_name]  'Retrieval Augmented Generation' appears in the evidence
+
+assessments:
+  POTENTIAL_CONFLICT     RAG can improve factual accuracy.
+      The new source reports RAG introducing errors with irrelevant context...
+      evidence: 3xk2m9...  (cached)
+
+proposals:
+  51njqpsoa7uc  claim_conflict     [activated] ambiguous
+
+nodes     : register_evidence -> identify_affected_concepts -> ... -> finalize_workflow
+cost      : 1 llm call(s), 0 cache hit(s), 13.67ms
+```
+
+`resume` continues a paused run after you have decided its proposals. Resuming
+with nothing decided pauses again — a resume is not consent. If the configured
+provider differs from the one that assessed the run, resume refuses until you
+pass `--allow-provider-change`, because mixing judgements from two models with
+no way to tell them apart is exactly the ambiguity provenance exists to
+prevent.
+
+---
+
+## Choosing a provider
+
+Forge is provider-agnostic; selection is configuration, and no paid API is ever
+required.
+
+```bash
+# Self-hosted and free — the default deployment path.
+export FORGE_LLM_PROVIDER=ollama
+export FORGE_MODEL_DEFAULT=qwen3:8b
+
+# Model on another machine (Forge on a laptop, GPU on a desktop).
+export FORGE_LLM_PROVIDER=ollama
+export FORGE_OLLAMA_URL=http://192.168.1.50:11434
+
+# Portable, for machines that cannot host a model.
+export FORGE_LLM_PROVIDER=cloud
+export FORGE_CLOUD_MODEL=claude-sonnet-5
+export ANTHROPIC_API_KEY=...        # read at call time; never stored
+
+# Deterministic, for CI.
+export FORGE_LLM_PROVIDER=mock
+```
+
+**Credentials live in the environment, never in configuration.** Forge stores
+only the *name* of the variable to read. `forge status` reports whether a
+credential is present without printing it.
+
+If the configured provider is unavailable, Forge says so and stops. It never
+substitutes a different model for a knowledge-mutation decision.
+
+---
+
 ## What the CLI will not do
 
-No command calls a paid API, deletes a note, or writes to the vault — with
+No command *requires* a paid API, deletes a note, or writes to the vault — with
 exactly one exception: `forge proposals approve --apply`, which requires an
 approved, deterministically-verified proposal, backs the file up first, records
 a revision, and touches only the single line named in the proposal.
@@ -526,6 +645,8 @@ and after running the read commands.
 - [Phase 1 implementation architecture](./architecture/phase-1-implementation.md)
 - [Phase 2 implementation architecture](./architecture/phase-2-implementation.md)
 - [Phase 3 implementation architecture](./architecture/phase-3-implementation.md)
+- [Phase 4 implementation architecture](./architecture/phase-4-implementation.md)
+- [Provider availability](./research/provider-availability.md)
 - [Retrieval baseline](./research/retrieval-baseline.md)
 - [Test strategy](./test-strategy.md)
 - [ADR-001](./decisions/001-forge-knowledge-os.md)

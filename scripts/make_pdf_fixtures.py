@@ -167,6 +167,39 @@ def main() -> None:
         )
     )
 
+    # 4b. The Phase 4 evolution pair. Two papers that genuinely disagree about
+    #     the same technique, so the evolution workflow has real material:
+    #     paper-a establishes a claim, paper-b qualifies it. Kept deliberately
+    #     short — the point is the disagreement, not the volume.
+    (OUT / "paper-a-rag-accuracy.pdf").write_bytes(
+        _simple_doc(
+            [
+                [
+                    ("Retrieval Augmented Generation", 20),
+                    ("RAG can improve factual accuracy on knowledge-intensive tasks.", 11),
+                    ("Grounding generation in retrieved passages reduces hallucination.", 11),
+                ]
+            ],
+            title="RAG and Factual Accuracy",
+        )
+    )
+    (OUT / "paper-b-rag-failure-modes.pdf").write_bytes(
+        _simple_doc(
+            [
+                [
+                    ("Retrieval Augmented Generation", 20),
+                    ("Retrieval quality determines whether RAG helps or hurts.", 11),
+                ],
+                [
+                    ("Failure Modes", 18),
+                    ("RAG can introduce errors when the retrieved context is irrelevant.", 11),
+                    ("Irrelevant passages distract the model and lower accuracy.", 11),
+                ],
+            ],
+            title="RAG Failure Modes",
+        )
+    )
+
     # 5. Image-only page: valid PDF, renders content, contains zero text.
     #    Must be reported as OCR_REQUIRED rather than as a successful empty
     #    extraction.

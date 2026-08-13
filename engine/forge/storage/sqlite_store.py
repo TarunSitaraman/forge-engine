@@ -41,6 +41,8 @@ from ..domain import (
     Revision,
     Source,
     Span,
+    WorkflowRun,
+    WorkflowStatus,
     record_change,
     record_create,
     record_invalidate,
@@ -52,7 +54,7 @@ from ..domain import (
 
 log = get_logger(__name__)
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -197,6 +199,25 @@ CREATE TABLE IF NOT EXISTS embeddings (
     created_at TEXT NOT NULL,
     PRIMARY KEY (owner_type, owner_id, model)
 );
+
+-- ---------------------------------------------------------------- Phase 4
+
+-- Knowledge-evolution runs. Distinct from the LangGraph checkpoint: a
+-- checkpoint is resumption state and may be pruned, while this is the durable
+-- answer to "why did Forge propose this?". Storing the run here also means
+-- inspection works with the orchestrator uninstalled.
+CREATE TABLE IF NOT EXISTS workflows (
+    id          TEXT PRIMARY KEY,
+    source_id   TEXT,
+    status      TEXT NOT NULL,
+    provider_id TEXT,
+    model_id    TEXT,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    data        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_workflows_status ON workflows(status);
+CREATE INDEX IF NOT EXISTS idx_workflows_source ON workflows(source_id);
 """
 
 
@@ -305,6 +326,7 @@ class SqliteStore:
         """Drop every table. Derived state only — nothing unrecoverable here."""
         with self._conn:
             for table in (
+                "workflows",
                 "revisions",
                 "claim_links",
                 "evidence_links",
@@ -875,6 +897,71 @@ class SqliteStore:
             )
         return len(spans)
 
+    # -- workflow runs (Phase 4) -------------------------------------------
+
+    def put_workflow(self, run: WorkflowRun) -> None:
+        """Upsert a run. Append-only in spirit: runs are updated, never deleted."""
+        with self._conn:
+            self._conn.execute(
+                "INSERT INTO workflows(id, source_id, status, provider_id, model_id,"
+                " created_at, updated_at, data) VALUES(?,?,?,?,?,?,?,?)"
+                " ON CONFLICT(id) DO UPDATE SET"
+                "  status = excluded.status,"
+                "  provider_id = excluded.provider_id,"
+                "  model_id = excluded.model_id,"
+                "  updated_at = excluded.updated_at,"
+                "  data = excluded.data",
+                (
+                    run.id,
+                    run.source_id,
+                    run.status.value,
+                    run.provider_id,
+                    run.model_id,
+                    run.created_at.isoformat(),
+                    utc_now().isoformat(),
+                    run.model_dump_json(),
+                ),
+            )
+
+    def get_workflow(self, workflow_id: str) -> WorkflowRun | None:
+        row = self._one("SELECT data FROM workflows WHERE id = ?", (workflow_id,))
+        return WorkflowRun.model_validate_json(row["data"]) if row else None
+
+    def find_workflow(self, prefix: str) -> list[WorkflowRun]:
+        """Resolve a possibly-abbreviated id, matching the proposal CLI's ergonomics."""
+        rows = self._all(
+            "SELECT data FROM workflows WHERE id LIKE ? ORDER BY created_at LIMIT 10",
+            (prefix + "%",),
+        )
+        return [WorkflowRun.model_validate_json(r["data"]) for r in rows]
+
+    def list_workflows(
+        self,
+        *,
+        status: WorkflowStatus | None = None,
+        source_id: str | None = None,
+        limit: int = 50,
+    ) -> list[WorkflowRun]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if status is not None:
+            clauses.append("status = ?")
+            params.append(status.value)
+        if source_id is not None:
+            clauses.append("source_id = ?")
+            params.append(source_id)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(limit)
+        rows = self._all(
+            f"SELECT data FROM workflows {where} ORDER BY created_at DESC LIMIT ?",
+            tuple(params),
+        )
+        return [WorkflowRun.model_validate_json(r["data"]) for r in rows]
+
+    def count_workflows(self) -> dict[str, int]:
+        rows = self._all("SELECT status, COUNT(*) AS n FROM workflows GROUP BY status")
+        return {r["status"]: int(r["n"]) for r in rows}
+
     # -- embeddings (Phase 2, optional) ------------------------------------
 
     def put_embedding(
@@ -912,6 +999,7 @@ class SqliteStore:
         return {
             table: int(self._one(f"SELECT COUNT(*) AS n FROM {table}")["n"])  # type: ignore[index]
             for table in (
+                "workflows",
                 "sources",
                 "documents",
                 "spans",

@@ -18,13 +18,15 @@
 | 8 | [roadmap.md](./roadmap.md) | In what order, with what exit gates |
 | 9 | [decisions/001-forge-knowledge-os.md](./decisions/001-forge-knowledge-os.md) | What was decided, and what is still open |
 
-### Phases 1–3 — as built
+### Phases 1–4 — as built
 
 | Document | Answers |
 |---|---|
 | [architecture/phase-1-implementation.md](./architecture/phase-1-implementation.md) | Phase 1: canonical model, provenance, indexing |
 | [architecture/phase-2-implementation.md](./architecture/phase-2-implementation.md) | Phase 2: ingestion, extraction, proposals, retrieval |
 | [architecture/phase-3-implementation.md](./architecture/phase-3-implementation.md) | Phase 3: activation, identity, graph, retrieval evaluation |
+| [architecture/phase-4-implementation.md](./architecture/phase-4-implementation.md) | Phase 4: the agentic evolution workflow, providers, checkpointing |
+| [research/provider-availability.md](./research/provider-availability.md) | Which providers could actually be exercised — and what stays unmeasured |
 | [research/retrieval-baseline.md](./research/retrieval-baseline.md) | What retrieval actually scores, and why hybrid was rejected |
 | [cli.md](./cli.md) | How to run it |
 | [test-strategy.md](./test-strategy.md) | How it is verified |
@@ -105,8 +107,21 @@ lexical wins, and hybrid was rejected on the evidence
 ([retrieval baseline](./research/retrieval-baseline.md)). 595 tests, 89%
 coverage, no model required.
 
-Verify with `bash scripts/validate_phase1.sh`,
-`bash scripts/validate_phase2.sh`, and `bash scripts/validate_phase3.sh`.
-Demos: `python3 scripts/phase2_demo.py`, `python3 scripts/phase3_demo.py`.
+**Phase 4 complete.** Forge now evaluates how new evidence affects what it
+already knows. A stateful LangGraph workflow narrows candidates
+deterministically, assesses new evidence against existing claims with a
+grounded, strictly-schema'd model call, classifies the impact with ordinary
+code, generates reviewable proposals, **pauses for a human**, and — only on
+approval — corroborates, refines (superseding non-destructively), or marks a
+claim disputed, recording a revision either way. Providers are pluggable: local
+Ollama, remote Ollama, cloud, or mock, with no silent downgrade for knowledge
+mutation. 737 tests, CI fully offline.
 
-**Not started:** Phases 4–10. See [roadmap.md](./roadmap.md).
+*Measured honestly:* no real model was reachable during development, so the
+pipeline is fully tested and model quality is entirely unmeasured — see
+[provider availability](./research/provider-availability.md).
+
+Verify with `bash scripts/validate_phase1.sh` … `validate_phase4.sh`.
+Demos: `python3 scripts/phase2_demo.py`, `phase3_demo.py`, `phase4_demo.py`.
+
+**Not started:** Phases 5–10. See [roadmap.md](./roadmap.md).

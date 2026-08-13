@@ -83,6 +83,12 @@ class Provenance(BaseModel):
     #: Required when derivation is MODEL; forbidden otherwise.
     model_id: str | None = None
     prompt_version: str | None = None
+    #: Phase 4. The output schema the model was held to, and the derivation key
+    #: the result was cached under. Both are needed to answer "would this be
+    #: recomputed today?" — a prompt or schema change must be visible in the
+    #: provenance of everything produced under the old one.
+    schema_version: str | None = None
+    derivation_key: str | None = None
 
     inputs: tuple[ProvenanceInput, ...] = ()
     workflow_run_id: str | None = None

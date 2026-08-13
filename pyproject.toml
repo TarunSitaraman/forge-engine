@@ -27,7 +27,17 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-cov>=5.0"]
+# LangGraph orchestrates the Phase 4 knowledge-evolution workflow. It is an
+# extra, not a core dependency, because indexing, ingestion, retrieval,
+# activation, and the graph must keep working without it — `forge index` on a
+# fresh clone must not require an orchestration framework.
+agent = ["langgraph>=1.0", "langgraph-checkpoint-sqlite>=3.0"]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "langgraph>=1.0",
+    "langgraph-checkpoint-sqlite>=3.0",
+]
 
 [project.scripts]
 forge = "forge.cli.main:app"

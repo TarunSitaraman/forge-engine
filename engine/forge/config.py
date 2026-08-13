@@ -20,7 +20,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-ProviderName = Literal["ollama", "mock"]
+ProviderName = Literal["ollama", "cloud", "mock"]
 ModelRole = Literal["extraction", "analysis", "resolution", "synthesis"]
 
 #: Directories never walked by the corpus indexer. These are engine-owned or
@@ -44,13 +44,54 @@ DEFAULT_EXCLUDES: tuple[str, ...] = (
 )
 
 
+class CloudSettings(BaseModel):
+    """Portable inference for machines that cannot run a local model.
+
+    **No credential is ever stored here.** ``api_key_env`` names an environment
+    variable; the key itself is read at call time and never written to config,
+    logs, the store, or provenance. A key in a YAML file is a key in Git.
+    """
+
+    #: Vendor identifier, e.g. "anthropic". Nothing above the provider layer
+    #: branches on this — it selects a wire format, not behaviour.
+    vendor: str = "anthropic"
+    model: str = "claude-sonnet-5"
+    api_key_env: str = "ANTHROPIC_API_KEY"
+    base_url: str = "https://api.anthropic.com"
+    timeout_seconds: float = Field(default=120.0, gt=0)
+    max_retries: int = Field(default=2, ge=0, le=5)
+    max_tokens: int = Field(default=2048, gt=0)
+    #: Whether the vendor can be *asked* for schema-conforming JSON. Forge
+    #: validates the result regardless; this only selects the request shape.
+    supports_structured_output: bool = True
+
+
+class OllamaSettings(BaseModel):
+    """Local or LAN-remote Ollama.
+
+    ``base_url`` is what makes a remote box usable: Forge runs on a laptop that
+    cannot host a model, and points at one that can. Nothing here assumes the
+    remote host is reachable — an unreachable provider is reported as
+    unavailable, never worked around.
+    """
+
+    base_url: str = "http://localhost:11434"
+    timeout_seconds: float = Field(default=120.0, gt=0)
+    max_retries: int = Field(default=2, ge=0, le=5)
+
+
 class LLMSettings(BaseModel):
     """Provider configuration. Nothing here is required for Phase 1 indexing."""
 
     provider: ProviderName = "ollama"
+    #: Retained as the Ollama URL for backwards compatibility with Phases 1-3
+    #: and `FORGE_OLLAMA_URL`. `ollama.base_url` is the preferred spelling.
     base_url: str = "http://localhost:11434"
     timeout_seconds: float = Field(default=120.0, gt=0)
     max_retries: int = Field(default=2, ge=0, le=5)
+
+    ollama: OllamaSettings = Field(default_factory=OllamaSettings)
+    cloud: CloudSettings = Field(default_factory=CloudSettings)
 
     #: Role -> model name. Business logic references the *role*.
     models: dict[str, str] = Field(
@@ -121,11 +162,27 @@ class Settings(BaseModel):
         root = Path(vault_path or os.environ.get("FORGE_VAULT_PATH") or _find_repo_root())
         state = Path(os.environ.get("FORGE_STATE_DIR") or (root / ".forge"))
 
+        ollama_url = os.environ.get("FORGE_OLLAMA_URL", "http://localhost:11434")
+        timeout = float(os.environ.get("FORGE_LLM_TIMEOUT", "120"))
+        retries = int(os.environ.get("FORGE_LLM_MAX_RETRIES", "2"))
         llm = LLMSettings(
             provider=os.environ.get("FORGE_LLM_PROVIDER", "ollama"),  # type: ignore[arg-type]
-            base_url=os.environ.get("FORGE_OLLAMA_URL", "http://localhost:11434"),
-            timeout_seconds=float(os.environ.get("FORGE_LLM_TIMEOUT", "120")),
-            max_retries=int(os.environ.get("FORGE_LLM_MAX_RETRIES", "2")),
+            base_url=ollama_url,
+            timeout_seconds=timeout,
+            max_retries=retries,
+            ollama=OllamaSettings(
+                base_url=ollama_url, timeout_seconds=timeout, max_retries=retries
+            ),
+            # Only the *name* of the credential variable is configuration. The
+            # credential itself is read at call time and never stored here.
+            cloud=CloudSettings(
+                vendor=os.environ.get("FORGE_CLOUD_VENDOR", "anthropic"),
+                model=os.environ.get("FORGE_CLOUD_MODEL", "claude-sonnet-5"),
+                api_key_env=os.environ.get("FORGE_CLOUD_API_KEY_ENV", "ANTHROPIC_API_KEY"),
+                base_url=os.environ.get("FORGE_CLOUD_BASE_URL", "https://api.anthropic.com"),
+                timeout_seconds=timeout,
+                max_retries=retries,
+            ),
             models={
                 role: os.environ.get(
                     f"FORGE_MODEL_{role.upper()}",

@@ -10,6 +10,7 @@ from .enums import (
     DETERMINISTIC_LINK_TYPES,
     TIER_STRENGTH,
     TIERS_WITHOUT_EVIDENCE,
+    AssessmentClass,
     ChangeStatus,
     ClaimStatus,
     ConceptKind,
@@ -18,6 +19,7 @@ from .enums import (
     EvidenceRelation,
     ExtractionStatus,
     IdentityState,
+    ImpactClass,
     IngestionStatus,
     LinkType,
     MatchKind,
@@ -28,6 +30,7 @@ from .enums import (
     SafetyClass,
     SourceKind,
     TrustTier,
+    WorkflowStatus,
 )
 from .proposal import (
     Proposal,
@@ -51,8 +54,17 @@ from .revision import (
     record_supersede,
 )
 from .validation import ValidationError, validate_claim, validate_claim_link, validate_supersession
+from .workflow import AssessmentRecord, CandidateRecord, NodeExecution, WorkflowRun
 
 __all__ = [
+    # Phase 4 — evolution
+    "AssessmentClass",
+    "AssessmentRecord",
+    "CandidateRecord",
+    "ImpactClass",
+    "NodeExecution",
+    "WorkflowRun",
+    "WorkflowStatus",
     # entities
     "Source",
     "Document",

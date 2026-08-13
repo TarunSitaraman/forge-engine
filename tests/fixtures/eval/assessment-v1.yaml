@@ -1,0 +1,97 @@
+# Evidence-assessment evaluation set, version 1.
+#
+# WHAT THIS MEASURES, AND WHAT IT DOES NOT
+#
+# It measures whether the *assessment pipeline* behaves correctly given a
+# model's answer: that structured output validates, that citations are checked
+# against real spans, that each classification maps to the right proposal (or
+# to none), that repeats hit the cache, and that grounding failures are
+# rejected rather than repaired.
+#
+# It does NOT measure whether a particular model classifies well. That is a
+# model-quality question and needs a real model; this set deliberately runs
+# against a scripted provider so CI stays offline and deterministic. When a
+# real model is available, `scripts/assessment_eval.py --provider ollama`
+# replays the same cases through it and reports the classification agreement
+# separately — see docs/architecture/phase-4-implementation.md.
+#
+# SELECTION METHODOLOGY
+#
+# Five cases, one per classification, because the classification vocabulary is
+# the thing under test and an unbalanced set would hide a systematic bias
+# toward the majority label. Each case pairs one existing claim with one new
+# evidence passage, written so that a careful human reader would agree with the
+# expected label without needing the surrounding paper.
+#
+# Two cases are deliberately adversarial:
+#   - `insufficient-partial-overlap` shares vocabulary with the claim but says
+#     nothing that settles it. A model biased toward "SUPPORTS whenever the
+#     words match" fails here.
+#   - `irrelevant-same-domain` is about the same technology but a different
+#     property, which is harder than an obviously off-topic passage.
+#
+# `expected_proposal` is null where the correct behaviour is to produce
+# nothing. Those rows exist to catch the opposite failure from the usual one:
+# a pipeline that manufactures a proposal from every assessment.
+
+version: 1
+unit: assessment
+
+cases:
+  - id: supports-direct
+    expected_classification: SUPPORTS
+    expected_proposal: claim_evidence
+    claim: "RAG can improve factual accuracy."
+    evidence: >-
+      Across three knowledge-intensive benchmarks, retrieval-augmented models
+      produced measurably fewer factual errors than the same models answering
+      from parameters alone.
+    note: >-
+      Independent corroboration of the claim as stated. Should attach evidence
+      without touching the statement.
+
+  - id: refines-adds-condition
+    expected_classification: REFINES
+    expected_proposal: claim_refinement
+    refined_statement: "RAG improves factual accuracy when retrieved context is relevant."
+    claim: "RAG can improve factual accuracy."
+    evidence: >-
+      The benefit of retrieval augmentation was observed only when the
+      retrieved passages were topically relevant; with irrelevant passages the
+      effect disappeared.
+    note: >-
+      The claim is broadly right but unconditioned. The correct action is a
+      sharper statement that supersedes the original, not a contradiction.
+
+  - id: conflict-contrary-finding
+    expected_classification: POTENTIAL_CONFLICT
+    expected_proposal: claim_conflict
+    claim: "RAG can improve factual accuracy."
+    evidence: >-
+      Retrieval Augmented Generation can introduce errors when the retrieved
+      context is irrelevant, lowering accuracy below the no-retrieval baseline.
+    note: >-
+      Reports a case where the claim does not hold. Must route to a human and
+      must NOT retract or rewrite the claim.
+
+  - id: irrelevant-same-domain
+    expected_classification: IRRELEVANT
+    expected_proposal: null
+    claim: "RAG can improve factual accuracy."
+    evidence: >-
+      Chunk size materially affects retrieval latency; larger chunks reduce the
+      number of index lookups per query.
+    note: >-
+      Same technology, different property. Latency has no bearing on a claim
+      about factual accuracy. Adversarial: shares vocabulary with the claim.
+
+  - id: insufficient-partial-overlap
+    expected_classification: INSUFFICIENT_EVIDENCE
+    expected_proposal: null
+    claim: "RAG can improve factual accuracy."
+    evidence: >-
+      Several teams have reported mixed results from retrieval augmentation,
+      and a systematic comparison across domains has not yet been published.
+    note: >-
+      Touches the topic without settling it. Adversarial: a model that must
+      pick a substantive label will reach for SUPPORTS or POTENTIAL_CONFLICT.

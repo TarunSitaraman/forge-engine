@@ -62,11 +62,14 @@ tests/
     test_activation.py             proposal activation, idempotency, identity, gating
     test_graph.py                  bounded traversal, evidence chains, integrity
     test_evaluation.py             retrieval metrics, dataset, embeddings
+    test_evolution.py              narrowing, assessment, impact, proposals, activation
+    test_providers.py              ollama, cloud, mock; credentials; no silent downgrade
   integration/
     test_real_corpus.py            everything, against the real vault
     test_pipeline_and_cli.py       end-to-end pipeline + every CLI command
     test_phase2_ingestion.py       ingestion, cost control, ambiguity, CLI
     test_phase3_activation.py      the activation loop through the CLI, batch ops
+    test_phase4_workflow.py        LangGraph interrupt/resume, routing, CLI
 ```
 
 `reset_call_counter` is autouse, so **every test starts with `CALLS.count == 0`**
@@ -214,11 +217,47 @@ ones a future change is most likely to break quietly:
 | The ambiguity index double-counted paths, reporting "4 canonical homes" for Heap | `test_a_model_supplied_namespace_is_ignored`, demo step 16 |
 | `retrieval-eval` resolved its default dataset relative to the working directory | `test_eval_runs_the_labelled_set_and_reports_metrics` |
 
+## Phase 4 additions
+
+| Module | Tests |
+|---|---|
+| `tests/unit/test_evolution.py` | Candidate narrowing and its selectors, claim retrieval bounds, all five assessment classifications, grounding rejection, every failure mode, cache hit and four invalidation paths, impact precedence, proposal generation per class, and the three activation behaviours |
+| `tests/unit/test_providers.py` | Provider selection, remote Ollama, cloud wire formats (both), credential handling, and the no-silent-downgrade rule |
+| `tests/integration/test_phase4_workflow.py` | The full loop through LangGraph: interrupt, checkpoint, resume across a simulated process restart, conditional routing, provider mismatch on resume, idempotency, observability, and the CLI |
+
+Four properties are asserted repeatedly rather than once:
+
+- **Deterministic steps spend nothing.** `CALLS.count == 0` after narrowing,
+  retrieval, impact classification, and activation. "Deterministic first" is a
+  claim that decays silently if nothing checks it.
+- **Ungrounded output is rejected, never repaired.** Two shapes are tested: an
+  invented span id, and a *real* span the model was not shown. The second is
+  the subtle one — citing real-but-unshown evidence is still fabrication with
+  respect to the question asked.
+- **A failure never becomes an empty success.** Three provider failures, each
+  asserted not to report success.
+- **Nothing is overwritten.** Every activation test also checks the prior state
+  is still retrievable.
+
+**CI is fully offline.** Every model call goes through `MockProvider` over the
+real `LLMProvider` interface, and the cloud provider's HTTP is stubbed with
+`httpx.MockTransport` — no test touches a network.
+
+### Phase 4 regression tests for bugs found during development
+
+| Bug | Test |
+|---|---|
+| `AssessmentRecord.to_dict` omitted `derivation_key`, so state failed to round-trip on resume | `test_run_round_trips_through_storage` |
+| Disputed claims were excluded from retrieval, faking idempotency and making DISPUTED terminal | `test_disputed_claims_are_still_examined` |
+| Resuming with nothing decided completed the run, treating a resume as consent | `test_resuming_without_deciding_pauses_again` |
+| The no-candidates path skipped `classify_impact`, losing the NEW_KNOWLEDGE finding | `test_unrelated_evidence_never_reaches_the_model` |
+| A provider-change warning was discarded when state was projected onto the run | `test_a_provider_change_can_be_accepted_explicitly` |
+
 ---
 
 ## Coverage
 
-89% overall across 595 tests. `llm/ollama.py` and `embeddings/ollama_embeddings.py`
+89% overall across 737 tests. `llm/ollama.py` and `embeddings/ollama_embeddings.py`
 are lowest because their success paths need a live server; `domain/` — where the
 invariants live — is 98–100%.
 
