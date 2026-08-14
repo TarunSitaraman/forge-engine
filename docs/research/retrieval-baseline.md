@@ -69,15 +69,15 @@ documented in the header of the YAML file itself.
 ## 3. Results
 
 Run: `forge retrieval-eval --methods lexical,semantic,hybrid --detail`
-over 638 sources / 1626 spans of the real vault.
+over 645 sources / 1692 spans of the real vault.
 
 | Method | R@5 | R@10 | P@5 | MRR | Misses | Latency |
 |---|---:|---:|---:|---:|---:|---:|
-| **lexical (FTS5/BM25)** | **0.406** | **0.650** | **0.158** | **0.471** | **5** | **13.8 ms/q** |
-| semantic (hashing-v1-256c) | 0.301 | 0.601 | 0.133 | 0.344 | 6 | 187.7 ms/q |
-| hybrid (w=0.25) | 0.378 | 0.524 | 0.158 | 0.338 | 7 | 202.7 ms/q |
-| hybrid (w=0.50) | 0.364 | 0.496 | 0.158 | 0.335 | 8 | 218.9 ms/q |
-| hybrid (w=0.75) | 0.258 | 0.428 | 0.117 | 0.355 | 10 | 215.6 ms/q |
+| **lexical (FTS5/BM25)** | **0.406** | **0.608** | **0.158** | **0.471** | **6** | **18.7 ms/q** |
+| semantic (hashing-v1-256c) | 0.301 | 0.581 | 0.133 | 0.342 | 6 | 244.6 ms/q |
+| hybrid (w=0.25) | 0.378 | 0.544 | 0.158 | 0.337 | 7 | 259.0 ms/q |
+| hybrid (w=0.50) | 0.364 | 0.517 | 0.158 | 0.337 | 7 | 264.4 ms/q |
+| hybrid (w=0.75) | 0.279 | 0.449 | 0.125 | 0.336 | 9 | 264.3 ms/q |
 
 `w` is the share of the fused score given to the semantic signal; the
 remainder goes to lexical. Both scores are min-max normalized before fusion —
@@ -88,10 +88,10 @@ whichever has the wider range dominate regardless of the weight.
 
 | Candidate | R@5 | R@10 | P@5 | MRR | Verdict |
 |---|---:|---:|---:|---:|---|
-| semantic | −0.104 | −0.049 | −0.025 | −0.127 | regression |
-| hybrid (w=0.25) | −0.028 | −0.126 | −0.000 | −0.133 | regression |
-| hybrid (w=0.50) | −0.042 | −0.154 | −0.000 | −0.136 | regression |
-| hybrid (w=0.75) | −0.147 | −0.222 | −0.042 | −0.116 | regression |
+| semantic | −0.104 | −0.028 | −0.025 | −0.128 | regression |
+| hybrid (w=0.25) | −0.028 | −0.064 | −0.000 | −0.134 | regression |
+| hybrid (w=0.50) | −0.042 | −0.092 | −0.000 | −0.133 | regression |
+| hybrid (w=0.75) | −0.126 | −0.160 | −0.033 | −0.135 | regression |
 
 **Decision: hybrid retrieval is NOT adopted.** Lexical remains the default and
 only retrieval path. The embedding code stays in the tree, off by default,
@@ -111,6 +111,24 @@ that run. Second, that earlier run differed from this one only because writing
 these documents added files to the corpus being searched; on a 24-query set,
 that is enough to move R@10 by 0.02. Both facts argue for the same discipline:
 sweep the parameter, report four metrics, and treat small deltas as noise.
+
+**Third data point, and the sharpest one.** Merging seven new canonical
+technology docs into the vault (Kubernetes, FastAPI, Node/Express, PostgreSQL,
+React, Redis, Supabase) moved lexical R@10 from 0.650 to **0.608** and added a
+sixth miss, without a single line of retrieval code changing. The query that
+broke is `fuzzy-task-ordering` — "task ordering with dependencies", whose
+target is `Topological Sort.md`. It sat at rank 9; the new infrastructure docs
+discuss scheduling and dependency ordering often enough to push it to rank 11.
+
+`fuzzy_concept` R@10 fell from 0.300 to 0.100 on that one query alone, which is
+what a 24-query set does: it is sensitive enough to detect real movement and
+too small to be stable. Both facts are true at once and both matter.
+
+The lesson is not "the corpus got worse". It is that **BM25 degrades as a
+corpus grows denser in a topic**, and it degrades first exactly where it was
+already weakest — paraphrase. That is a much stronger argument for the two
+deterministic fixes in §5 than any of the earlier runs made, because this time
+the regression was observed rather than predicted.
 
 ---
 
@@ -164,9 +182,9 @@ Per-category results for the lexical baseline:
 | exact_concept | 0.467 | 0.733 | 0.457 |
 | related_concept | 0.300 | 0.644 | 0.319 |
 | dsa | 0.375 | 0.625 | 0.577 |
-| **fuzzy_concept** | **0.100** | **0.300** | **0.084** |
+| **fuzzy_concept** | **0.100** | **0.100** | **0.083** |
 
-The failure is concentrated and unsurprising: **paraphrase**. The five
+The failure is concentrated and unsurprising: **paraphrase**. The six
 complete misses, from the per-query detail:
 
 | Query | Category | Target | First hit |
@@ -175,6 +193,7 @@ complete misses, from the per-query detail:
 | "measure similarity between documents using an index" | fuzzy | `Technologies/Docs/vector-databases.md` | never |
 | "grounding an LLM in your own documents" | fuzzy | `Technologies/Docs/rag.md` | rank 14 |
 | "vector databases" | exact | `Technologies/Docs/vector-databases.md` | rank 12 |
+| "task ordering with dependencies" | fuzzy | `01_Patterns/Topological Sort.md` | rank 11 |
 | "off-by-one errors" | dsa | `08_Mistakes/Off-by-One.md` | rank 17 |
 
 Four of the five are vocabulary mismatches — the vault says "Union Find", the

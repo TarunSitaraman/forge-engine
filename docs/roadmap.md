@@ -133,8 +133,8 @@ a *measurement* rather than a deliverable.
 - [x] Re-embedding is detectable when the model changes (vectors are keyed by
       model id, so a model change invalidates rather than mixes)
 - [x] Hybrid retrieval adopted **only if measured better** — it was not.
-      Lexical R@10 = 0.650 beat semantic (0.601) and every swept fusion weight
-      (0.524 / 0.496 / 0.428). See
+      Lexical R@10 = 0.608 beat semantic (0.581) and every swept fusion weight
+      (0.544 / 0.517 / 0.449). See
       [retrieval baseline](./research/retrieval-baseline.md).
 
 *Caveat carried forward:* the semantic measurement used a non-neural hashing

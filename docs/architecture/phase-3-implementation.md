@@ -250,9 +250,14 @@ short version:
 
 | Method | R@5 | R@10 | MRR | Verdict |
 |---|---:|---:|---:|---|
-| lexical | 0.406 | 0.650 | 0.471 | **baseline, adopted** |
-| semantic | 0.301 | 0.601 | 0.344 | regression |
-| hybrid (w=0.25 / 0.5 / 0.75) | 0.378 / 0.364 / 0.258 | 0.524 / 0.496 / 0.428 | 0.338 / 0.335 / 0.355 | regression at every weight |
+| lexical | 0.406 | 0.608 | 0.471 | **baseline, adopted** |
+| semantic | 0.301 | 0.581 | 0.342 | regression |
+| hybrid (w=0.25 / 0.5 / 0.75) | 0.378 / 0.364 / 0.279 | 0.544 / 0.517 / 0.449 | 0.337 / 0.337 / 0.336 | regression at every weight |
+
+*(Re-measured after the Phase 0–4 branches were merged, which added seven
+technology docs to the corpus and moved lexical R@10 from 0.650 to 0.608
+without any retrieval code changing. The verdict is unchanged; the mechanism
+is discussed in the baseline document.)*
 
 Fusion weight was **swept, not chosen** — `DEFAULT_FUSION_WEIGHTS =
 (0.0, 0.25, 0.5, 0.75, 1.0)`, with the endpoints as anchors that must reproduce

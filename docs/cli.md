@@ -482,9 +482,9 @@ forge retrieval-eval --json
 ```
 dataset: tests/fixtures/eval/retrieval-v1.yaml (v1, 24 queries, 48 labels)
 
-  lexical                R@5=0.406  R@10=0.650  P@5=0.158  MRR=0.471  misses=5  13.8ms/q
-  semantic               R@5=0.301  R@10=0.601  P@5=0.133  MRR=0.344  misses=6  187.7ms/q
-  hybrid(w=0.25)         R@5=0.378  R@10=0.524  P@5=0.158  MRR=0.338  misses=7  202.7ms/q
+  lexical                R@5=0.406  R@10=0.608  P@5=0.158  MRR=0.471  misses=6  18.7ms/q
+  semantic               R@5=0.301  R@10=0.581  P@5=0.133  MRR=0.342  misses=6  244.6ms/q
+  hybrid(w=0.25)         R@5=0.378  R@10=0.544  P@5=0.158  MRR=0.337  misses=7  259.0ms/q
 
 vs lexical baseline:
   semantic             regression   {...}
