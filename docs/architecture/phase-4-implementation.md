@@ -419,10 +419,16 @@ all cost.
 
 ## 15. Known limitations
 
-- **No real model has ever run this pipeline.** Classification quality,
-  latency, and — most importantly — the false-positive conflict rate are
+- **The local path has been smoke-tested, not characterised.** Qwen3 8B scored
+  5/5 on the assessment set (2026-08-14) with perfect structured-output
+  validity and perfect grounding, including both adversarial cases. But five
+  cases cannot establish a classification rate, and "0 false positives out of 2
+  adversarial cases" is not a false-positive rate. The cloud path remains
   entirely unmeasured. See
-  [`../research/provider-availability.md`](../research/provider-availability.md).
+  [`../research/provider-availability.md`](../research/provider-availability.md) §6.
+- **Local latency is a real constraint.** 63 s/case on an RTX 4050, with one
+  call exceeding the default 120 s timeout and retrying. Raise
+  `FORGE_LLM_TIMEOUT` before long runs on comparable hardware.
 - **The assessment evaluation set is 5 cases.** Enough to check the pipeline's
   behaviour per classification; far too small to characterise a model.
 - **Relevance narrowing has no LLM refinement step.** The brief permits one;

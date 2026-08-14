@@ -3,8 +3,16 @@
 *Phase 4. A record of which inference providers could actually be exercised in
 this environment, what that permits us to claim, and what it does not.*
 
-**Headline: no real model produced a single assessment during Phase 4
-development. The pipeline is fully measured; model quality is entirely
+**Update, 2026-08-14 — the local path has now been measured.** Qwen3 8B on an
+RTX 4050 scored 5/5 on the assessment set with perfect structured-output
+validity and perfect grounding. Details in §6. The cloud path remains
+unmeasured. The original Phase 4 finding is preserved below because the
+distinction it draws — measured pipeline vs unmeasured model — is the reason
+the measurement was worth making, and because a document that quietly rewrites
+its own history is worth less than one that shows its work.
+
+**Original headline (Phase 4 development): no real model produced a single
+assessment. The pipeline is fully measured; model quality is entirely
 unmeasured.** Those are different claims and this document keeps them apart.
 
 Companion to
@@ -91,16 +99,14 @@ classifications are any good.
 | Workflow interrupts, checkpoints, and resumes | **Measured** (incl. process restart) |
 | Provider unavailability is explicit | **Measured** |
 | Cloud request shape is accepted by the real API | **Partially measured** (§3) |
-| A real model returns schema-valid JSON in practice | **UNMEASURED** |
-| Real assessment latency | **UNMEASURED** |
-| Real classification accuracy | **UNMEASURED** |
-| False-positive conflict rate | **UNMEASURED** — and this is the important one |
+| A real model returns schema-valid JSON in practice | **MEASURED** — 5/5, see §6 |
+| Real assessment latency | **MEASURED** — 63 s/case local, see §6 |
+| Real classification accuracy | **MEASURED** — 5/5 on 5 cases, see §6 |
+| False-positive conflict rate | **0 of 2 adversarial cases** — encouraging, not yet a rate |
 
-The last row deserves emphasis. Forge's conservatism rules — no `CONTRADICTS`,
-prefer `INSUFFICIENT_EVIDENCE` when unsure, route conflicts to a human — exist
-to keep false conflicts rare, because a false conflict costs more trust than a
-missed one. **Whether those rules actually achieve that with a real model is
-untested.** It is the single largest open risk carried into Phase 5.
+The last row was the single largest open risk carried out of Phase 4. It is now
+partially answered — see §6 — but two adversarial cases cannot establish a
+rate, so it remains the thing most worth measuring next.
 
 ---
 
@@ -159,3 +165,92 @@ python3 -c "import os; print(bool(os.environ.get('ANTHROPIC_API_KEY')))"
 - [`local-model-capability-spike.md`](local-model-capability-spike.md) — Phase 1 local-model probe
 - [`retrieval-baseline.md`](retrieval-baseline.md) — the same discipline applied to retrieval, where measurement *was* possible
 - [`../architecture/phase-4-implementation.md`](../architecture/phase-4-implementation.md) — the pipeline these providers serve
+
+---
+
+## 6. First real-model results (2026-08-14)
+
+**Hardware:** ASUS laptop, RTX 4050 (~6 GB VRAM), 16 GB RAM, Windows.
+**Command:** `python scripts\assessment_eval.py --provider ollama`
+
+```
+provider: ollama / qwen3:8b
+
+  ollama/qwen3:8b   valid=1.00 grounded=1.00 class=1.00 proposal=1.00 cache=1.00  63126ms/case
+
+  [ok] supports-direct               expected=SUPPORTS              actual=SUPPORTS
+  [ok] refines-adds-condition        expected=REFINES               actual=REFINES
+  [ok] conflict-contrary-finding     expected=POTENTIAL_CONFLICT    actual=POTENTIAL_CONFLICT
+  [ok] irrelevant-same-domain        expected=IRRELEVANT            actual=IRRELEVANT
+  [ok] insufficient-partial-overlap  expected=INSUFFICIENT_EVIDENCE actual=INSUFFICIENT_EVIDENCE
+```
+
+### What this establishes
+
+**Structured output survives a local 8B model.** 5/5 responses validated
+against the strict schema on the first attempt — no repair retries. The Phase 1
+capability spike specifically worried that local models would ignore JSON
+schemas often enough to make strict validation impractical. On this model and
+this task, it did not happen.
+
+**Grounding held.** Every cited span id resolved to a span that was actually
+shown. Zero hallucinated citations across five cases. The rejection path
+therefore never fired — which is the *good* outcome, and distinguishable from
+"the check is broken" because the unit tests exercise the rejection path
+directly.
+
+**Both adversarial cases classified correctly.** These are the two cases the
+set was designed around:
+
+- `irrelevant-same-domain` — same technology, different property (retrieval
+  *latency* vs a claim about factual *accuracy*). A model pattern-matching on
+  shared vocabulary flags this. Qwen3 did not.
+- `insufficient-partial-overlap` — touches the topic without settling it. A
+  model forced toward a substantive label reaches for SUPPORTS or
+  POTENTIAL_CONFLICT. Qwen3 declined correctly.
+
+**Zero false-positive conflicts.** The conservatism rules held on the two cases
+built to break them.
+
+### What this does not establish
+
+**Five cases is five cases.** 5/5 is consistent with a model that is right 60%
+of the time; the confidence interval is enormous. This is a smoke test that
+passed, not a characterisation.
+
+**A rate needs more than two negatives.** "0 false positives out of 2
+adversarial cases" is not a false-positive rate, and should never be quoted as
+one.
+
+**Nothing here transfers to the cloud path**, which is still unmeasured.
+
+### The operational finding: latency
+
+**63 s/case mean**, and one call hit the 120 s timeout and retried:
+
+```
+[warning] ollama_retry  attempt=0  error='timed out'
+```
+
+Per-case wall time ranged from ~31 s to ~155 s (the retry). That has real
+consequences:
+
+- An 8B model on ~6 GB VRAM is at the edge of comfortable. Some of that time is
+  likely layer swapping.
+- The default 120 s timeout is *marginally* too low for this hardware. Raise it
+  with `FORGE_LLM_TIMEOUT=300` before a long run.
+- The derivation cache matters more than expected. A re-run costs 0 s and 0
+  calls; at 63 s/case, re-assessing needlessly is the difference between a
+  minute and an hour.
+- Batching is worth revisiting. `DEFAULT_BATCH_SIZE = 6` claims per call was
+  chosen to protect quality; at this latency the per-call overhead argues for
+  measuring whether a larger batch degrades accuracy at all.
+
+### Reproducing
+
+```powershell
+$env:FORGE_LLM_PROVIDER="ollama"
+$env:FORGE_MODEL_DEFAULT="qwen3:8b"
+$env:FORGE_LLM_TIMEOUT="300"
+python scripts\assessment_eval.py --provider ollama
+```

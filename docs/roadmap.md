@@ -181,10 +181,12 @@ that is a bigger pile of facts nobody is maintaining.
 - [x] Assessments cached; provider/model/prompt/schema changes invalidate
 - [x] Duplicate execution is safe — 0 new entities, 0 model calls
 - [x] CI is fully offline
-- [ ] **Real-model evaluation** — not run. No Ollama server and no cloud
-      credential were available in the development environment; the pipeline
-      is measured, model quality is not. See
-      [provider availability](./research/provider-availability.md).
+- [x] **Real-model evaluation, local** — run 2026-08-14 on Qwen3 8B / RTX
+      4050: 5/5 classifications, 1.00 structured-output validity, 1.00
+      grounding, 0 false-positive conflicts. A passing smoke test, not a
+      characterisation. See
+      [provider availability](./research/provider-availability.md) §6.
+- [ ] **Real-model evaluation, cloud** — still not run.
 
 *Deferred from the original Phase 4 scope, now the leading candidates for
 Phase 5:* bootstrapping concepts from filenames, seeding edges from the ~4,100
@@ -201,12 +203,17 @@ Phase 5 becomes the two things Phase 4 could not do: **prove the pipeline works
 with a real model**, and populate the graph at corpus scale.
 
 **Scope**
-- Run `scripts/assessment_eval.py` against a real local model and a real cloud
-  model. Report them as two rows, never averaged — they are different
-  instruments.
-- Measure the **false-positive conflict rate** specifically. Forge's
-  conservatism rules exist to keep it low; whether they succeed is untested and
-  is the largest open risk carried out of Phase 4.
+- Expand the assessment set well beyond 5 cases. The local smoke test passed
+  5/5, which is consistent with a model that is right 60% of the time — the
+  set is now the binding constraint on what can be claimed, not the model.
+- Measure the **false-positive conflict rate** properly. Zero false positives
+  on two adversarial cases is encouraging and is not a rate. This needs enough
+  IRRELEVANT and INSUFFICIENT_EVIDENCE cases to put a real bound on it.
+- Run the same set against a cloud model. Report as two rows, never averaged —
+  they are different instruments.
+- Act on the latency finding: 63 s/case locally, one call over the 120 s
+  timeout. Raise the default timeout, and measure whether a larger assessment
+  batch degrades accuracy, since per-call overhead now dominates.
 - Expand the assessment set beyond 5 cases once a real model shows where it is
   weak.
 - Bootstrap concepts from filenames; seed edges from the ~4,100 wikilinks
