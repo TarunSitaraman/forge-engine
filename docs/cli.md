@@ -16,7 +16,7 @@ pip install -e ".[dev]"     # from the repository root
 forge --help
 ```
 
-Python 3.11+. No model, no database server, and no API key is required for
+Python 3.10+. No model, no database server, and no API key is required for
 anything below except `forge model-test`.
 
 ---

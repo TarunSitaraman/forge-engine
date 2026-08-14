@@ -7,7 +7,12 @@ name = "forge-engine"
 version = "0.1.0"
 description = "Forge Knowledge OS engine — canonical knowledge model, deterministic corpus indexing, provenance."
 readme = "engine/README.md"
-requires-python = ">=3.11"
+# Verified on 3.10, 3.11, 3.12, and 3.13 — the full suite passes on each.
+# The real floor is 3.10: the domain models use PEP 604 unions (`str | None`)
+# which pydantic evaluates at runtime, so 3.9 and below genuinely cannot load
+# them. The floor was previously declared as 3.11, which made pip refuse an
+# install that works, and 3.10 is materially easier to obtain on older systems.
+requires-python = ">=3.10"
 license = { text = "MIT" }
 
 # Deliberately minimal. Every dependency below is load-bearing:
