@@ -184,8 +184,26 @@ class IngestionPipeline:
                 report.status = IngestionStatus.UNCHANGED
                 report.source_id = existing.id
                 report.content_hash = existing.content_hash
-                report.extraction_status = ExtractionStatus.SKIPPED_CACHED
                 report.spans = len(self._spans_for_source(existing.id))
+
+                # Unchanged content does not imply extracted content. A vault
+                # ingested deterministically first — the normal order, since
+                # extraction is opt-in and expensive — has every source stored
+                # with a matching hash and nothing extracted. Short-circuiting
+                # here on that basis made `--extract` a silent no-op, and broke
+                # resumability: an interrupted run, restarted, skipped every
+                # source it had already *ingested* rather than every source it
+                # had already *extracted*.
+                #
+                # Re-deriving the document would bump its version and duplicate
+                # spans for no reason, so extraction runs over the stored spans
+                # instead. Repeat runs still cost zero calls — that guarantee
+                # comes from the derivation cache inside `_extract`, which is
+                # where it belongs.
+                if opts.extract and self.extractor is not None:
+                    return self._extract_only(report, existing, opts, matcher, cache, started)
+
+                report.extraction_status = ExtractionStatus.SKIPPED_CACHED
                 report.duration_seconds = time.perf_counter() - started
                 log.info("source_unchanged", locator=locator)
                 return report
@@ -272,6 +290,50 @@ class IngestionPipeline:
         return report
 
     # -- stages ------------------------------------------------------------
+
+    def _extract_only(
+        self,
+        report: SourceReport,
+        source: Source,
+        opts: IngestOptions,
+        matcher: ConceptMatcher,
+        cache: CacheStats,
+        started: float,
+    ) -> SourceReport:
+        """Extract from an already-stored source without re-deriving it.
+
+        Used when content is unchanged but extraction has not run against it.
+        The spans come from the store, so no document version is created and no
+        span is duplicated; the source stays exactly as it was on disk and in
+        the database, and only proposals are added.
+        """
+        spans = self._spans_for_source(source.id)
+        if not spans:
+            report.extraction_status = ExtractionStatus.SKIPPED_CACHED
+            report.duration_seconds = time.perf_counter() - started
+            return report
+
+        result = self._extract(source, spans, opts, cache)
+        report.extraction_status = result.status
+        report.llm_calls = result.llm_calls
+        report.concepts_proposed = len(result.concepts)
+        report.claims_proposed = len(result.claims)
+        for failure in result.failures:
+            report.errors.append(f"{failure.get('kind')}: {failure.get('error', '')[:160]}")
+
+        if opts.propose:
+            report.proposals_created = self._propose(result, source, matcher)
+            report.evidence_links = sum(1 for c in result.claims if c.span_id)
+
+        report.duration_seconds = time.perf_counter() - started
+        log.info(
+            "source_extracted_in_place",
+            locator=report.locator,
+            spans=len(spans),
+            llm_calls=report.llm_calls,
+            status=result.status.value,
+        )
+        return report
 
     def _extract(
         self,

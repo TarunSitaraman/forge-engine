@@ -73,7 +73,15 @@ processor version, model id, prompt version, and schema version. The cache is
 written **after each source completes**. Consequences:
 
 * **Re-running a completed scope costs zero calls.** Interrupt a run, restart
-  it, and finished documents are skipped.
+  it, and finished documents are served from the cache.
+* **Deterministic ingestion first, extraction later, is a supported order** —
+  and is the normal one, since extraction is opt-in. Until 2026-08-15 it was
+  not: the unchanged-source short-circuit compared content hashes only, so
+  `--extract` over an already-ingested vault skipped every source, made zero
+  calls, and reported success. The same bug broke resumability, since a
+  restarted run skipped sources it had ingested but never extracted. Fixed;
+  regression test in
+  `tests/integration/test_phase2_ingestion.py::test_extract_runs_on_a_source_ingested_without_extraction`.
 * **Interrupting mid-document loses that document's work** — up to 12 spans ×
   2 calls ≈ 25 minutes locally. Document granularity, not span granularity.
 * **Changing the model, prompt version, or schema version invalidates the

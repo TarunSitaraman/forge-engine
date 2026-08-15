@@ -121,9 +121,17 @@ class TestChangeDetection:
         assert CALLS.count == 0
         assert store.counts() == before, "no duplicate documents or spans"
 
-    def test_unchanged_source_skips_extraction_entirely(
+    def test_unchanged_source_costs_no_model_calls(
         self, settings, store, pdf_dir, scripted_extractor
     ):
+        """Re-extracting unchanged content is free.
+
+        The guarantee is **zero model calls**, and it is delivered by the
+        derivation cache — not by the unchanged-source short-circuit, which
+        cannot tell "already extracted" from "never extracted" and must not
+        try. The reported status is therefore the cached outcome (SUCCEEDED),
+        not SKIPPED_CACHED: extraction did resolve, it just cost nothing.
+        """
         extractor = scripted_extractor()
         pipe = IngestionPipeline(settings, store, extractor=extractor)
         options = IngestOptions(extract=True)
@@ -135,7 +143,36 @@ class TestChangeDetection:
         second = pipe.ingest_path(pdf_dir / "multipage.pdf", options)
         assert second.llm_calls == 0
         assert CALLS.count == 0
-        assert second.sources[0].extraction_status is ExtractionStatus.SKIPPED_CACHED
+        assert second.cache.hits >= 1
+        assert second.sources[0].status is IngestionStatus.UNCHANGED
+
+    def test_extract_runs_on_a_source_ingested_without_extraction(
+        self, settings, store, pdf_dir, scripted_extractor
+    ):
+        """Regression: `--extract` was a silent no-op on an already-ingested vault.
+
+        Deterministic ingestion first, extraction later, is the normal order —
+        extraction is opt-in and costs hours. The unchanged-source
+        short-circuit fired on the content hash alone, so the later
+        `--extract` run skipped every source and made zero calls while
+        reporting success. It also broke resumability: an interrupted
+        extraction, restarted, skipped sources it had ingested but never
+        extracted.
+        """
+        deterministic = IngestionPipeline(settings, store)
+        deterministic.ingest_path(pdf_dir / "multipage.pdf")
+        before = store.counts()
+
+        CALLS.reset()
+        pipe = IngestionPipeline(settings, store, extractor=scripted_extractor())
+        report = pipe.ingest_path(pdf_dir / "multipage.pdf", IngestOptions(extract=True))
+
+        assert report.llm_calls > 0, "extraction must run against un-extracted content"
+        assert report.sources[0].concepts_proposed > 0
+
+        after = store.counts()
+        assert after["documents"] == before["documents"], "no document re-derivation"
+        assert after["spans"] == before["spans"], "no duplicated spans"
 
     def test_modified_source_is_reprocessed(self, pipeline, fixture_vault, store):
         target = fixture_vault / "Notes/plain-note.md"
