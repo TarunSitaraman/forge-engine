@@ -115,9 +115,25 @@ class IngestionPipeline:
             report.duration_seconds = time.perf_counter() - started
             return report
 
-        for target in targets:
+        for position, target in enumerate(targets, start=1):
             # Rebuilt per source so each file sees what earlier files proposed.
             report.add(self._ingest_one(target, opts, self._matcher(), report.cache))
+            if opts.extract:
+                # Extraction runs for hours; a run with no visible progress
+                # cannot be distinguished from a stalled one. The estimate is
+                # measured-so-far, not a prediction: it is simply the mean
+                # per-source time of this run projected over what is left, and
+                # it will swing early on and while cached sources fly past.
+                elapsed = time.perf_counter() - started
+                remaining = (elapsed / position) * (len(targets) - position)
+                log.info(
+                    "ingest_progress",
+                    source=position,
+                    of=len(targets),
+                    elapsed_minutes=round(elapsed / 60, 1),
+                    estimated_remaining_minutes=round(remaining / 60, 1),
+                    llm_calls=CALLS.count,
+                )
 
         report.duration_seconds = time.perf_counter() - started
         log.info("ingestion_run_complete", **report.totals())

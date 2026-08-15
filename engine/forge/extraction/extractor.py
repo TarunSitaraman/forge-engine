@@ -223,6 +223,7 @@ class CandidateExtractor:
         for span in selected:
             attempted += 1
             span_ok = True
+            span_started = time.perf_counter()
 
             concepts, calls, failure = self._concepts(span)
             result.llm_calls += calls
@@ -246,6 +247,19 @@ class CandidateExtractor:
 
             if span_ok:
                 succeeded += 1
+
+            # Emitted per span, not per document. At the measured local latency
+            # a single document is ~25 minutes of silence otherwise, which is
+            # indistinguishable from a hang during an overnight run.
+            log.info(
+                "extraction_span_complete",
+                span=attempted,
+                of=len(selected),
+                ok=span_ok,
+                seconds=round(time.perf_counter() - span_started, 1),
+                concepts=len(result.concepts),
+                claims=len(result.claims),
+            )
 
         if self.extract_terms and selected:
             terms, calls, failure = self._terms(selected[0])
