@@ -44,11 +44,13 @@ class OllamaProvider:
         models: dict[str, str] | None = None,
         timeout: float = 120.0,
         max_retries: int = 2,
+        think: bool | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.models = models or {}
         self.timeout = timeout
         self.max_retries = max_retries
+        self.think = think
         self._client = httpx.Client(base_url=self.base_url, timeout=timeout)
         self._capabilities: ProviderCapabilities | None = None
 
@@ -94,6 +96,22 @@ class OllamaProvider:
             raise LLMError(f"no model configured for role {role!r}")
         return model
 
+    @property
+    def identity_variant(self) -> str:
+        """Suffix distinguishing runs that are not comparable.
+
+        A thinking model answering with reasoning disabled is, for caching
+        purposes, a different instrument from the same model reasoning
+        normally. Without this, a fast think-off run would silently serve
+        cached results to a later think-on run and vice versa, and the two
+        would be averaged together in any evaluation.
+        """
+        if self.think is False:
+            return "+nothink"
+        if self.think is True:
+            return "+think"
+        return ""
+
     # -- inference ---------------------------------------------------------
 
     def complete(self, request: CompletionRequest) -> CompletionResponse:
@@ -108,6 +126,8 @@ class OllamaProvider:
             payload["options"]["num_predict"] = request.max_tokens
         if request.json_schema is not None:
             payload["format"] = request.json_schema
+        if self.think is not None:
+            payload["think"] = self.think
 
         started = timed()
         last_error: Exception | None = None
@@ -128,7 +148,24 @@ class OllamaProvider:
                 )
             except httpx.HTTPStatusError as exc:
                 last_error = exc
-                # 4xx is a request problem; retrying identical input won't help.
+                # Ollama rejects `think` outright for models that have no
+                # reasoning mode. Retrying without the field is not a silent
+                # downgrade — there is no reasoning to lose on such a model —
+                # but it is a departure from what was asked for, so it is said
+                # out loud and done exactly once.
+                if (
+                    exc.response.status_code < 500
+                    and "think" in payload
+                    and "think" in exc.response.text.casefold()
+                ):
+                    log.warning(
+                        "ollama_thinking_unsupported",
+                        model=model,
+                        requested_think=payload.pop("think"),
+                        detail=exc.response.text[:200],
+                    )
+                    continue
+                # Other 4xx is a request problem; retrying identical input won't help.
                 if exc.response.status_code < 500:
                     raise LLMError(
                         f"Ollama rejected the request ({exc.response.status_code}): "

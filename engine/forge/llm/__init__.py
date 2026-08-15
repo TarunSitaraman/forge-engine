@@ -49,6 +49,7 @@ def get_provider(settings: Settings) -> LLMProvider:
             models=dict(settings.llm.models),
             timeout=settings.llm.ollama.timeout_seconds,
             max_retries=settings.llm.ollama.max_retries,
+            think=settings.llm.ollama.think,
         )
     if settings.llm.provider == "cloud":
         cloud = settings.llm.cloud

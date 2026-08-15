@@ -3,9 +3,11 @@
 *What it actually costs to turn the vault into concepts and claims, which
 subsets are worth spending that on, and how to run it without babysitting.*
 
-**Headline: the whole vault is ~59 hours of local GPU time, not the ~236 hours
-previously estimated. `Technologies/Docs/` — the highest-value subset — is
-~3.4 hours, a single overnight run. Extraction is resumable at document
+**Headline: the call count is settled — 3,372 calls for the whole vault, 196
+for `Technologies/Docs/`. The per-call latency is not. The 63 s/call borrowed
+from the Phase 4 assessment eval understates real extraction by roughly 7×
+(§2), and the leading suspect is that Qwen3 was reasoning before every answer
+because nothing told it not to. Extraction is resumable at document
 granularity, so it does not need to finish in one sitting.**
 
 ---
@@ -45,13 +47,60 @@ Inputs, all measured rather than assumed:
 | Model calls per span | **2** | `extraction/extractor.py` |
 | Local latency | **63 s/call** | `provider-availability.md` §6 |
 
-| Scope | Spans | Calls | Local (63 s/call) |
+| Scope | Spans | Calls | At 63 s/call |
 |---|---:|---:|---:|
-| **Whole vault** | 1,686 | 3,372 | **59 h** |
+| **Whole vault** | 1,686 | 3,372 | 59 h |
 | `Projects/` | 160 | 320 | 5.6 h |
-| `Technologies/Docs/` | 98 | 196 | **3.4 h** |
+| `Technologies/Docs/` | 98 | 196 | 3.4 h |
 | `DSA/01_Patterns/` | 94 | 188 | 3.3 h |
 | `Courses/` | 37 | 74 | 1.3 h |
+
+### The 63 s/call figure does not survive contact with extraction
+
+**It was measured on a different task.** It comes from the Phase 4 *assessment*
+eval — short prompts, small outputs. Extraction sends a full span and asks for
+up to 15 concepts or 10 claims. The first real extraction run, on the same
+hardware and model, produced:
+
+| Span | Wall time (2 calls) | Implied per call |
+|---|---:|---:|
+| 3 | 478.6 s | ~239 s |
+| 4 | 704.5 s (one timeout + retry) | ~235 s |
+| 5 | 183.3 s | ~92 s |
+
+Mean ≈ **455 s/span**, roughly **7× the assessment figure**, and one later gap
+exceeded 60 minutes with no span completing at all. On those three points
+`Technologies/Docs/` projects to **~26 h**, not 3.4 h, and the whole vault to
+well over a week.
+
+Three data points from one document are not a characterisation either — they
+are recorded here so the next estimate starts from extraction's own numbers
+rather than borrowing another task's.
+
+### The likely cause, and what it costs to check
+
+Qwen3 is a **reasoning model**, and Ollama runs it with reasoning enabled
+unless told otherwise. Forge was not telling it otherwise. Every extraction
+call therefore generated a full chain of thought — at full token cost, in the
+same wall clock — which the structured-output path then discards.
+
+`FORGE_OLLAMA_THINK=0` sends Ollama's `think: false`. That is a change to what
+the model *does*, not a tuning flag, so it is opt-in, and it appends
+`+nothink` to the extractor's model id — think-on and think-off results can
+never share a derivation cache entry, and must never be averaged in an
+evaluation.
+
+**Measure before committing hours to it:**
+
+```powershell
+$env:FORGE_OLLAMA_THINK="0"
+python scripts\assessment_eval.py --provider ollama
+```
+
+If accuracy holds at 5/5 and latency drops sharply, extraction with reasoning
+off is justified on evidence. If accuracy falls, the honest conclusion is that
+this hardware cannot extract the whole vault in reasonable time and the work
+belongs on the cloud path.
 
 The per-document cap rarely binds: ingestion chunking produces roughly 5–12
 usable spans per document, so `--max-spans 12` truncates almost nothing. Raising

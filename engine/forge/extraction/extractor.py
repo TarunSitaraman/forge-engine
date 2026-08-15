@@ -177,17 +177,27 @@ class CandidateExtractor:
             return False
 
     def model_id(self) -> str:
-        """Resolved model name, for the derivation key. 'none' when disabled."""
+        """Resolved model name, for the derivation key. 'none' when disabled.
+
+        A provider may append an ``identity_variant`` — a mode it is running in
+        that makes its output non-comparable with the same model in another
+        mode, such as a reasoning model with reasoning switched off. It belongs
+        in the model id because that is what the derivation key hashes: two
+        modes must not share cache entries, and must not be averaged together
+        in an evaluation.
+        """
         if self.provider is None:
             return "none"
+        variant = str(getattr(self.provider, "identity_variant", "") or "")
         resolve = getattr(self.provider, "resolve_model", None)
         if callable(resolve):
             try:
-                return str(resolve(self.model_role))
+                return f"{resolve(self.model_role)}{variant}"
             except Exception:
                 pass
         caps = self.provider.capabilities
-        return caps.available_models[0] if caps.available_models else caps.name
+        base = caps.available_models[0] if caps.available_models else caps.name
+        return f"{base}{variant}"
 
     # -- extraction --------------------------------------------------------
 

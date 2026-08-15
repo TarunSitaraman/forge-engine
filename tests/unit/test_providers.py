@@ -384,3 +384,98 @@ class TestOllamaProvider:
 
         assert provider.capabilities.name == "ollama"
         assert provider.capabilities.available_models == ()
+
+
+# --------------------------------------------------------------------------
+# ollama reasoning control
+# --------------------------------------------------------------------------
+
+
+def ollama(handler, **kw) -> OllamaProvider:
+    """An OllamaProvider whose transport is a stub, so no network is touched."""
+    provider = OllamaProvider(models={"extraction": "qwen3:8b"}, max_retries=1, **kw)
+    provider._client = httpx.Client(
+        transport=httpx.MockTransport(handler), base_url=provider.base_url
+    )
+    return provider
+
+
+def _ok(_req: httpx.Request) -> httpx.Response:
+    return httpx.Response(200, json={"message": {"content": "{}"}})
+
+
+class TestOllamaThinking:
+    """Reasoning is a model-behaviour switch, not a tuning knob.
+
+    Qwen3 and friends reason before answering by default. For a bounded
+    extraction task that reasoning is generated at full token cost and then
+    discarded, which dominates wall time — but turning it off changes what the
+    model does, so it is opt-in and separately identified rather than a silent
+    default.
+    """
+
+    def test_unset_sends_no_think_field(self):
+        seen: dict = {}
+        provider = ollama(lambda r: (seen.update(json.loads(r.content)), _ok(r))[1])
+
+        provider.complete(CompletionRequest(messages=[Message("user", "hi")]))
+
+        assert "think" not in seen, "an unset toggle must leave the model's default alone"
+        assert provider.identity_variant == ""
+
+    @pytest.mark.parametrize("think", [True, False])
+    def test_explicit_setting_is_sent_and_changes_identity(self, think):
+        seen: dict = {}
+        provider = ollama(lambda r: (seen.update(json.loads(r.content)), _ok(r))[1], think=think)
+
+        provider.complete(CompletionRequest(messages=[Message("user", "hi")]))
+
+        assert seen["think"] is think
+        assert provider.identity_variant == ("+think" if think else "+nothink")
+
+    def test_model_without_reasoning_falls_back_once_and_says_so(self, caplog):
+        """A model with no reasoning mode has none to lose — but say it aloud."""
+        attempts: list[bool] = []
+
+        def handler(req: httpx.Request) -> httpx.Response:
+            payload = json.loads(req.content)
+            attempts.append("think" in payload)
+            if "think" in payload:
+                return httpx.Response(400, text='"llama3" does not support thinking')
+            return _ok(req)
+
+        provider = ollama(handler, think=False)
+        provider.complete(CompletionRequest(messages=[Message("user", "hi")]))
+
+        assert attempts == [True, False], "retried exactly once, without the field"
+
+    def test_other_4xx_still_fails_fast(self):
+        provider = ollama(lambda r: httpx.Response(400, text="unknown model"), think=False)
+
+        with pytest.raises(LLMError):
+            provider.complete(CompletionRequest(messages=[Message("user", "hi")]))
+
+    def test_reasoning_mode_reaches_the_derivation_key(self):
+        """Think-on and think-off results must never share a cache entry.
+
+        The derivation key hashes the model id, so the variant has to survive
+        the trip from provider to extractor. If it did not, a fast think-off
+        run would silently serve its results to a later think-on run.
+        """
+        from forge.extraction import CandidateExtractor
+        from forge.ingestion.derivation import extraction_key
+
+        def key_for(think):
+            extractor = CandidateExtractor(
+                OllamaProvider(models={"extraction": "qwen3:8b"}, think=think)
+            )
+            return extraction_key(
+                content_hash="h",
+                processor_version=extractor.version,
+                model_id=extractor.model_id(),
+                prompt_version=extractor.prompt_version,
+                schema_version=extractor.schema_version,
+            ).value()
+
+        assert key_for(False) != key_for(True) != key_for(None)
+        assert key_for(False) != key_for(None)

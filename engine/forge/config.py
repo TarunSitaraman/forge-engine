@@ -78,6 +78,15 @@ class OllamaSettings(BaseModel):
     base_url: str = "http://localhost:11434"
     timeout_seconds: float = Field(default=120.0, gt=0)
     max_retries: int = Field(default=2, ge=0, le=5)
+    #: Ollama's reasoning toggle for thinking-capable models (Qwen3, DeepSeek-R1,
+    #: gpt-oss, …). ``None`` sends nothing and leaves the model's default alone,
+    #: which is what every Forge measurement so far was taken under.
+    #:
+    #: Setting it to ``False`` is a real change to model behaviour, not a
+    #: performance flag: the model stops reasoning before it answers. It is
+    #: therefore opt-in, and it changes the extractor's model identity so
+    #: think-on and think-off results can never share a derivation cache entry.
+    think: bool | None = None
 
 
 class LLMSettings(BaseModel):
@@ -171,7 +180,10 @@ class Settings(BaseModel):
             timeout_seconds=timeout,
             max_retries=retries,
             ollama=OllamaSettings(
-                base_url=ollama_url, timeout_seconds=timeout, max_retries=retries
+                base_url=ollama_url,
+                timeout_seconds=timeout,
+                max_retries=retries,
+                think=_optional_bool(os.environ.get("FORGE_OLLAMA_THINK")),
             ),
             # Only the *name* of the credential variable is configuration. The
             # credential itself is read at call time and never stored here.
@@ -212,6 +224,24 @@ class Settings(BaseModel):
 
 class ConfigError(RuntimeError):
     """Raised when configuration is invalid. Always fatal at startup."""
+
+
+def _optional_bool(raw: str | None) -> bool | None:
+    """Parse a tri-state environment flag: unset means "leave the default alone".
+
+    Unset and "set to something meaningless" are deliberately different from
+    "set to false". An unrecognised value raises rather than silently reading as
+    False, because a typo in `FORGE_OLLAMA_THINK` would otherwise quietly change
+    how the model reasons.
+    """
+    if raw is None or raw.strip() == "":
+        return None
+    value = raw.strip().casefold()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    raise ConfigError(f"expected a boolean or an unset value, got {raw!r}")
 
 
 def _find_repo_root(start: Path | None = None) -> Path:
