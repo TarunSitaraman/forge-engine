@@ -1,6 +1,10 @@
 """Forge CLI.
 
-Makes all Phase 1 functionality demonstrable without a web application.
+Makes the engine demonstrable without a web application.
+
+This module defines the Phase 1 commands and the root ``app``; later phases
+register their own commands onto it from :mod:`forge.cli.phase2`, ``phase3``,
+and ``phase4``.
 
     forge index          index the vault, detect changes, write reports
     forge status         engine + provider + derived-state status
@@ -33,7 +37,7 @@ from ..spike import render_markdown, run_spike
 app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
-    help="Forge Knowledge OS engine (Phase 1). Read-only with respect to the vault.",
+    help="Forge Knowledge OS engine. Read-only with respect to the vault.",
 )
 
 err = typer.echo

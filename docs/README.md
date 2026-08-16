@@ -38,12 +38,13 @@ that block implementation.
 
 ---
 
-## Why there are nine documents and not thirty
+## Why this tree is small
 
-The brief sketched a wider tree (`ingestion/`, `retrieval/`, `agents/`,
-`langgraph/`, `api/`, `ux/`, `deployment/`) and then said: *"Do not
-create dozens of documents unnecessarily. Group closely related
-concepts."*
+Phase 0 established nine core documents rather than thirty, and every phase
+since has added a file only when its content existed. The brief sketched a wider
+tree (`ingestion/`, `retrieval/`, `agents/`, `langgraph/`, `api/`, `ux/`,
+`deployment/`) and then said: *"Do not create dozens of documents unnecessarily.
+Group closely related concepts."*
 
 Those topics are covered, grouped where they belong rather than split
 across near-empty files:
@@ -115,11 +116,16 @@ code, generates reviewable proposals, **pauses for a human**, and — only on
 approval — corroborates, refines (superseding non-destructively), or marks a
 claim disputed, recording a revision either way. Providers are pluggable: local
 Ollama, remote Ollama, cloud, or mock, with no silent downgrade for knowledge
-mutation. 737 tests, CI fully offline.
+mutation. 744 tests, CI fully offline.
 
-*Measured honestly:* no real model was reachable during development, so the
-pipeline is fully tested and model quality is entirely unmeasured — see
-[provider availability](./research/provider-availability.md).
+*Measured honestly:* no real model was reachable during Phase 4 development, so
+the phase shipped with a fully-tested pipeline and entirely unmeasured model
+quality. That gap has since been **partly** closed: on 2026-08-14 a local Qwen3
+8B scored 5/5 on the assessment set with valid schemas and correct grounding on
+every case. Five cases are a smoke test, not a characterisation of a rate, and
+the cloud path remains unmeasured — read
+[provider availability](./research/provider-availability.md) §6 before quoting
+either result.
 
 Verify with `bash scripts/validate_phase1.sh` … `validate_phase4.sh`.
 Demos: `python3 scripts/phase2_demo.py`, `phase3_demo.py`, `phase4_demo.py`.
