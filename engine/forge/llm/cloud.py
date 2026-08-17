@@ -25,12 +25,12 @@ interchangeable and must never be silently compared.
 from __future__ import annotations
 
 import json
-import os
 from typing import Any, TypeVar
 
 import httpx
 from pydantic import BaseModel
 
+from ..config import env_value
 from ..logging import get_logger
 from .base import (
     CALLS,
@@ -105,17 +105,23 @@ class CloudProvider:
 
     @property
     def api_key(self) -> str | None:
-        """The key, read fresh from the environment. Never cached to disk."""
-        key = os.environ.get(self.api_key_env)
+        """The key, resolved fresh at call time. Never cached, never stored.
+
+        Uses the same layered lookup as configuration — process environment
+        first, then the per-machine settings file — so a key kept in that file
+        is found without ever being copied into :data:`os.environ`.
+        """
+        key = env_value(self.api_key_env)
         return key.strip() if key and key.strip() else None
 
     def _require_key(self) -> str:
         key = self.api_key
         if not key:
             raise ProviderUnavailable(
-                f"cloud provider {self.vendor!r} has no credential: environment "
-                f"variable {self.api_key_env} is unset. Export it, or select a "
-                f"different provider with FORGE_LLM_PROVIDER."
+                f"cloud provider {self.vendor!r} has no credential: {self.api_key_env} is "
+                f"set neither in the environment nor in the settings file. Export "
+                f"it, add it there, or select a different provider with "
+                f"FORGE_LLM_PROVIDER."
             )
         return key
 

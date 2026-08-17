@@ -26,7 +26,7 @@ from typing import Any, Optional
 
 import typer
 
-from ..config import ConfigError, Settings
+from ..config import ConfigError, Settings, env_file_path
 from ..corpus import IndexPipeline, analyze_conventions, compute_stats, load_store
 from ..corpus.diagnostics import frontmatter_report, link_report
 from ..corpus.indexer import CorpusIndexer, detect_changes
@@ -128,9 +128,11 @@ def status(
     except Exception as exc:  # provider misconfiguration must not break status
         provider_detail = f"{type(exc).__name__}: {exc}"
 
+    env_file = env_file_path()
     payload = {
         "vault_path": str(settings.vault_path),
         "state_dir": str(settings.state_dir),
+        "env_file": {"path": str(env_file), "exists": env_file.is_file()},
         "db_exists": settings.db_path.exists(),
         "markdown_files_on_disk": len(on_disk),
         "sources_indexed": len(previous),
@@ -147,6 +149,7 @@ def status(
     if not _emit(payload, json_out):
         typer.echo(f"vault          : {settings.vault_path}")
         typer.echo(f"derived state  : {settings.state_dir} (exists: {settings.db_path.exists()})")
+        typer.echo(f"settings file  : {env_file} ({'loaded' if env_file.is_file() else 'absent'})")
         typer.echo(f"markdown files : {len(on_disk)}")
         typer.echo(f"indexed sources: {len(previous)}")
         counts = store.counts()

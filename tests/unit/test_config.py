@@ -15,7 +15,15 @@ from pathlib import Path
 import pytest
 
 from forge import config as config_module
-from forge.config import ConfigError, Settings, _find_vault_root, _resolve_vault_root
+from forge.config import (
+    CLOUD_PRESETS,
+    ConfigError,
+    Settings,
+    _find_vault_root,
+    _resolve_vault_root,
+    env_value,
+    read_env_file,
+)
 
 
 # --------------------------------------------------------------------------
@@ -206,3 +214,179 @@ def test_cloud_vendor_and_endpoint_are_configurable(fixture_vault: Path, monkeyp
     assert (cloud.vendor, cloud.model) == ("openai", "llama-3.3-70b-versatile")
     assert cloud.api_key_env == "GROQ_API_KEY"
     assert cloud.base_url == "https://api.groq.com/openai"
+
+
+# --------------------------------------------------------------------------
+# per-machine settings file
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def env_file(tmp_path: Path, monkeypatch) -> Path:
+    path = tmp_path / "forge.env"
+    monkeypatch.setenv("FORGE_ENV_FILE", str(path))
+    return path
+
+
+def test_a_missing_settings_file_is_not_an_error(env_file: Path) -> None:
+    assert read_env_file() == {}
+
+
+def test_settings_file_supplies_configuration(env_file: Path, fixture_vault: Path) -> None:
+    env_file.write_text("FORGE_LLM_PROVIDER=cloud\nFORGE_CLOUD_MODEL=qwen3-32b\n")
+
+    settings = Settings.load(fixture_vault)
+
+    assert settings.llm.provider == "cloud"
+    assert settings.llm.cloud.model == "qwen3-32b"
+
+
+def test_the_process_environment_wins_over_the_file(
+    env_file: Path, fixture_vault: Path, monkeypatch
+) -> None:
+    """So a single command can be overridden without editing the file."""
+    env_file.write_text("FORGE_CLOUD_MODEL=from-file\n")
+    monkeypatch.setenv("FORGE_CLOUD_MODEL", "from-environment")
+
+    assert Settings.load(fixture_vault).llm.cloud.model == "from-environment"
+
+
+def test_loading_the_file_never_mutates_the_environment(env_file: Path, fixture_vault: Path) -> None:
+    """A settings file must not leak into every process this one later spawns."""
+    env_file.write_text("FORGE_CLOUD_MODEL=qwen3-32b\nSOME_SECRET=shhh\n")
+    before = dict(os.environ)
+
+    Settings.load(fixture_vault)
+
+    assert dict(os.environ) == before
+    assert "SOME_SECRET" not in os.environ
+
+
+def test_comments_blanks_quotes_and_export_are_handled(env_file: Path) -> None:
+    env_file.write_text(
+        "\n"
+        "# a comment\n"
+        "  \n"
+        "export FORGE_CLOUD_MODEL=exported\n"
+        'FORGE_CLOUD_BASE_URL="https://example.test"\n'
+        "FORGE_CLOUD_API_KEY_ENV='QUOTED_KEY'\n"
+    )
+
+    values = read_env_file()
+
+    assert values["FORGE_CLOUD_MODEL"] == "exported"
+    assert values["FORGE_CLOUD_BASE_URL"] == "https://example.test"
+    assert values["FORGE_CLOUD_API_KEY_ENV"] == "QUOTED_KEY"
+
+
+def test_a_malformed_line_names_the_file_and_line(env_file: Path) -> None:
+    env_file.write_text("FORGE_CLOUD_MODEL=fine\nthis is not an assignment\n")
+
+    with pytest.raises(ConfigError) as exc:
+        read_env_file()
+
+    assert "forge.env:2" in str(exc.value)
+
+
+def test_a_key_may_live_in_the_settings_file(env_file: Path, monkeypatch) -> None:
+    """The credential is resolved through the same layered lookup, at call time."""
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    env_file.write_text("GROQ_API_KEY=gsk-from-file\n")
+
+    assert env_value("GROQ_API_KEY") == "gsk-from-file"
+    # ...and it is still not in the environment.
+    assert "GROQ_API_KEY" not in os.environ
+
+
+# --------------------------------------------------------------------------
+# cloud presets
+# --------------------------------------------------------------------------
+
+
+def test_a_preset_fills_the_endpoint_and_credential_variable(
+    fixture_vault: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("FORGE_CLOUD_PRESET", "groq")
+    monkeypatch.setenv("FORGE_CLOUD_MODEL", "llama-3.3-70b-versatile")
+
+    cloud = Settings.load(fixture_vault).llm.cloud
+
+    assert cloud.vendor == "openai"
+    assert cloud.base_url == "https://api.groq.com/openai"
+    assert cloud.api_key_env == "GROQ_API_KEY"
+    assert cloud.max_tokens == 8192
+
+
+def test_explicit_values_override_a_preset(fixture_vault: Path, monkeypatch) -> None:
+    """A preset is a default, not a mode — every field stays overridable."""
+    monkeypatch.setenv("FORGE_CLOUD_PRESET", "groq")
+    monkeypatch.setenv("FORGE_CLOUD_MODEL", "qwen3-32b")
+    monkeypatch.setenv("FORGE_CLOUD_API_KEY_ENV", "MY_OWN_KEY")
+    monkeypatch.setenv("FORGE_CLOUD_MAX_TOKENS", "2048")
+
+    cloud = Settings.load(fixture_vault).llm.cloud
+
+    assert cloud.api_key_env == "MY_OWN_KEY"
+    assert cloud.max_tokens == 2048
+    assert cloud.base_url == "https://api.groq.com/openai"  # still from the preset
+
+
+def test_an_unknown_preset_fails_loudly_with_the_list(fixture_vault: Path, monkeypatch) -> None:
+    """Falling back to Anthropic defaults would point the request at the wrong host."""
+    monkeypatch.setenv("FORGE_CLOUD_PRESET", "gorq")
+
+    with pytest.raises(ConfigError) as exc:
+        Settings.load(fixture_vault)
+
+    message = str(exc.value)
+    assert "unknown FORGE_CLOUD_PRESET" in message
+    assert "groq" in message
+
+
+def test_a_preset_without_a_model_says_which_knob_is_missing(
+    fixture_vault: Path, monkeypatch
+) -> None:
+    """A preset supplies an endpoint; choosing the model is always the user's call."""
+    monkeypatch.setenv("FORGE_CLOUD_PRESET", "groq")
+    monkeypatch.delenv("FORGE_CLOUD_MODEL", raising=False)
+
+    with pytest.raises(ConfigError) as exc:
+        Settings.load(fixture_vault)
+
+    assert "FORGE_CLOUD_MODEL" in str(exc.value)
+
+
+def test_every_preset_is_openai_compatible_and_complete(fixture_vault: Path, monkeypatch) -> None:
+    """Guards the table itself: a half-filled preset is a broken endpoint."""
+    monkeypatch.setenv("FORGE_CLOUD_MODEL", "some-model")
+    for name in CLOUD_PRESETS:
+        monkeypatch.setenv("FORGE_CLOUD_PRESET", name)
+
+        cloud = Settings.load(fixture_vault).llm.cloud
+
+        assert cloud.vendor == "openai", name
+        assert cloud.base_url.startswith("http"), name
+        assert not cloud.base_url.endswith("/v1"), f"{name}: base_url is the root above /v1"
+        assert cloud.api_key_env, name
+        assert cloud.max_tokens > 0, name
+
+
+def test_no_preset_keeps_the_anthropic_defaults(fixture_vault: Path, monkeypatch) -> None:
+    monkeypatch.delenv("FORGE_CLOUD_PRESET", raising=False)
+
+    cloud = Settings.load(fixture_vault).llm.cloud
+
+    assert (cloud.vendor, cloud.model) == ("anthropic", "claude-sonnet-5")
+
+
+def test_the_shipped_example_settings_file_parses(monkeypatch) -> None:
+    """The template users copy must stay loadable, not just readable."""
+    example = Path(__file__).resolve().parents[2] / "config" / "forge.env.example"
+    monkeypatch.setenv("FORGE_ENV_FILE", str(example))
+
+    values = read_env_file()
+
+    assert values, "example file parsed to nothing — every line got commented out?"
+    # Its active profile is the GPU box; the rest are commented alternatives.
+    assert values["FORGE_MODEL_DEFAULT"]
+    assert all(k.isupper() for k in values), values

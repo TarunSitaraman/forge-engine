@@ -63,13 +63,49 @@ forge <TAB>                          # completes subcommands and flags
 `forge model-test`, `forge evolve`, and extraction runs without one. The
 provider is per-machine configuration — see the next section.
 
+### Where settings live
+
+Provider configuration is a property of the **machine**, not of the vault: the
+same checkout is a GPU box on one machine and a laptop borrowing a hosted
+endpoint on another, and the vault is shared between them by Git. So settings
+live in a per-machine file rather than in the repository or a shell profile:
+
+```bash
+mkdir -p ~/.config/forge
+cp config/forge.env.example ~/.config/forge/forge.env
+chmod 600 ~/.config/forge/forge.env      # it can hold an API key
+$EDITOR ~/.config/forge/forge.env
+forge status                              # shows which file was loaded
+```
+
+`~/.config/forge/forge.env` (or `$XDG_CONFIG_HOME/forge/forge.env`; override
+with `FORGE_ENV_FILE`) is read for every setting on this page, including the API
+key. Three layers resolve each value, highest first: an explicit CLI option, the
+process environment, then this file. So a single command can always be
+overridden without editing anything:
+
+```bash
+FORGE_LLM_PROVIDER=mock forge status
+```
+
+The format is `KEY=value`, one per line, with `#` comments, blank lines, a
+leading `export `, and surrounding quotes all accepted. There is deliberately no
+interpolation and no command substitution — a settings file that can execute is
+a settings file that can surprise you, and this one holds a credential. A
+malformed line fails at startup naming the file and line number.
+
+**Loading the file never mutates the environment.** Values are resolved through
+it, not exported into it, so nothing here leaks into processes Forge spawns —
+and the key in particular is fetched at call time and never lands in
+`os.environ`. `.gitignore` covers `forge.env` so a stray copy inside the repo
+cannot be committed.
+
 ### Per-machine provider: the ASUS primary, a hosted open-weights fallback
 
-**No paid API is required, and none is assumed.** Provider selection is an
-environment variable, so each machine's shell profile decides. Nothing in the
-engine branches on which one answered; only the recorded provenance differs, and
-it always records *which* provider and model produced a result — so results from
-two different models are never silently compared.
+**No paid API is required, and none is assumed.** Nothing in the engine branches
+on which provider answered; only the recorded provenance differs, and it always
+records *which* provider and model produced a result — so results from two
+different models are never silently compared.
 
 The intended setup is two tiers: the GPU box does the real work, and a hosted
 open-weights endpoint covers the Mac when that box is off.
@@ -112,47 +148,53 @@ which is a reason to prefer it, not just a convenience.
 
 The cloud provider speaks two wire formats, and the second one —
 `FORGE_CLOUD_VENDOR=openai` — is the de-facto shape for essentially every hosted
-open-weights service (Groq, OpenRouter, Together, DeepInfra, Fireworks,
-Cerebras) as well as self-hosted servers (vLLM, llama.cpp, LM Studio, LocalAI).
-Pointing Forge at one is configuration, not a code change:
+open-weights service (Groq, OpenRouter, Together, Cerebras, Fireworks) as well
+as self-hosted servers (vLLM, llama.cpp, LM Studio). Pointing Forge at one is
+configuration, not a code change.
+
+**Presets** collapse the endpoint, the credential-variable name, and a safe
+token ceiling into one value, because a base URL with the wrong path prefix is
+the single most common way to get this wrong:
 
 ```bash
-cat >> ~/.zshrc <<'EOF'
-export FORGE_LLM_PROVIDER=cloud
-export FORGE_CLOUD_VENDOR=openai
-export FORGE_CLOUD_BASE_URL=https://api.groq.com/openai   # host's OpenAI-compatible root
-export FORGE_CLOUD_MODEL=llama-3.3-70b-versatile          # an open-weights model
-export FORGE_CLOUD_API_KEY_ENV=GROQ_API_KEY               # the *name* of the variable
-export GROQ_API_KEY=gsk_...                               # the key itself
-export FORGE_CLOUD_MAX_TOKENS=8192
-export FORGE_LLM_TIMEOUT=300
-EOF
-exec $SHELL -l
-forge status          # -> llm provider : cloud (OK)
+FORGE_LLM_PROVIDER=cloud
+FORGE_CLOUD_PRESET=groq
+FORGE_CLOUD_MODEL=llama-3.3-70b-versatile
+GROQ_API_KEY=gsk_...
 ```
 
-Swap the four `FORGE_CLOUD_*` values for any other host; the shape does not
-change. `FORGE_CLOUD_BASE_URL` is the root that has `/v1/chat/completions`
-underneath it, so include any vendor path prefix (Groq's is `/openai`) and no
-trailing `/v1`.
+Known presets: `groq`, `openrouter`, `together`, `cerebras`, `fireworks`,
+`lmstudio`, `llama-cpp`, `vllm`. An unknown name fails at startup with the list
+rather than silently falling back to a different host.
+
+**You always choose the model.** A preset supplies an endpoint, never a model —
+omitting `FORGE_CLOUD_MODEL` is a startup error naming that variable, not a
+guess. And a preset is a *default*, not a mode: every field it fills stays
+individually overridable, and any other host works without one by setting
+`FORGE_CLOUD_VENDOR=openai` plus `FORGE_CLOUD_BASE_URL` (the root that has
+`/v1/chat/completions` beneath it — include any vendor path prefix, no trailing
+`/v1`).
+
+Presets are a convenience against a typo, not an integration: third-party
+endpoints can change, and the explicit variables are always authoritative.
 
 Three things worth knowing about this path:
 
-- **Set `FORGE_CLOUD_MAX_TOKENS` to something the model actually supports.** The
-  default (16000) is sized for a frontier model with a 128K output ceiling. A
-  served Llama or Qwen typically caps at 4096–8192, and gateways reject an
-  over-large request rather than clamping it. The 400 body is surfaced in the
-  error, so the failure is at least legible.
+- **Output ceilings are lower than a frontier model's.** Presets set 4096–8192;
+  the bare default is 16000, sized for a 128K-output model. Gateways reject an
+  over-large request rather than clamping it, and the 400 body is surfaced in
+  the error. Override with `FORGE_CLOUD_MAX_TOKENS`.
 - **Only the *name* of the credential variable is configuration.** The key is
-  read at call time and never written to config, the store, provenance, or logs.
-  `forge status` reports whether a key is present without echoing it.
+  read at call time, never written to config, the store, provenance, or logs,
+  and never copied into the environment. `forge status` reports whether a key is
+  present without echoing it.
 - **JSON mode is requested where the schema is known**
   (`response_format: {"type": "json_object"}`), and Forge validates the result
   regardless. A response that will not validate against the schema raises rather
   than becoming a degraded write — the same contract as every other provider.
 
 Anthropic remains supported as a third option (`FORGE_CLOUD_VENDOR=anthropic`,
-the default) if a key ever exists; nothing about it is required.
+the default when no preset is set) if a key ever exists; nothing requires it.
 
 #### Re-measure after any provider change
 
@@ -208,6 +250,7 @@ Environment variables, all optional:
 
 | Variable | Default | Purpose |
 |---|---|---|
+| `FORGE_ENV_FILE` | `~/.config/forge/forge.env` | Per-machine settings file (see above) |
 | `FORGE_VAULT_PATH` | see below | Vault to index |
 | `FORGE_STATE_DIR` | `<vault>/.forge` | Derived state |
 | `FORGE_LLM_PROVIDER` | `ollama` | `ollama`, `cloud`, or `mock` |
@@ -215,6 +258,7 @@ Environment variables, all optional:
 | `FORGE_OLLAMA_THINK` | unset | Tri-state reasoning toggle; unset leaves the model's default |
 | `FORGE_MODEL_DEFAULT` | `llama3.1:8b` | Model for all roles (Ollama) |
 | `FORGE_MODEL_EXTRACTION` / `_ANALYSIS` / `_RESOLUTION` / `_SYNTHESIS` | — | Per-role override (Ollama) |
+| `FORGE_CLOUD_PRESET` | — | `groq`, `openrouter`, `together`, `cerebras`, `fireworks`, `lmstudio`, `llama-cpp`, `vllm`. Fills the four fields below; you still set the model |
 | `FORGE_CLOUD_VENDOR` | `anthropic` | `anthropic` or `openai` — a wire format, not a company. `openai` is the shape every open-weights host speaks |
 | `FORGE_CLOUD_MODEL` | `claude-sonnet-5` | Model for every role on the cloud provider |
 | `FORGE_CLOUD_API_KEY_ENV` | `ANTHROPIC_API_KEY` | **Name** of the variable holding the key |
