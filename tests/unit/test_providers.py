@@ -339,6 +339,67 @@ class TestCloudWireFormats:
 
         assert seen["body"]["max_tokens"] == 512
 
+    def test_openai_compatible_hoists_system_to_the_front(self, monkeypatch):
+        """Open-weights chat templates commonly drop a non-leading system turn.
+
+        `structured()` appends the schema instruction as a system message *after*
+        the user turn. The Anthropic branch hoists system into its own top-level
+        field so order never mattered; served through a gateway the messages hit
+        the model's own chat template, and a dropped instruction would strip the
+        schema silently — a 200 response that fails to parse, on every call.
+        """
+        seen: dict = {}
+
+        def handler(req: httpx.Request) -> httpx.Response:
+            seen["body"] = json.loads(req.content)
+            return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+        provider = cloud(monkeypatch, handler, vendor=OPENAI_COMPATIBLE, model="qwen")
+        provider.complete(
+            CompletionRequest(
+                messages=[
+                    Message(role="user", content="q"),
+                    Message(role="system", content="schema instruction"),
+                ]
+            )
+        )
+
+        roles = [m["role"] for m in seen["body"]["messages"]]
+        assert roles == ["system", "user"]
+        assert seen["body"]["messages"][0]["content"] == "schema instruction"
+
+    def test_openai_compatible_collapses_multiple_system_turns(self, monkeypatch):
+        seen: dict = {}
+
+        def handler(req: httpx.Request) -> httpx.Response:
+            seen["body"] = json.loads(req.content)
+            return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+        provider = cloud(monkeypatch, handler, vendor=OPENAI_COMPATIBLE, model="qwen")
+        provider.complete(
+            CompletionRequest(
+                messages=[
+                    Message(role="system", content="first"),
+                    Message(role="user", content="q"),
+                    Message(role="system", content="second"),
+                ]
+            )
+        )
+
+        messages = seen["body"]["messages"]
+        assert [m["role"] for m in messages] == ["system", "user"]
+        assert messages[0]["content"] == "first\n\nsecond"
+
+    def test_the_token_budget_is_configurable_for_smaller_models(self):
+        """Open-weights models cap far below a frontier model's output ceiling.
+
+        Gateways reject an over-large `max_tokens` rather than clamping it, so
+        this has to be tunable without a code change.
+        """
+        settings = CloudSettings(max_tokens=4096)
+
+        assert settings.max_tokens == 4096
+
     def test_an_unsupported_vendor_is_rejected(self):
         with pytest.raises(LLMError, match="unsupported cloud vendor"):
             CloudProvider(vendor="mystery-inc")

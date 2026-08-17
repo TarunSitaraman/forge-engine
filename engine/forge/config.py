@@ -63,6 +63,11 @@ class CloudSettings(BaseModel):
     #: Caps thinking *and* response text together on current Anthropic models,
     #: which think by default — so this has to leave room for both. See
     #: `CloudProvider.__init__`.
+    #:
+    #: **Lower it for open-weights models.** The default is sized for a frontier
+    #: model with a 128K output ceiling; a served Llama or Qwen usually caps at
+    #: 4096-8192, and gateways reject a request that asks for more rather than
+    #: clamping it. `FORGE_CLOUD_MAX_TOKENS` exists for exactly this.
     max_tokens: int = Field(default=16000, gt=0)
     #: Whether the vendor can be *asked* for schema-conforming JSON. Forge
     #: validates the result regardless; this only selects the request shape.
@@ -195,6 +200,7 @@ class Settings(BaseModel):
                 model=os.environ.get("FORGE_CLOUD_MODEL", "claude-sonnet-5"),
                 api_key_env=os.environ.get("FORGE_CLOUD_API_KEY_ENV", "ANTHROPIC_API_KEY"),
                 base_url=os.environ.get("FORGE_CLOUD_BASE_URL", "https://api.anthropic.com"),
+                max_tokens=int(os.environ.get("FORGE_CLOUD_MAX_TOKENS", "16000")),
                 timeout_seconds=timeout,
                 max_retries=retries,
             ),

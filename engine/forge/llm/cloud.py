@@ -296,12 +296,25 @@ class CloudProvider:
             }
             return "/v1/messages", payload, headers
 
-        # OpenAI-compatible: system stays in the message list.
+        # OpenAI-compatible: system stays in the message list, but it is
+        # **collapsed and hoisted to the front**, not left where it fell.
+        #
+        # This matters for open-weights models specifically. `structured()`
+        # appends the schema instruction as a system message *after* the user
+        # turn; the Anthropic branch above hoists every system message into the
+        # top-level `system` field, so ordering never mattered there. Served
+        # through an OpenAI-compatible gateway the messages are rendered by the
+        # model's own chat template, and templates commonly assume a single
+        # leading system turn — several drop a trailing one outright. That would
+        # silently delete the schema instruction and turn every extraction into
+        # a structured-output failure, with a well-formed request and a 200 to
+        # show for it. Hoisting keeps both wire formats semantically identical.
+        ordered = ([{"role": "system", "content": system}] if system else []) + turns
         payload = {
             "model": model,
             "max_tokens": max_tokens,
             "temperature": request.temperature,
-            "messages": [{"role": m.role, "content": m.content} for m in request.messages],
+            "messages": ordered or [{"role": "user", "content": system}],
         }
         if request.json_schema is not None and self._structured:
             payload["response_format"] = {"type": "json_object"}

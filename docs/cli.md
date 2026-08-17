@@ -63,34 +63,21 @@ forge <TAB>                          # completes subcommands and flags
 `forge model-test`, `forge evolve`, and extraction runs without one. The
 provider is per-machine configuration — see the next section.
 
-### Per-machine provider: cloud on the laptop, Ollama on the GPU box
+### Per-machine provider: the ASUS primary, a hosted open-weights fallback
 
-Provider selection is an environment variable, so each machine's shell profile
-decides. Nothing in the engine branches on which one answered; only the recorded
-provenance differs, and it always records *which* provider and model produced a
-result so a local and a cloud assessment are never silently compared.
+**No paid API is required, and none is assumed.** Provider selection is an
+environment variable, so each machine's shell profile decides. Nothing in the
+engine branches on which one answered; only the recorded provenance differs, and
+it always records *which* provider and model produced a result — so results from
+two different models are never silently compared.
 
-**On the Mac — cloud.** An 8 GB laptop cannot practically host an 8B model, and
-this is what the cloud provider exists for:
+The intended setup is two tiers: the GPU box does the real work, and a hosted
+open-weights endpoint covers the Mac when that box is off.
 
-```bash
-cat >> ~/.zshrc <<'EOF'
-export FORGE_LLM_PROVIDER=cloud
-export ANTHROPIC_API_KEY=sk-ant-...     # or keep it in a secret manager
-export FORGE_LLM_TIMEOUT=300
-EOF
-exec $SHELL -l
-forge status                             # -> llm provider : cloud (OK)
-```
+#### Tier 1 — the ASUS, from anywhere
 
-Only the *name* of the credential variable is configuration
-(`FORGE_CLOUD_API_KEY_ENV`); the key itself is read at call time and never
-written to config, the store, provenance, or logs. `forge status` reports
-whether a key is present without echoing it. Change the model with
-`FORGE_CLOUD_MODEL` (default `claude-sonnet-5`).
-
-**On the ASUS — Ollama, unchanged.** It is the default provider, so that box
-needs no `FORGE_LLM_PROVIDER` at all:
+The ASUS is the default provider and needs no configuration at all beyond the
+model:
 
 ```bash
 ollama pull qwen3:8b
@@ -98,26 +85,105 @@ export FORGE_MODEL_DEFAULT=qwen3:8b
 export FORGE_LLM_TIMEOUT=300
 ```
 
-**Or use the ASUS from the Mac.** `FORGE_OLLAMA_URL` points at any reachable
-host — nothing assumes the model runs locally, so the laptop can borrow the GPU
-box over the LAN instead of going to the cloud:
+`FORGE_OLLAMA_URL` points at any reachable host — nothing assumes the model runs
+locally — so the Mac can drive it over the LAN:
 
 ```bash
-export FORGE_OLLAMA_URL=http://<asus-host>:11434
+export FORGE_OLLAMA_URL=http://<asus-hostname>:11434
 ```
 
-Set `FORGE_LLM_TIMEOUT=300` on any real local run; the 120 s default has been
-exceeded by a single call at ~63 s/case on the reference hardware.
+To reach it off the LAN, put both machines on a private network (Tailscale or
+equivalent) and use the private hostname. **Do not expose port 11434 to the
+public internet** — Ollama has no authentication, so anything that can reach it
+can use it.
 
-> **Measurement status.** The local path was measured once — Qwen3 8B, 5/5 on
-> the assessment set (2026-08-14). The **cloud path has never been exercised
-> against a live API**: until this was fixed it could not be, because the
-> request forwarded `temperature=0.0` and current Anthropic models reject
-> non-default sampling parameters with a 400. The request shape is now correct
-> and asserted by tests, but "correct shape" is not "measured quality" — treat
-> the first real cloud runs as the measurement, and read
-> [provider availability](./research/provider-availability.md) §6 before quoting
-> either path as a rate.
+Ollama binds to loopback by default, so the ASUS must be told to listen on the
+private interface before anything else can connect:
+
+```bash
+# On the ASUS
+OLLAMA_HOST=0.0.0.0:11434 ollama serve     # or set it in the systemd unit
+```
+
+This tier is the one with a measurement behind it (Qwen3 8B, 5/5 — see below),
+which is a reason to prefer it, not just a convenience.
+
+#### Tier 2 — a hosted open-weights endpoint, when the ASUS is off
+
+The cloud provider speaks two wire formats, and the second one —
+`FORGE_CLOUD_VENDOR=openai` — is the de-facto shape for essentially every hosted
+open-weights service (Groq, OpenRouter, Together, DeepInfra, Fireworks,
+Cerebras) as well as self-hosted servers (vLLM, llama.cpp, LM Studio, LocalAI).
+Pointing Forge at one is configuration, not a code change:
+
+```bash
+cat >> ~/.zshrc <<'EOF'
+export FORGE_LLM_PROVIDER=cloud
+export FORGE_CLOUD_VENDOR=openai
+export FORGE_CLOUD_BASE_URL=https://api.groq.com/openai   # host's OpenAI-compatible root
+export FORGE_CLOUD_MODEL=llama-3.3-70b-versatile          # an open-weights model
+export FORGE_CLOUD_API_KEY_ENV=GROQ_API_KEY               # the *name* of the variable
+export GROQ_API_KEY=gsk_...                               # the key itself
+export FORGE_CLOUD_MAX_TOKENS=8192
+export FORGE_LLM_TIMEOUT=300
+EOF
+exec $SHELL -l
+forge status          # -> llm provider : cloud (OK)
+```
+
+Swap the four `FORGE_CLOUD_*` values for any other host; the shape does not
+change. `FORGE_CLOUD_BASE_URL` is the root that has `/v1/chat/completions`
+underneath it, so include any vendor path prefix (Groq's is `/openai`) and no
+trailing `/v1`.
+
+Three things worth knowing about this path:
+
+- **Set `FORGE_CLOUD_MAX_TOKENS` to something the model actually supports.** The
+  default (16000) is sized for a frontier model with a 128K output ceiling. A
+  served Llama or Qwen typically caps at 4096–8192, and gateways reject an
+  over-large request rather than clamping it. The 400 body is surfaced in the
+  error, so the failure is at least legible.
+- **Only the *name* of the credential variable is configuration.** The key is
+  read at call time and never written to config, the store, provenance, or logs.
+  `forge status` reports whether a key is present without echoing it.
+- **JSON mode is requested where the schema is known**
+  (`response_format: {"type": "json_object"}`), and Forge validates the result
+  regardless. A response that will not validate against the schema raises rather
+  than becoming a degraded write — the same contract as every other provider.
+
+Anthropic remains supported as a third option (`FORGE_CLOUD_VENDOR=anthropic`,
+the default) if a key ever exists; nothing about it is required.
+
+#### Re-measure after any provider change
+
+**A quality result belongs to a model, not to Forge.** The one real-model
+measurement on record — 5/5 on the assessment set, 2026-08-14 — is Qwen3 8B via
+Ollama and describes *only* that. Moving the Mac to a hosted open-weights model
+does not inherit it, and the two must not be pooled.
+
+The evaluation is reproducible, so re-run it rather than estimating:
+
+```bash
+# Whatever provider the environment is currently configured for
+python3 scripts/assessment_eval.py --provider cloud --json    # or --provider ollama
+forge model-test --repetitions 3 --note "host: <name>, model: <id>"
+```
+
+`assessment_eval.py` drives the production assessor and proposer — only the
+provider changes between modes — and `forge model-test` writes its results to
+[`research/local-model-capability-spike.md`](./research/local-model-capability-spike.md),
+recording which provider and model produced them. Both refuse to invent a number
+when the provider is unreachable; they report the unavailability instead.
+
+Five cases were never enough to establish a rate even for Qwen3. Treat any new
+provider's first run as a smoke test too, and read
+[provider availability](./research/provider-availability.md) §6 before quoting
+either as a rate.
+
+> **Status of the Anthropic path.** It has still never completed a call. Until
+> recently it could not: the request forwarded `temperature=0.0`, which current
+> Anthropic models reject with a 400. The shape is now correct and asserted by
+> tests, but a correct shape is not a measurement.
 
 ### Troubleshooting
 
@@ -149,10 +215,11 @@ Environment variables, all optional:
 | `FORGE_OLLAMA_THINK` | unset | Tri-state reasoning toggle; unset leaves the model's default |
 | `FORGE_MODEL_DEFAULT` | `llama3.1:8b` | Model for all roles (Ollama) |
 | `FORGE_MODEL_EXTRACTION` / `_ANALYSIS` / `_RESOLUTION` / `_SYNTHESIS` | — | Per-role override (Ollama) |
-| `FORGE_CLOUD_VENDOR` | `anthropic` | `anthropic` or `openai` — selects a wire format only |
+| `FORGE_CLOUD_VENDOR` | `anthropic` | `anthropic` or `openai` — a wire format, not a company. `openai` is the shape every open-weights host speaks |
 | `FORGE_CLOUD_MODEL` | `claude-sonnet-5` | Model for every role on the cloud provider |
 | `FORGE_CLOUD_API_KEY_ENV` | `ANTHROPIC_API_KEY` | **Name** of the variable holding the key |
-| `FORGE_CLOUD_BASE_URL` | `https://api.anthropic.com` | API endpoint |
+| `FORGE_CLOUD_BASE_URL` | `https://api.anthropic.com` | API root; for `openai`, the path above `/v1/chat/completions` |
+| `FORGE_CLOUD_MAX_TOKENS` | `16000` | Output cap. **Lower to 4096–8192 for open-weights models** |
 | `FORGE_LLM_TIMEOUT` / `FORGE_LLM_MAX_RETRIES` | `120` / `2` | Per-call timeout and retries |
 | `FORGE_LOG_LEVEL` / `FORGE_LOG_FORMAT` | `INFO` / `console` | `console` or `json` |
 
@@ -756,8 +823,19 @@ export FORGE_MODEL_DEFAULT=qwen3:8b
 export FORGE_LLM_PROVIDER=ollama
 export FORGE_OLLAMA_URL=http://192.168.1.50:11434
 
-# Portable, for machines that cannot host a model.
+# Hosted open-weights, for machines that cannot host a model. The `openai`
+# vendor is a wire format — Groq, OpenRouter, Together, vLLM, llama.cpp and
+# most other servers speak it.
 export FORGE_LLM_PROVIDER=cloud
+export FORGE_CLOUD_VENDOR=openai
+export FORGE_CLOUD_BASE_URL=https://api.groq.com/openai
+export FORGE_CLOUD_MODEL=llama-3.3-70b-versatile
+export FORGE_CLOUD_API_KEY_ENV=GROQ_API_KEY
+export FORGE_CLOUD_MAX_TOKENS=8192  # open-weights models cap well below 16000
+
+# Hosted proprietary, if a key happens to exist. Never required.
+export FORGE_LLM_PROVIDER=cloud
+export FORGE_CLOUD_VENDOR=anthropic
 export FORGE_CLOUD_MODEL=claude-sonnet-5
 export ANTHROPIC_API_KEY=...        # read at call time; never stored
 

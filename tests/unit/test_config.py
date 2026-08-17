@@ -183,3 +183,26 @@ def test_os_environ_untouched_by_load(fixture_vault: Path) -> None:
     Settings.load(fixture_vault)
 
     assert dict(os.environ) == before
+
+
+def test_cloud_token_budget_reads_the_environment(fixture_vault: Path, monkeypatch) -> None:
+    """Open-weights models need a lower ceiling than the Anthropic-shaped default."""
+    monkeypatch.setenv("FORGE_CLOUD_MAX_TOKENS", "4096")
+
+    settings = Settings.load(fixture_vault)
+
+    assert settings.llm.cloud.max_tokens == 4096
+
+
+def test_cloud_vendor_and_endpoint_are_configurable(fixture_vault: Path, monkeypatch) -> None:
+    """Pointing Forge at an open-weights host is configuration, not a code change."""
+    monkeypatch.setenv("FORGE_CLOUD_VENDOR", "openai")
+    monkeypatch.setenv("FORGE_CLOUD_MODEL", "llama-3.3-70b-versatile")
+    monkeypatch.setenv("FORGE_CLOUD_API_KEY_ENV", "GROQ_API_KEY")
+    monkeypatch.setenv("FORGE_CLOUD_BASE_URL", "https://api.groq.com/openai")
+
+    cloud = Settings.load(fixture_vault).llm.cloud
+
+    assert (cloud.vendor, cloud.model) == ("openai", "llama-3.3-70b-versatile")
+    assert cloud.api_key_env == "GROQ_API_KEY"
+    assert cloud.base_url == "https://api.groq.com/openai"
