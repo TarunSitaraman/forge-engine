@@ -35,7 +35,9 @@ from ..logging import bind_run, configure_logging, new_run_id
 from ..spike import render_markdown, run_spike
 
 app = typer.Typer(
-    add_completion=False,
+    # Completion is on so `forge <TAB>` works in zsh/bash/fish. Install it once
+    # per shell with `forge --install-completion`.
+    add_completion=True,
     no_args_is_help=True,
     help="Forge Knowledge OS engine. Read-only with respect to the vault.",
 )

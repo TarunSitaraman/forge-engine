@@ -168,7 +168,7 @@ class Settings(BaseModel):
     @classmethod
     def load(cls, vault_path: Path | str | None = None, **overrides: object) -> Settings:
         """Build settings from environment with optional explicit overrides."""
-        root = Path(vault_path or os.environ.get("FORGE_VAULT_PATH") or _find_repo_root())
+        root = Path(vault_path or os.environ.get("FORGE_VAULT_PATH") or _resolve_vault_root())
         state = Path(os.environ.get("FORGE_STATE_DIR") or (root / ".forge"))
 
         ollama_url = os.environ.get("FORGE_OLLAMA_URL", "http://localhost:11434")
@@ -244,10 +244,47 @@ def _optional_bool(raw: str | None) -> bool | None:
     raise ConfigError(f"expected a boolean or an unset value, got {raw!r}")
 
 
-def _find_repo_root(start: Path | None = None) -> Path:
-    """Walk upward looking for the repository root (a directory containing .git)."""
-    here = (start or Path(__file__)).resolve()
+def _find_vault_root(start: Path) -> Path | None:
+    """Walk upward from ``start`` for a repository root (a directory containing .git).
+
+    Returns ``None`` rather than a fallback: "no vault here" is a real answer the
+    caller has to handle, and the previous silent fallback to the current
+    directory is exactly the bug this signature prevents.
+    """
+    here = start.resolve()
     for candidate in [here, *here.parents]:
         if (candidate / ".git").exists():
             return candidate
-    return Path.cwd()
+    return None
+
+
+def _resolve_vault_root() -> Path:
+    """Locate the vault when it was not passed explicitly or set in the environment.
+
+    Two locations are tried, in this order:
+
+    1. **Next to the installed module.** A source checkout or an editable install
+       puts ``forge/config.py`` inside the vault repository, so this pins the CLI
+       to that vault from any working directory — the behaviour a personal vault
+       wants, and what ``pipx install --editable`` gives you.
+    2. **Upward from the current directory.** For a non-editable install the
+       module lives in ``site-packages``, so the only signal left is the vault
+       the user is standing in.
+
+    If neither finds a repository root, this raises. It must not fall back to the
+    current directory: ``forge index`` would then treat an arbitrary directory as
+    a vault, write a ``.forge/`` into it, and report success — silently indexing
+    the wrong thing instead of saying it could not find the right thing.
+    """
+    for start in (Path(__file__), Path.cwd()):
+        found = _find_vault_root(start)
+        if found is not None:
+            return found
+    raise ConfigError(
+        "could not locate a Forge vault. Forge looks for a directory containing "
+        ".git, first next to the installed engine and then upward from the "
+        "current directory, and found neither.\n"
+        "Fix this by pointing Forge at the vault explicitly:\n"
+        "  export FORGE_VAULT_PATH=/path/to/forge   # persist it in ~/.zshrc\n"
+        "  forge index --vault /path/to/forge       # or per-command, where supported"
+    )

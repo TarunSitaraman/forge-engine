@@ -19,6 +19,91 @@ forge --help
 Python 3.10+. No model, no database server, and no API key is required for
 anything below except `forge model-test`.
 
+### macOS — `forge` as a global command
+
+macOS ships Python 3.9.6, which is **below Forge's floor** and cannot load the
+domain models (they use PEP 604 unions that pydantic evaluates at runtime). You
+need a newer interpreter, and you want `forge` on your `PATH` without activating
+a virtualenv first.
+
+```bash
+brew install python@3.12 pipx     # 3.10+; skip if you already have one
+pipx ensurepath                   # puts ~/.local/bin on PATH
+exec $SHELL -l                    # reload so PATH takes effect
+
+cd ~/forge                        # wherever you cloned it
+pipx install --editable ".[dev]"
+
+forge --help
+```
+
+**Why `pipx` and not `pip install`.** Homebrew's Python is marked
+externally-managed (PEP 668), so a plain `pip install` into it fails with
+`error: externally-managed-environment`. pipx gives the CLI its own isolated
+environment and links only the `forge` executable onto your `PATH`.
+
+**Why `--editable`.** It keeps the installed command pointed at your checkout,
+so edits to `engine/` take effect immediately with no reinstall — and it makes
+Forge resolve the vault to that checkout from *any* working directory, which is
+what you want for a single personal vault. Confirm with:
+
+```bash
+cd ~ && forge status | head -1      # -> vault : /Users/you/forge
+```
+
+**Tab completion** (macOS defaults to zsh):
+
+```bash
+forge --install-completion
+exec $SHELL -l
+forge <TAB>                          # completes subcommands and flags
+```
+
+**A local model, if you want the LLM-backed commands.** Everything except
+`forge model-test`, `forge evolve`, and extraction runs without one.
+
+```bash
+brew install ollama
+brew services start ollama           # serves http://localhost:11434
+ollama pull qwen3:8b
+export FORGE_MODEL_DEFAULT=qwen3:8b
+```
+
+On Apple Silicon this runs on Metal. If you would rather use the machine that
+was actually measured, point Forge at it over the LAN instead — nothing assumes
+the host is local:
+
+```bash
+export FORGE_OLLAMA_URL=http://<that-box>:11434
+```
+
+Either way, set `FORGE_LLM_TIMEOUT=300` for real runs; the default 120 s has
+been exceeded by a single call.
+
+Persist the settings you keep in `~/.zshrc`:
+
+```bash
+cat >> ~/.zshrc <<'EOF'
+export FORGE_MODEL_DEFAULT=qwen3:8b
+export FORGE_LLM_TIMEOUT=300
+EOF
+```
+
+### Troubleshooting
+
+| Symptom | Cause and fix |
+|---|---|
+| `zsh: command not found: forge` | `~/.local/bin` is not on `PATH`. Run `pipx ensurepath`, then `exec $SHELL -l`. |
+| `error: externally-managed-environment` | You ran `pip install` against Homebrew Python. Use pipx as above, or a venv. |
+| `configuration error: could not locate a Forge vault` | A non-editable install run outside any git repository. Either reinstall with `--editable`, or `export FORGE_VAULT_PATH=~/forge`. |
+| `forge status` reports the wrong vault | A non-editable install resolves the vault from your current directory. Set `FORGE_VAULT_PATH` to pin it. |
+| `pydantic` / `TypeError` on import | Python 3.9 or older. Check with `python3 -V`; reinstall with `pipx install --python $(brew --prefix)/bin/python3.12 --editable ".[dev]"`. |
+| Ollama `UNAVAILABLE` in `forge status` | Not running. `brew services start ollama`, then `curl localhost:11434`. |
+
+To upgrade after pulling new commits, an editable install needs nothing. To
+rebuild it anyway: `pipx reinstall forge-engine`. To remove it entirely:
+`pipx uninstall forge-engine`.
+
 ---
 
 ## Configuration
@@ -27,7 +112,7 @@ Environment variables, all optional:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `FORGE_VAULT_PATH` | repo root (nearest `.git`) | Vault to index |
+| `FORGE_VAULT_PATH` | see below | Vault to index |
 | `FORGE_STATE_DIR` | `<vault>/.forge` | Derived state |
 | `FORGE_LLM_PROVIDER` | `ollama` | `ollama` or `mock` |
 | `FORGE_OLLAMA_URL` | `http://localhost:11434` | Ollama endpoint |
@@ -37,6 +122,24 @@ Environment variables, all optional:
 
 No API keys, ever. Configuration is validated at startup: a bad vault path or
 an unbound model role fails immediately rather than mid-run.
+
+### How the vault is located
+
+When neither a `--vault` option nor `FORGE_VAULT_PATH` is given, Forge looks for
+a directory containing `.git`, in this order:
+
+1. **Next to the installed engine.** A source checkout or an editable install
+   puts `forge/config.py` inside the vault repository, so the command stays
+   pinned to that vault from any working directory.
+2. **Upward from the current directory.** For a non-editable install the engine
+   lives in `site-packages`, so the only remaining signal is the vault you are
+   standing in.
+
+If neither finds one, Forge **fails with exit code 2** and tells you to set
+`FORGE_VAULT_PATH`. It does not fall back to the current directory: doing so
+meant `forge index` in an arbitrary directory would index that directory, write
+a `.forge/` into it, and print a success line — silently operating on the wrong
+thing instead of reporting that it could not find the right one.
 
 ---
 
