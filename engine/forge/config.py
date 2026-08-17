@@ -60,7 +60,10 @@ class CloudSettings(BaseModel):
     base_url: str = "https://api.anthropic.com"
     timeout_seconds: float = Field(default=120.0, gt=0)
     max_retries: int = Field(default=2, ge=0, le=5)
-    max_tokens: int = Field(default=2048, gt=0)
+    #: Caps thinking *and* response text together on current Anthropic models,
+    #: which think by default — so this has to leave room for both. See
+    #: `CloudProvider.__init__`.
+    max_tokens: int = Field(default=16000, gt=0)
     #: Whether the vendor can be *asked* for schema-conforming JSON. Forge
     #: validates the result regardless; this only selects the request shape.
     supports_structured_output: bool = True

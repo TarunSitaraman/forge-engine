@@ -86,6 +86,31 @@ What it does **not** establish: that a real completion succeeds, how long one
 takes, whether the model returns schema-valid JSON, or whether its
 classifications are any good.
 
+**Correction, 2026-08-17 — inference 2 above was wrong, and the 401 concealed
+it.** The request shape was *not* well-formed. The payload forwarded
+`temperature: 0.0` (Forge asks for deterministic sampling everywhere), and
+current Anthropic models reject non-default sampling parameters: `temperature`,
+`top_p`, and `top_k` return `400 invalid_request_error` on Opus 4.7 and later,
+and on the configured `claude-sonnet-5` any non-default value does the same. So
+**every** cloud call would have failed — not for want of a credential, but on
+the body. Authentication is checked before body validation, so a 401 tells you
+nothing about the payload, and the original inference read more into it than the
+probe could support.
+
+The parameter has been removed from the Anthropic payload and the omission is
+asserted in `tests/unit/test_providers.py`. Two things worth keeping from this:
+
+- The probe was still worth running — it correctly established the network path
+  and the failure classification. The error was in what was concluded about the
+  *third* thing, not in the method.
+- **A 401 probe cannot validate a request body.** Any future "the shape is
+  fine" claim needs a call that gets far enough to be rejected *on the body*, or
+  a real completion. This is the same rule the rest of this document already
+  applies to model quality, applied one level lower down the stack.
+
+The cloud path therefore remains **unmeasured**, and now for a second, better
+understood reason: it has never completed a call.
+
 ---
 
 ## 4. What this means for the Phase 4 claims

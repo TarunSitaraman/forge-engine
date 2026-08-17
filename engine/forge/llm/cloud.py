@@ -74,7 +74,12 @@ class CloudProvider:
         base_url: str = "https://api.anthropic.com",
         timeout: float = 120.0,
         max_retries: int = 2,
-        max_tokens: int = 2048,
+        # Sized for a hosted model that thinks by default. On current Anthropic
+        # models `max_tokens` caps thinking *plus* response text together, so
+        # the old 2048 could be consumed by reasoning and truncate the JSON
+        # mid-object — which Forge would surface as a structured-output failure
+        # rather than as the budget problem it actually is.
+        max_tokens: int = 16000,
         supports_structured_output: bool = True,
         models: dict[str, str] | None = None,
     ) -> None:
@@ -266,10 +271,20 @@ class CloudProvider:
         max_tokens = request.max_tokens or self.max_tokens
 
         if self.vendor == ANTHROPIC:
+            # `temperature` is deliberately **not** sent. Current Anthropic
+            # models reject non-default sampling parameters: `temperature`,
+            # `top_p`, and `top_k` return 400 on Opus 4.7 and later, and on
+            # Sonnet 5 any non-default value does the same. Forge asks for
+            # `temperature=0.0` everywhere for determinism, which is exactly the
+            # non-default value that fails — so sending it would have made
+            # *every* cloud call a 400. It is dropped rather than clamped
+            # because 0.0 never guaranteed identical outputs anyway;
+            # determinism here comes from the schema and the grounding check,
+            # not from a sampling knob. The OpenAI-compatible path below still
+            # sends it — those gateways accept it.
             payload: dict[str, Any] = {
                 "model": model,
                 "max_tokens": max_tokens,
-                "temperature": request.temperature,
                 "messages": turns or [{"role": "user", "content": system}],
             }
             if system and turns:

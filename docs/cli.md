@@ -59,35 +59,65 @@ exec $SHELL -l
 forge <TAB>                          # completes subcommands and flags
 ```
 
-**A local model, if you want the LLM-backed commands.** Everything except
-`forge model-test`, `forge evolve`, and extraction runs without one.
+**A model, if you want the LLM-backed commands.** Everything except
+`forge model-test`, `forge evolve`, and extraction runs without one. The
+provider is per-machine configuration — see the next section.
 
-```bash
-brew install ollama
-brew services start ollama           # serves http://localhost:11434
-ollama pull qwen3:8b
-export FORGE_MODEL_DEFAULT=qwen3:8b
-```
+### Per-machine provider: cloud on the laptop, Ollama on the GPU box
 
-On Apple Silicon this runs on Metal. If you would rather use the machine that
-was actually measured, point Forge at it over the LAN instead — nothing assumes
-the host is local:
+Provider selection is an environment variable, so each machine's shell profile
+decides. Nothing in the engine branches on which one answered; only the recorded
+provenance differs, and it always records *which* provider and model produced a
+result so a local and a cloud assessment are never silently compared.
 
-```bash
-export FORGE_OLLAMA_URL=http://<that-box>:11434
-```
-
-Either way, set `FORGE_LLM_TIMEOUT=300` for real runs; the default 120 s has
-been exceeded by a single call.
-
-Persist the settings you keep in `~/.zshrc`:
+**On the Mac — cloud.** An 8 GB laptop cannot practically host an 8B model, and
+this is what the cloud provider exists for:
 
 ```bash
 cat >> ~/.zshrc <<'EOF'
-export FORGE_MODEL_DEFAULT=qwen3:8b
+export FORGE_LLM_PROVIDER=cloud
+export ANTHROPIC_API_KEY=sk-ant-...     # or keep it in a secret manager
 export FORGE_LLM_TIMEOUT=300
 EOF
+exec $SHELL -l
+forge status                             # -> llm provider : cloud (OK)
 ```
+
+Only the *name* of the credential variable is configuration
+(`FORGE_CLOUD_API_KEY_ENV`); the key itself is read at call time and never
+written to config, the store, provenance, or logs. `forge status` reports
+whether a key is present without echoing it. Change the model with
+`FORGE_CLOUD_MODEL` (default `claude-sonnet-5`).
+
+**On the ASUS — Ollama, unchanged.** It is the default provider, so that box
+needs no `FORGE_LLM_PROVIDER` at all:
+
+```bash
+ollama pull qwen3:8b
+export FORGE_MODEL_DEFAULT=qwen3:8b
+export FORGE_LLM_TIMEOUT=300
+```
+
+**Or use the ASUS from the Mac.** `FORGE_OLLAMA_URL` points at any reachable
+host — nothing assumes the model runs locally, so the laptop can borrow the GPU
+box over the LAN instead of going to the cloud:
+
+```bash
+export FORGE_OLLAMA_URL=http://<asus-host>:11434
+```
+
+Set `FORGE_LLM_TIMEOUT=300` on any real local run; the 120 s default has been
+exceeded by a single call at ~63 s/case on the reference hardware.
+
+> **Measurement status.** The local path was measured once — Qwen3 8B, 5/5 on
+> the assessment set (2026-08-14). The **cloud path has never been exercised
+> against a live API**: until this was fixed it could not be, because the
+> request forwarded `temperature=0.0` and current Anthropic models reject
+> non-default sampling parameters with a 400. The request shape is now correct
+> and asserted by tests, but "correct shape" is not "measured quality" — treat
+> the first real cloud runs as the measurement, and read
+> [provider availability](./research/provider-availability.md) §6 before quoting
+> either path as a rate.
 
 ### Troubleshooting
 
@@ -114,14 +144,27 @@ Environment variables, all optional:
 |---|---|---|
 | `FORGE_VAULT_PATH` | see below | Vault to index |
 | `FORGE_STATE_DIR` | `<vault>/.forge` | Derived state |
-| `FORGE_LLM_PROVIDER` | `ollama` | `ollama` or `mock` |
-| `FORGE_OLLAMA_URL` | `http://localhost:11434` | Ollama endpoint |
-| `FORGE_MODEL_DEFAULT` | `llama3.1:8b` | Model for all roles |
-| `FORGE_MODEL_EXTRACTION` / `_ANALYSIS` / `_RESOLUTION` / `_SYNTHESIS` | — | Per-role override |
+| `FORGE_LLM_PROVIDER` | `ollama` | `ollama`, `cloud`, or `mock` |
+| `FORGE_OLLAMA_URL` | `http://localhost:11434` | Ollama endpoint — local or LAN |
+| `FORGE_OLLAMA_THINK` | unset | Tri-state reasoning toggle; unset leaves the model's default |
+| `FORGE_MODEL_DEFAULT` | `llama3.1:8b` | Model for all roles (Ollama) |
+| `FORGE_MODEL_EXTRACTION` / `_ANALYSIS` / `_RESOLUTION` / `_SYNTHESIS` | — | Per-role override (Ollama) |
+| `FORGE_CLOUD_VENDOR` | `anthropic` | `anthropic` or `openai` — selects a wire format only |
+| `FORGE_CLOUD_MODEL` | `claude-sonnet-5` | Model for every role on the cloud provider |
+| `FORGE_CLOUD_API_KEY_ENV` | `ANTHROPIC_API_KEY` | **Name** of the variable holding the key |
+| `FORGE_CLOUD_BASE_URL` | `https://api.anthropic.com` | API endpoint |
+| `FORGE_LLM_TIMEOUT` / `FORGE_LLM_MAX_RETRIES` | `120` / `2` | Per-call timeout and retries |
 | `FORGE_LOG_LEVEL` / `FORGE_LOG_FORMAT` | `INFO` / `console` | `console` or `json` |
 
-No API keys, ever. Configuration is validated at startup: a bad vault path or
-an unbound model role fails immediately rather than mid-run.
+**No API key is ever configuration.** `FORGE_CLOUD_API_KEY_ENV` names the
+variable to read; the key itself is read at call time and never written to
+config, the store, provenance, or logs — a key in a YAML file is a key in Git.
+Configuration is validated at startup: a bad vault path or an unbound model role
+fails immediately rather than mid-run.
+
+The cloud provider binds one model to every role, so the per-role
+`FORGE_MODEL_*` variables apply to Ollama only — which is deliberate, since
+their `llama3.1:8b` default is not a valid cloud model.
 
 ### How the vault is located
 

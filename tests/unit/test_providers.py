@@ -272,6 +272,73 @@ class TestCloudWireFormats:
         assert seen["body"]["messages"][0]["role"] == "system"
         assert response.text == "hello"
 
+    def test_anthropic_payload_omits_sampling_parameters(self, monkeypatch):
+        """The regression that made every cloud call a 400.
+
+        Forge asks for ``temperature=0.0`` everywhere for determinism. Current
+        Anthropic models reject non-default sampling parameters outright, so
+        forwarding it meant the cloud path could never complete a single call —
+        which is why it stayed unmeasured. Assert the whole family, not just
+        ``temperature``, so adding one back is a test failure.
+        """
+        seen: dict = {}
+
+        def handler(req: httpx.Request) -> httpx.Response:
+            seen["body"] = json.loads(req.content)
+            return httpx.Response(200, json={"content": [{"type": "text", "text": "ok"}]})
+
+        provider = cloud(monkeypatch, handler, vendor=ANTHROPIC, model="claude-sonnet-5")
+        provider.complete(request())
+
+        assert "temperature" not in seen["body"]
+        assert "top_p" not in seen["body"]
+        assert "top_k" not in seen["body"]
+
+    def test_openai_compatible_still_sends_temperature(self, monkeypatch):
+        """The removal is Anthropic-specific — OpenAI-shaped gateways accept it."""
+        seen: dict = {}
+
+        def handler(req: httpx.Request) -> httpx.Response:
+            seen["body"] = json.loads(req.content)
+            return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+        provider = cloud(monkeypatch, handler, vendor=OPENAI_COMPATIBLE, model="gpt-x")
+        provider.complete(request())
+
+        assert seen["body"]["temperature"] == 0.0
+
+    def test_token_budget_leaves_room_for_thinking(self, monkeypatch):
+        """`max_tokens` caps thinking and response text together on current models.
+
+        A budget sized for the JSON alone gets eaten by reasoning and truncates
+        the object, which surfaces as a structured-output failure rather than as
+        the budget problem it is.
+        """
+        seen: dict = {}
+
+        def handler(req: httpx.Request) -> httpx.Response:
+            seen["body"] = json.loads(req.content)
+            return httpx.Response(200, json={"content": [{"type": "text", "text": "ok"}]})
+
+        provider = cloud(monkeypatch, handler, vendor=ANTHROPIC)
+        provider.complete(request())
+
+        assert seen["body"]["max_tokens"] >= 16000
+
+    def test_an_explicit_request_budget_still_wins(self, monkeypatch):
+        seen: dict = {}
+
+        def handler(req: httpx.Request) -> httpx.Response:
+            seen["body"] = json.loads(req.content)
+            return httpx.Response(200, json={"content": [{"type": "text", "text": "ok"}]})
+
+        provider = cloud(monkeypatch, handler, vendor=ANTHROPIC)
+        provider.complete(
+            CompletionRequest(messages=[Message(role="user", content="q")], max_tokens=512)
+        )
+
+        assert seen["body"]["max_tokens"] == 512
+
     def test_an_unsupported_vendor_is_rejected(self):
         with pytest.raises(LLMError, match="unsupported cloud vendor"):
             CloudProvider(vendor="mystery-inc")
