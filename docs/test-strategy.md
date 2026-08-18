@@ -83,6 +83,7 @@ and "made no model calls" is assertable anywhere.
 |---|---|
 | Corpus unchanged | `test_indexing_does_not_modify_the_vault` (git porcelain diff), `test_no_markdown_file_mtime_changes`, `test_cli_never_writes_to_the_vault` (byte comparison) |
 | Deterministic indexing | `test_same_corpus_produces_same_index` (fingerprint equality), `test_discovery_order_is_stable` |
+| Deterministic indexing *across platforms* | Not a test — **observed**. The same commit indexed on Windows (CRLF checkout, ASUS) and Linux (LF) produced the identical fingerprint `600dd093…` over 642 files, 2026-08-17. `text_hash` normalizes CRLF/CR to LF before hashing for exactly this reason, so a checkout's line endings are not a content change. Worth re-checking whenever hashing or discovery changes: a platform-dependent fingerprint would make derived state non-shareable and provenance non-comparable between machines. |
 | Unresolved links reported | `test_unresolved_links_are_reported` |
 | Malformed frontmatter reported | `test_frontmatter_defects_are_found`, `test_every_parse_error_has_a_verified_repair` |
 | Zero LLM calls on re-index | `test_reindexing_unchanged_corpus_costs_zero_llm_calls` |
