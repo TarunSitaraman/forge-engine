@@ -128,6 +128,16 @@ $EDITOR ~/.config/forge/forge.env
 forge status                              # shows which file was loaded
 ```
 
+On Windows the same path resolves under your user profile —
+`%USERPROFILE%\.config\forge\forge.env`:
+
+```powershell
+mkdir "$env:USERPROFILE\.config\forge" -Force
+copy config\forge.env.example "$env:USERPROFILE\.config\forge\forge.env"
+notepad "$env:USERPROFILE\.config\forge\forge.env"
+forge status
+```
+
 `~/.config/forge/forge.env` (or `$XDG_CONFIG_HOME/forge/forge.env`; override
 with `FORGE_ENV_FILE`) is read for every setting on this page, including the API
 key. Three layers resolve each value, highest first: an explicit CLI option, the
@@ -183,12 +193,22 @@ equivalent) and use the private hostname. **Do not expose port 11434 to the
 public internet** — Ollama has no authentication, so anything that can reach it
 can use it.
 
-Ollama binds to loopback by default, so the ASUS must be told to listen on the
-private interface before anything else can connect:
+Ollama binds to loopback by default, so the GPU box must be told to listen on
+the private interface before anything else can connect. **The reference machine
+here is Windows** (ASUS laptop, RTX 4050 ~6 GB VRAM, 16 GB RAM):
 
-```bash
-# On the ASUS
-OLLAMA_HOST=0.0.0.0:11434 ollama serve     # or set it in the systemd unit
+```powershell
+[Environment]::SetEnvironmentVariable("OLLAMA_HOST", "0.0.0.0:11434", "User")
+```
+
+Then quit Ollama from the system tray and relaunch it — the variable is read at
+startup. On Linux the equivalent is `OLLAMA_HOST=0.0.0.0:11434 ollama serve`, or
+the same variable in the systemd unit.
+
+Verify from the box itself, then from the other machine:
+
+```powershell
+curl.exe http://localhost:11434            # -> Ollama is running
 ```
 
 This tier is the one with a measurement behind it (Qwen3 8B, 5/5 — see below),
