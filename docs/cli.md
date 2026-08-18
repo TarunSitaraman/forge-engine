@@ -26,21 +26,35 @@ domain models (they use PEP 604 unions that pydantic evaluates at runtime). You
 need a newer interpreter, and you want `forge` on your `PATH` without activating
 a virtualenv first.
 
-```bash
-brew install python@3.12 pipx     # 3.10+; skip if you already have one
-pipx ensurepath                   # puts ~/.local/bin on PATH
-exec $SHELL -l                    # reload so PATH takes effect
+**Get Python from python.org, not Homebrew.** Download the *macOS 64-bit
+universal2 installer* for 3.12 or 3.13 from
+<https://www.python.org/downloads/macos/> and run the `.pkg` — a prebuilt
+binary, about two minutes, no build step.
 
-cd ~/forge                        # wherever you cloned it
+```bash
+python3.12 -m pip install --user pipx
+python3.12 -m pipx ensurepath      # puts ~/.local/bin on PATH
+exec $SHELL -l                     # reload so PATH takes effect
+
+cd ~/forge                         # wherever you cloned it
 pipx install --editable ".[dev]"
 
 forge --help
 ```
 
-**Why `pipx` and not `pip install`.** Homebrew's Python is marked
-externally-managed (PEP 668), so a plain `pip install` into it fails with
-`error: externally-managed-environment`. pipx gives the CLI its own isolated
-environment and links only the `forge` executable onto your `PATH`.
+**Why not Homebrew.** It is fine on a current machine, and if you already run it
+`brew install python@3.12 pipx` works. But on an older Intel Mac there is often
+no prebuilt bottle for the OS version, and Homebrew silently falls back to
+compiling from source — including chains like `git → cmake → …`, each built
+locally. That can run for hours on modest hardware, with no error to tell you
+something went wrong. It is not worth adopting Homebrew just for this.
+
+**Why `pipx` and not `pip install`.** pipx gives the CLI its own isolated
+environment and links only the `forge` executable onto your `PATH`. It is also
+the way around PEP 668: Homebrew and most Linux distributions mark their Python
+"externally managed" and refuse a plain `pip install` with
+`error: externally-managed-environment`. python.org builds do not set that flag,
+which is why `pip install --user pipx` above works.
 
 **Why `--editable`.** It keeps the installed command pointed at your checkout,
 so edits to `engine/` take effect immediately with no reinstall — and it makes
@@ -235,8 +249,9 @@ either as a rate.
 | `error: externally-managed-environment` | You ran `pip install` against Homebrew Python. Use pipx as above, or a venv. |
 | `configuration error: could not locate a Forge vault` | A non-editable install run outside any git repository. Either reinstall with `--editable`, or `export FORGE_VAULT_PATH=~/forge`. |
 | `forge status` reports the wrong vault | A non-editable install resolves the vault from your current directory. Set `FORGE_VAULT_PATH` to pin it. |
-| `pydantic` / `TypeError` on import | Python 3.9 or older. Check with `python3 -V`; reinstall with `pipx install --python $(brew --prefix)/bin/python3.12 --editable ".[dev]"`. |
-| Ollama `UNAVAILABLE` in `forge status` | Not running. `brew services start ollama`, then `curl localhost:11434`. |
+| `pydantic` / `TypeError` on import | Python 3.9 or older. Check with `python3 -V`; reinstall against a newer one: `pipx install --python "$(python3.12 -c 'import sys; print(sys.executable)')" --editable ".[dev]"`. |
+| `brew install` sits on `./bootstrap --prefix=...` for a very long time | No prebuilt bottle for your macOS version, so Homebrew is compiling from source. Not hung, but it can take hours on older hardware. Interrupting is safe — partial builds are discarded. Use the python.org installer instead. |
+| Ollama `UNAVAILABLE` in `forge status` | Expected before a model host is configured — every deterministic command still works without one. If you did configure one, check it is running and reachable: `curl <host>:11434`. |
 
 To upgrade after pulling new commits, an editable install needs nothing. To
 rebuild it anyway: `pipx reinstall forge-engine`. To remove it entirely:
