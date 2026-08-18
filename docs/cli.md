@@ -31,14 +31,49 @@ universal2 installer* for 3.12 or 3.13 from
 <https://www.python.org/downloads/macos/> and run the `.pkg` — a prebuilt
 binary, about two minutes, no build step.
 
+Once a Python version goes security-only its later patches are **source-only**,
+so the newest 3.12.x may have no installer at all. To find the newest one that
+does, without leaving the terminal:
+
+```bash
+MINOR=3.12; BASE=https://www.python.org/ftp/python
+VER=$(for V in $(curl -s $BASE/ | grep -oE "${MINOR}\.[0-9]+" | sort -u -t. -k3 -nr | head -10); do
+  curl -sfI "$BASE/$V/python-$V-macos11.pkg" >/dev/null 2>&1 && echo "$V" && break
+done)
+cd ~ && curl -fLO "$BASE/$VER/python-$VER-macos11.pkg"
+open ~/"python-$VER-macos11.pkg"          # NOT `sudo installer` — see below
+```
+
+Then, from a directory that is **not** `~/Downloads`, `~/Desktop`, or
+`~/Documents`:
+
+```bash
+cd ~
+/Applications/Python\ 3.12/Install\ Certificates.command
+```
+
+Skipping that last step is the most common cause of `pip` failing with SSL
+errors later: python.org builds ship without CA certificates wired up.
+
+> **Verified on macOS 10.15.8 Catalina (Intel) with Python 3.12.10** — the
+> oldest configuration this has been run on. Homebrew on that machine had no
+> bottles and fell back to source builds; the python.org path took minutes.
+
 ```bash
 python3.12 -m pip install --user pipx
 python3.12 -m pipx ensurepath      # puts ~/.local/bin on PATH
-exec $SHELL -l                     # reload so PATH takes effect
+```
 
+Reload the shell so that `PATH` takes effect. Run this **on its own** — `exec`
+replaces the shell process and silently discards anything pasted after it:
+
+```bash
+exec $SHELL -l
+```
+
+```bash
 cd ~/forge                         # wherever you cloned it
 pipx install --editable ".[dev]"
-
 forge --help
 ```
 
@@ -69,9 +104,10 @@ cd ~ && forge status | head -1      # -> vault : /Users/you/forge
 
 ```bash
 forge --install-completion
-exec $SHELL -l
-forge <TAB>                          # completes subcommands and flags
 ```
+
+Then, on its own line again, `exec $SHELL -l` — after which `forge <TAB>`
+completes subcommands and flags.
 
 **A model, if you want the LLM-backed commands.** Everything except
 `forge model-test`, `forge evolve`, and extraction runs without one. The
@@ -250,6 +286,11 @@ either as a rate.
 | `configuration error: could not locate a Forge vault` | A non-editable install run outside any git repository. Either reinstall with `--editable`, or `export FORGE_VAULT_PATH=~/forge`. |
 | `forge status` reports the wrong vault | A non-editable install resolves the vault from your current directory. Set `FORGE_VAULT_PATH` to pin it. |
 | `pydantic` / `TypeError` on import | Python 3.9 or older. Check with `python3 -V`; reinstall against a newer one: `pipx install --python "$(python3.12 -c 'import sys; print(sys.executable)')" --editable ".[dev]"`. |
+| `installer: ... NSInvalidArgumentException ... nil string parameter` | macOS privacy (TCC) is blocking access to the folder the `.pkg` is in — `~/Downloads` is protected, and `sudo installer` running as root gets denied. Use `open <pkg>` and click through the GUI installer instead. |
+| `FileNotFoundError` from `os.getcwd()` in *any* Python command | Your shell's working directory is a TCC-protected folder (`~/Downloads`, `~/Desktop`, `~/Documents`) the interpreter has no permission for, so it cannot resolve its own cwd and dies before running anything. `cd ~` and retry. Grant Terminal Full Disk Access only if you actually need to work from those folders. |
+| `WARNING: Install Certificates failed` | Same cause as the row above — run it from `~`. Leaving it unfixed makes every later `pip` call fail on SSL. |
+| A pasted block stops silently after `exec $SHELL -l` | `exec` replaces the shell process and discards the rest of the buffered input, so the following lines never ran — no error, just a prompt. Paste it on its own. |
+| `No module named pytest` | pipx installed the `[dev]` extras into its own venv, not your system Python. Run `"$(pipx environment --value PIPX_LOCAL_VENVS)/forge-engine/bin/python" -m pytest tests -q`. |
 | `brew install` sits on `./bootstrap --prefix=...` for a very long time | No prebuilt bottle for your macOS version, so Homebrew is compiling from source. Not hung, but it can take hours on older hardware. Interrupting is safe — partial builds are discarded. Use the python.org installer instead. |
 | Ollama `UNAVAILABLE` in `forge status` | Expected before a model host is configured — every deterministic command still works without one. If you did configure one, check it is running and reachable: `curl <host>:11434`. |
 
