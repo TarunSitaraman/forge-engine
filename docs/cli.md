@@ -109,6 +109,31 @@ forge --install-completion
 Then, on its own line again, `exec $SHELL -l` — after which `forge <TAB>`
 completes subcommands and flags.
 
+**Running the test suite and the scripts under a pipx install.** `pipx` puts the
+dependencies in its own isolated environment, so `python -m pytest` and
+`python scripts/...` against your *system* interpreter fail with
+`ModuleNotFoundError` (`pytest`, `structlog`, …). That is the isolation working
+as intended, not a broken install — reach for the venv's interpreter instead:
+
+```bash
+PY="$(pipx environment --value PIPX_LOCAL_VENVS)/forge-engine/bin/python"
+"$PY" -m pytest tests -q
+"$PY" scripts/assessment_eval.py --provider ollama
+```
+
+```powershell
+$venv = pipx environment --value PIPX_LOCAL_VENVS
+$PY = "$venv\forge-engine\Scripts\python.exe"
+& $PY -m pytest tests -q
+& $PY scripts\assessment_eval.py --provider ollama
+```
+
+The `forge` command itself needs none of this — it already runs inside that
+environment. This applies only to invoking Python directly. If you would rather
+have one interpreter for everything, install into a plain virtualenv
+(`python -m venv .venv && . .venv/bin/activate && pip install -e ".[dev]"`)
+instead of pipx, and accept that `forge` then works only with that venv active.
+
 **A model, if you want the LLM-backed commands.** Everything except
 `forge model-test`, `forge evolve`, and extraction runs without one. The
 provider is per-machine configuration — see the next section.
