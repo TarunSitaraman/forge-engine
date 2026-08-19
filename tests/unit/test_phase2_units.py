@@ -422,3 +422,66 @@ class TestEmbeddings:
 
     def test_model_id_is_reported(self):
         assert OllamaEmbeddingProvider(model="bge-small").model_id == "bge-small"
+
+
+class TestPromptContract:
+    """The prompts encode findings from a real run; a rewrite must not lose them.
+
+    Every rule pinned here was added because the 2026-08-19 extraction over
+    `Technologies/Docs` produced the failure it prevents. These are cheap
+    guards against a future edit quietly reverting a measured fix.
+    """
+
+    def test_prompt_version_is_current(self):
+        from forge.extraction.prompts import PROMPT_VERSION
+
+        assert PROMPT_VERSION == "extract-prompts/0.3.0"
+
+    def test_claims_must_not_be_about_the_document(self):
+        """Sample yielded 'The text provides a link to OpenAI's guide.'"""
+        from forge.extraction.prompts import CLAIM_INSTRUCTION
+
+        assert "about the document itself" in CLAIM_INSTRUCTION
+        # Collapse wrapping before matching phrases that span source lines.
+        flat = " ".join(CLAIM_INSTRUCTION.split())
+        assert "The text provides" in flat
+        assert "not knowledge" in flat
+
+    def test_claims_must_forbid_turning_a_table_row_into_a_sentence(self):
+        """29 of 30 ungrounded quotes were table rows rewritten as prose."""
+        from forge.extraction.prompts import CLAIM_INSTRUCTION
+
+        assert "table row into a sentence" in CLAIM_INSTRUCTION
+        assert "pipes included" in CLAIM_INSTRUCTION
+
+    def test_claims_must_ask_for_deduplication(self):
+        """Sample had three phrasings of one pub/sub fact in 25 claims."""
+        from forge.extraction.prompts import CLAIM_INSTRUCTION
+
+        assert "same fact several ways" in CLAIM_INSTRUCTION
+
+    def test_concepts_must_exclude_parameters_and_commands(self):
+        """Sample yielded 'maxmemory', 'VARCHAR(n)', 'git commit', '.dockerignore'."""
+        from forge.extraction.prompts import CONCEPT_INSTRUCTION
+
+        assert "configuration keys" in CONCEPT_INSTRUCTION
+        for example in ("maxmemory", "VARCHAR(n)", ".dockerignore"):
+            assert example in CONCEPT_INSTRUCTION
+
+    def test_concepts_must_exclude_bare_generic_words(self):
+        """Sample yielded 'RAM', 'HTML', 'Answer', 'Vector', 'Fluency'."""
+        from forge.extraction.prompts import CONCEPT_INSTRUCTION
+
+        for example in ("RAM", "Answer", "Fluency"):
+            assert example in CONCEPT_INSTRUCTION
+
+    def test_a_prompt_change_invalidates_cached_extractions(self):
+        """The version is in the derivation key — that is what makes it safe."""
+        from forge.ingestion.derivation import extraction_key
+
+        base = dict(
+            content_hash="h", processor_version="p", model_id="m", schema_version="s"
+        )
+        old = extraction_key(prompt_version="extract-prompts/0.2.0", **base)
+        new = extraction_key(prompt_version="extract-prompts/0.3.0", **base)
+        assert old.value() != new.value()
