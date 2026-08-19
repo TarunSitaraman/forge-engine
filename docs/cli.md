@@ -203,8 +203,14 @@ model:
 ```bash
 ollama pull qwen3:8b
 export FORGE_MODEL_DEFAULT=qwen3:8b
-export FORGE_LLM_TIMEOUT=300
+export FORGE_LLM_TIMEOUT=600
 ```
+
+**Be generous with the timeout.** Typical assessment cases finish in 40-60 s on
+the reference hardware, but one adversarial case has exceeded both the 120 s
+default *and* a raised 300 s. A timeout costs its full value before the retry
+even begins, so setting it too low is far more expensive than setting it too
+high — see [provider availability](./research/provider-availability.md) §7.
 
 `FORGE_OLLAMA_URL` points at any reachable host — nothing assumes the model runs
 locally — so the Mac can drive it over the LAN:

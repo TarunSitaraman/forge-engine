@@ -125,8 +125,8 @@ understood reason: it has never completed a call.
 | Provider unavailability is explicit | **Measured** |
 | Cloud request shape is accepted by the real API | **Partially measured** (§3) |
 | A real model returns schema-valid JSON in practice | **MEASURED** — 5/5, see §6 |
-| Real assessment latency | **MEASURED** — 63 s/case local, see §6 |
-| Real classification accuracy | **MEASURED** — 5/5 on 5 cases, see §6 |
+| Real assessment latency | **MEASURED, high variance** — typical 40-60 s, worst case >300 s, see §6 and §7 |
+| Real classification accuracy | **MEASURED** — 5/5 on two independent runs, see §6 and §7 |
 | False-positive conflict rate | **0 of 2 adversarial cases** — encouraging, not yet a rate |
 
 The last row was the single largest open risk carried out of Phase 4. It is now
@@ -270,6 +270,60 @@ consequences:
 - Batching is worth revisiting. `DEFAULT_BATCH_SIZE = 6` claims per call was
   chosen to protect quality; at this latency the per-call overhead argues for
   measuring whether a larger batch degrades accuracy at all.
+
+## 7. Second run (2026-08-19) — quality holds, one case blows the timeout
+
+Re-run on the same machine after the CLI, cloud-provider, and config work, to
+check whether any of it changed behaviour on the Ollama path. **Same command,
+same model, same dataset.**
+
+```
+ollama/qwen3:8b   valid=1.00 grounded=1.00 class=1.00 proposal=1.00 cache=1.00  112078ms/case
+
+  [ok ] supports-direct                expected=SUPPORTS               actual=SUPPORTS
+  [ok ] refines-adds-condition         expected=REFINES                actual=REFINES
+  [ok ] conflict-contrary-finding      expected=POTENTIAL_CONFLICT     actual=POTENTIAL_CONFLICT
+  [ok ] irrelevant-same-domain         expected=IRRELEVANT             actual=IRRELEVANT
+  [ok ] insufficient-partial-overlap   expected=INSUFFICIENT_EVIDENCE  actual=INSUFFICIENT_EVIDENCE
+```
+
+**5/5 again, every metric 1.00.** Two independent runs now agree, which is the
+narrow thing this establishes: the engine changes between them did not alter
+classification on this path. It is still ten case-runs of one model — not a
+rate.
+
+**The mean latency is misleading and should not be quoted on its own.** It reads
+112,078 ms/case against the 63,126 ms of §6, which looks like a 78% regression.
+It is not. Per-case wall times, derived from the log's completion timestamps:
+
+| Case | Wall time |
+|---|---:|
+| `refines-adds-condition` | 41 s |
+| `conflict-contrary-finding` | **345 s** |
+| `irrelevant-same-domain` | 40 s |
+| `insufficient-partial-overlap` | 55 s |
+
+Three of the four measurable cases ran *faster* than the earlier 63 s mean. One
+case consumed 300 s — exactly `FORGE_LLM_TIMEOUT` — timed out, retried, and
+finished ~45 s later. That single outlier accounts for essentially the entire
+increase in the mean.
+
+Two things follow, and they point in opposite directions:
+
+- **`FORGE_LLM_TIMEOUT=300` is no longer sufficient.** §6 raised it from 120 s
+  because one call exceeded that. The same case has now exceeded 300 s. The
+  worst case on this hardware is not bounded by anything measured so far, and
+  each retry costs the full timeout before any work resumes. Raise it further
+  for long runs rather than paying 300 s to learn nothing.
+- **A five-case mean cannot absorb an outlier.** With n=5, one timeout moves the
+  headline number by 78% while typical performance improves. Report the
+  distribution, or at least the timeout count, alongside any mean from this
+  set — a single number here describes neither run well.
+
+Not established: why that case is the slow one every time, whether it is the
+prompt length or the adversarial content, and whether the improvement in the
+other three is real or noise. All are answerable by running the set more than
+once, which has not been done.
 
 ### Reproducing
 
