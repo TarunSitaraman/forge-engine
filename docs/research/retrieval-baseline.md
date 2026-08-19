@@ -233,11 +233,11 @@ speed of a method that returns worse results is not an improvement.
 ```bash
 cd engine
 FORGE_VAULT_PATH=/path/to/forge FORGE_STATE_DIR=/tmp/eval \
-  python -m forge.cli.main ingest /path/to/forge
+  forge ingest /path/to/forge
 FORGE_VAULT_PATH=/path/to/forge FORGE_STATE_DIR=/tmp/eval \
-  python -m forge.cli.main embeddings build --provider hashing
+  forge embeddings build --provider hashing
 FORGE_VAULT_PATH=/path/to/forge FORGE_STATE_DIR=/tmp/eval \
-  python -m forge.cli.main retrieval-eval --methods lexical,semantic,hybrid --detail
+  forge retrieval-eval --methods lexical,semantic,hybrid --detail
 ```
 
 Ingestion is deterministic and makes zero LLM calls. The evaluation makes zero

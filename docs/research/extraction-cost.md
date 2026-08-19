@@ -196,15 +196,19 @@ they become canonical only through explicit approval and activation.
 Recommended order — highest concept density first:
 
 ```powershell
-# Windows / ASUS. Raise the timeout first: the default 120 s is marginally
-# too low for an 8B model on ~6 GB VRAM (one call timed out at the default).
-$env:FORGE_LLM_PROVIDER="ollama"
-$env:FORGE_MODEL_DEFAULT="qwen3:8b"
-$env:FORGE_LLM_TIMEOUT="300"
+# Windows / ASUS. Provider and model come from ~/.config/forge/forge.env, so
+# the only thing worth overriding per-run is the timeout. 120 s (the default)
+# and 300 s have both been exceeded by a single call on this hardware, and a
+# retry costs the whole timeout before any work resumes — see
+# provider-availability.md §7. 900 is headroom, not a measurement.
+$env:FORGE_LLM_TIMEOUT="900"
 
-python -m forge.cli.main ingest "Technologies/Docs" --extract -v    # ~9-12 h
-python -m forge.cli.main ingest "DSA/01_Patterns"   --extract -v    # ~9-12 h
-python -m forge.cli.main ingest "Projects"          --extract -v    # ~15-20 h
+# Check what will actually be used before committing hours to it:
+forge status
+
+forge ingest "Technologies/Docs" --extract -v    # ~9-12 h
+forge ingest "DSA/01_Patterns"   --extract -v    # ~9-12 h
+forge ingest "Projects"          --extract -v    # ~15-20 h
 ```
 
 `-v` is what makes a multi-hour run observable. Two progress signals are
@@ -220,9 +224,9 @@ emitted:
 Then review what came out — nothing is canonical yet:
 
 ```powershell
-python -m forge.cli.main proposals list --status PENDING
-python -m forge.cli.main proposals show <id>
-python -m forge.cli.main proposals approve <id>
+forge proposals list --status PENDING
+forge proposals show <id>
+forge proposals approve <id>
 ```
 
 ### Before the first run — done, 2026-08-19
