@@ -250,3 +250,89 @@ class TestProposalFilterParsing:
     def test_type_filter_accepts_every_documented_value(self, settings, type_):
         result = runner.invoke(app, ["proposals", "list", "--type", type_], env=self._env(settings))
         assert result.exit_code == 0
+
+
+class TestProposalSampling:
+    """`--sample` must draw randomly, not take the first N.
+
+    Proposals come back grouped by source, so the first N describe one or two
+    documents. Judging 2,000 proposals from that is judging one file.
+    """
+
+    def _env(self, settings):
+        return {
+            "FORGE_VAULT_PATH": str(settings.vault_path),
+            "FORGE_STATE_DIR": str(settings.state_dir),
+        }
+
+    def _seed_proposals(self, settings, count):
+        from forge.domain import (
+            Derivation,
+            EntityType,
+            Proposal,
+            ProposalType,
+            ProposedOperation,
+            Provenance,
+            ProvenanceTier,
+            SafetyClass,
+        )
+        from forge.storage import SqliteStore
+
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        for i in range(count):
+            store.put_proposal(
+                Proposal(
+                    id=f"p{i:04d}",
+                    type=ProposalType.NEW_CONCEPT,
+                    safety=SafetyClass.MODEL_GENERATED,
+                    target_entity_type=EntityType.CONCEPT,
+                    operation=ProposedOperation(
+                        action="create_concept", target=f"concept-{i:04d}"
+                    ),
+                    reason="test",
+                    evidence_span_ids=(f"sp{i:04d}",),
+                    provenance=Provenance(
+                        tier=ProvenanceTier.EXTRACTED_CLAIM,
+                        derivation=Derivation.MODEL,
+                        confidence=0.5,
+                        agent="test/1",
+                        model_id="test-model",
+                    ),
+                )
+            )
+        store.close()
+
+    def test_sample_is_not_the_first_n(self, settings):
+        self._seed_proposals(settings, 60)
+        result = runner.invoke(
+            app, ["proposals", "list", "--sample", "10"], env=self._env(settings)
+        )
+        assert result.exit_code == 0
+        assert "random sample of 10 from 60" in result.output
+        shown = {line.split()[0] for line in result.output.splitlines() if line.startswith("p0")}
+        first_ten = {f"p{i:04d}" for i in range(10)}
+        assert shown != first_ten, "a random sample that equals the first ten is not random"
+
+    def test_sample_is_reproducible_for_a_seed(self, settings):
+        self._seed_proposals(settings, 60)
+        env = self._env(settings)
+        args = ["proposals", "list", "--sample", "10", "--seed", "7"]
+        first = runner.invoke(app, args, env=env).output
+        second = runner.invoke(app, args, env=env).output
+        assert first == second
+
+    def test_a_different_seed_draws_differently(self, settings):
+        self._seed_proposals(settings, 60)
+        env = self._env(settings)
+        a = runner.invoke(app, ["proposals", "list", "--sample", "10", "--seed", "1"], env=env)
+        b = runner.invoke(app, ["proposals", "list", "--sample", "10", "--seed", "2"], env=env)
+        assert a.output != b.output
+
+    def test_sample_larger_than_the_population_is_not_an_error(self, settings):
+        self._seed_proposals(settings, 5)
+        result = runner.invoke(
+            app, ["proposals", "list", "--sample", "50"], env=self._env(settings)
+        )
+        assert result.exit_code == 0
+        assert "random sample of 5 from 5" in result.output

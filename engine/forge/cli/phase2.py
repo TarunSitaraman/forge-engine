@@ -10,6 +10,7 @@ on failure.
 from __future__ import annotations
 
 import json as jsonlib
+import random
 from pathlib import Path
 from typing import Any, Optional
 
@@ -239,9 +240,20 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             ),
         ),
         limit: int = typer.Option(20),
+        sample: int = typer.Option(
+            0,
+            help="Show a random sample of this many instead of the first --limit.",
+        ),
+        seed: int = typer.Option(0, help="Seed for --sample, so a sample is reproducible."),
         json_out: bool = typer.Option(False, "--json"),
     ) -> None:
-        """List proposals awaiting or holding a decision."""
+        """List proposals awaiting or holding a decision.
+
+        `--sample N` draws randomly rather than taking the first N. That matters
+        for judging output quality: proposals come back grouped by source, so
+        the first N describe one or two documents and tell you nothing about
+        the rest. The draw is seeded, so quoting a sample is reproducible.
+        """
         settings = settings_factory(vault)
         store = SqliteStore(settings.db_path)
         store.initialize()
@@ -254,8 +266,12 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
                 else _enum_option(ProposalStatus, status, "--status")
             ),
             type=_enum_option(ProposalType, type_, "--type") if type_ else None,
-            limit=limit,
+            limit=max(limit, 100_000) if sample else limit,
         )
+        if sample:
+            population = list(found)
+            found = random.Random(seed).sample(population, min(sample, len(population)))
+            typer.echo(f"random sample of {len(found)} from {len(population)} (seed {seed})\n")
         counts = service.counts()
 
         if _emit(
