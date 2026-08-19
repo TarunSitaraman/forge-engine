@@ -116,7 +116,7 @@ code, generates reviewable proposals, **pauses for a human**, and — only on
 approval — corroborates, refines (superseding non-destructively), or marks a
 claim disputed, recording a revision either way. Providers are pluggable: local
 Ollama, remote Ollama, cloud, or mock, with no silent downgrade for knowledge
-mutation. 806 tests, CI fully offline.
+mutation. 808 tests, CI fully offline.
 
 *Measured honestly:* no real model was reachable during Phase 4 development, so
 the phase shipped with a fully-tested pipeline and entirely unmeasured model
