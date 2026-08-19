@@ -207,3 +207,46 @@ class TestCli:
             runner.invoke(app, args, env=env)
 
         assert {p: p.read_bytes() for p in sorted(fixture_vault.rglob("*.md"))} == snapshot
+
+
+class TestProposalFilterParsing:
+    """`proposals list` filters are user input, so a bad one must not traceback.
+
+    The enum's names are upper case and its values lower case, so
+    ``--status PENDING`` — which is what `docs/research/extraction-cost.md`
+    §4 told people to type — used to raise a raw ``ValueError`` out of
+    ``enum`` and print a stack trace over the review workflow.
+    """
+
+    def _env(self, settings):
+        return {
+            "FORGE_VAULT_PATH": str(settings.vault_path),
+            "FORGE_STATE_DIR": str(settings.state_dir),
+        }
+
+    @pytest.mark.parametrize("status", ["pending", "PENDING", "Pending", " pending "])
+    def test_status_filter_is_case_insensitive(self, settings, status):
+        result = runner.invoke(app, ["proposals", "list", "--status", status], env=self._env(settings))
+        assert result.exit_code == 0
+
+    def test_status_all_is_not_an_enum_member(self, settings):
+        result = runner.invoke(app, ["proposals", "list", "--status", "ALL"], env=self._env(settings))
+        assert result.exit_code == 0
+
+    def test_unknown_status_exits_two_and_lists_the_valid_set(self, settings):
+        result = runner.invoke(app, ["proposals", "list", "--status", "bogus"], env=self._env(settings))
+        assert result.exit_code == 2
+        assert "Traceback" not in result.output
+        for expected in ("pending", "approved", "activated", "rejected", "superseded"):
+            assert expected in result.output
+
+    def test_unknown_type_exits_two_and_lists_the_valid_set(self, settings):
+        result = runner.invoke(app, ["proposals", "list", "--type", "bogus"], env=self._env(settings))
+        assert result.exit_code == 2
+        assert "Traceback" not in result.output
+        assert "new_concept" in result.output
+
+    @pytest.mark.parametrize("type_", ["new_concept", "NEW_CONCEPT", "claim_conflict"])
+    def test_type_filter_accepts_every_documented_value(self, settings, type_):
+        result = runner.invoke(app, ["proposals", "list", "--type", type_], env=self._env(settings))
+        assert result.exit_code == 0

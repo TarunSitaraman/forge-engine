@@ -37,6 +37,22 @@ def _emit(payload: Any, as_json: bool) -> bool:
     return False
 
 
+def _enum_option(enum_cls: Any, value: str, flag: str) -> Any:
+    """Parse a CLI string into an enum member, or exit 2 with the valid set.
+
+    Case-insensitive on purpose: the enum's *names* are upper case and its
+    values lower case, so ``--status PENDING`` is the natural thing to type
+    and used to raise a raw ``ValueError`` traceback from deep inside
+    ``enum``. A wrong filter is a user error, not a crash.
+    """
+    try:
+        return enum_cls(value.strip().lower())
+    except ValueError:
+        allowed = "|".join(member.value for member in enum_cls)
+        typer.echo(f"unknown {flag} {value!r}; expected one of: {allowed}", err=True)
+        raise typer.Exit(code=2)
+
+
 def register(app: typer.Typer, settings_factory: Any) -> None:
     """Attach Phase 2 commands to the main app."""
 
@@ -210,8 +226,18 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
     @proposals_app.command("list")
     def proposals_list(
         vault: Optional[Path] = typer.Option(None),
-        status: Optional[str] = typer.Option("pending", help="pending|approved|rejected|superseded|all"),
-        type_: Optional[str] = typer.Option(None, "--type", help="metadata_repair|new_concept|concept_match|new_claim"),
+        status: Optional[str] = typer.Option(
+            "pending",
+            help="pending|approved|activated|rejected|superseded|all (case-insensitive)",
+        ),
+        type_: Optional[str] = typer.Option(
+            None,
+            "--type",
+            help=(
+                "metadata_repair|new_concept|concept_match|new_claim|"
+                "claim_evidence|claim_refinement|claim_conflict"
+            ),
+        ),
         limit: int = typer.Option(20),
         json_out: bool = typer.Option(False, "--json"),
     ) -> None:
@@ -222,8 +248,12 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         service = ProposalService(store)
 
         found = service.list(
-            status=None if status in (None, "all") else ProposalStatus(status),
-            type=ProposalType(type_) if type_ else None,
+            status=(
+                None
+                if status is None or status.strip().lower() == "all"
+                else _enum_option(ProposalStatus, status, "--status")
+            ),
+            type=_enum_option(ProposalType, type_, "--type") if type_ else None,
             limit=limit,
         )
         counts = service.counts()
@@ -415,7 +445,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             p
             for p in service.list(
                 status=ProposalStatus.PENDING,
-                type=ProposalType(type_) if type_ else None,
+                type=_enum_option(ProposalType, type_, "--type") if type_ else None,
                 source_id=source,
                 limit=limit,
             )
