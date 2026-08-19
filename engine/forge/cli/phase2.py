@@ -21,7 +21,7 @@ from ..embeddings import NullEmbeddingProvider, OllamaEmbeddingProvider
 from ..extraction import CandidateExtractor
 from ..ingestion import IngestionPipeline, IngestOptions
 from ..llm import CALLS, get_provider
-from ..proposals import ProposalApplier, ProposalService
+from ..proposals import ProposalApplier, ProposalService, audit as audit_grounding
 from ..retrieval import SearchQuery, SearchService
 from ..storage.sqlite_store import SqliteStore
 
@@ -273,6 +273,60 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         if found:
             typer.echo(f"\n{len(found)} shown. `forge proposals show <id>` for detail.")
         store.close()
+
+    @proposals_app.command("audit-grounding")
+    def proposals_audit_grounding(
+        vault: Optional[Path] = typer.Option(None),
+        show_passing: bool = typer.Option(False, "--show-passing", help="Print every row."),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Re-check stored evidence quotes against the current grounding rule.
+
+        Zero model calls: grounding is a deterministic string check, so a rule
+        change applies retroactively to an already-extracted corpus for free.
+
+        Exits 1 if any stored quote fails. Those were admitted under an older,
+        looser rule and would be dropped by extraction today — reject them
+        rather than approving them.
+        """
+        settings = settings_factory(vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        try:
+            checks = audit_grounding(store)
+        finally:
+            store.close()
+
+        failed = [c for c in checks if not c.grounded]
+
+        if _emit(
+            {"checked": len(checks), "ungrounded": [c.to_dict() for c in failed]}, json_out
+        ):
+            raise typer.Exit(code=1 if failed else 0)
+
+        if not checks:
+            typer.echo("no proposals carry an evidence quote — nothing to audit")
+            return
+
+        for check in checks:
+            if check.grounded and not show_passing:
+                continue
+            mark = "ok  " if check.grounded else "FAIL"
+            typer.echo(
+                f"{mark} {check.proposal_id[:12]}  {check.status:<9} overlap={check.overlap:.3f}"
+            )
+            typer.echo(f"     quote: {check.quote[:100]!r}")
+            if check.note:
+                typer.echo(f"     note : {check.note}")
+
+        typer.echo(f"\n{len(checks)} quote(s) checked, {len(failed)} ungrounded.")
+        if failed:
+            typer.echo(
+                "\nThese were admitted under the pre-2026-08-19 bag-of-words rule and\n"
+                "would be dropped by extraction today. Reject rather than approve:\n"
+                "  forge proposals reject <id>"
+            )
+            raise typer.Exit(code=1)
 
     @proposals_app.command("show")
     def proposals_show(

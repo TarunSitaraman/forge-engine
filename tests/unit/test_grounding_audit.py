@@ -15,9 +15,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-
-from audit_grounding import audit  # noqa: E402
+from forge.proposals import audit  # noqa: E402
 
 from forge.domain import (  # noqa: E402
     Derivation,
@@ -43,7 +41,8 @@ SPAN_TEXT = (
 
 @pytest.fixture
 def store(tmp_path):
-    store = SqliteStore(tmp_path / "forge.db")
+    (tmp_path / ".forge").mkdir(exist_ok=True)
+    store = SqliteStore(tmp_path / ".forge" / "forge.db")
     store.initialize()
     source = Source.for_path("Technologies/Docs/rag.md", kind=SourceKind.MARKDOWN, content_hash="h")
     store.put_source(source)
@@ -101,7 +100,7 @@ def test_a_genuinely_grounded_quote_passes(store):
     store.put_proposal(_proposal("grounds generation in retrieved passages", "p-good"))
     rows = audit(store)
     assert len(rows) == 1
-    assert rows[0]["grounded"] is True
+    assert rows[0].grounded is True
 
 
 def test_a_quote_reordered_from_span_vocabulary_is_flagged(store):
@@ -111,8 +110,8 @@ def test_a_quote_reordered_from_span_vocabulary_is_flagged(store):
     )
     rows = audit(store)
     assert len(rows) == 1
-    assert rows[0]["grounded"] is False
-    assert rows[0]["overlap"] < 0.9
+    assert rows[0].grounded is False
+    assert rows[0].overlap < 0.9
 
 
 def test_audit_makes_no_model_calls(store):
@@ -128,8 +127,8 @@ def test_a_missing_span_is_reported_not_silently_passed(store):
     proposal = _proposal("grounds generation in retrieved passages", "p-orphan")
     store.put_proposal(proposal.model_copy(update={"evidence_span_ids": ("sp-nope",)}))
     rows = audit(store)
-    assert rows[0]["grounded"] is False
-    assert "span missing" in rows[0]["note"]
+    assert rows[0].grounded is False
+    assert "span missing" in rows[0].note
 
 
 def test_proposals_without_a_quote_are_skipped(store):
@@ -140,3 +139,45 @@ def test_proposals_without_a_quote_are_skipped(store):
         )
     )
     assert audit(store) == []
+
+
+class TestAuditCli:
+    """The audit has to be reachable from the installed `forge` command.
+
+    It was a script under `scripts/` first, which meant running it needed the
+    interpreter that owns the engine's dependencies — not the `python3` on
+    PATH. On a pipx install those are different, so the script failed with
+    ModuleNotFoundError on the machine that actually held the store.
+    """
+
+    def _env(self, tmp_path):
+        return {"FORGE_VAULT_PATH": str(tmp_path), "FORGE_STATE_DIR": str(tmp_path / ".forge")}
+
+    def test_empty_store_is_clean(self, tmp_path):
+        from typer.testing import CliRunner
+
+        from forge.cli.main import app
+
+        (tmp_path / ".git").mkdir()
+        result = CliRunner().invoke(
+            app, ["proposals", "audit-grounding"], env=self._env(tmp_path)
+        )
+        assert result.exit_code == 0
+        assert "nothing to audit" in result.stdout
+
+    def test_an_ungrounded_quote_exits_nonzero(self, tmp_path, store):
+        from typer.testing import CliRunner
+
+        from forge.cli.main import app
+
+        store.put_proposal(
+            _proposal("retrieved passages reduces generation grounds hallucination", "p-bad")
+        )
+        store.close()
+
+        (tmp_path / ".git").mkdir()
+        result = CliRunner().invoke(
+            app, ["proposals", "audit-grounding"], env=self._env(tmp_path)
+        )
+        assert result.exit_code == 1, result.output
+        assert "1 ungrounded" in result.output

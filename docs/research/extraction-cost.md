@@ -237,7 +237,7 @@ Before approving any of it, run the grounding audit (§3 of
 `provider-availability.md` has the background):
 
 ```powershell
-python scripts\audit_grounding.py
+forge proposals audit-grounding
 ```
 
 These proposals were extracted under the pre-2026-08-19 bag-of-words grounding
