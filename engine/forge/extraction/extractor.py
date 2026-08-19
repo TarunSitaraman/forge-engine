@@ -18,6 +18,7 @@ it just produces spans without candidates.
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Sequence
@@ -60,11 +61,18 @@ log = get_logger(__name__)
 
 EXTRACTOR_VERSION = "extractor/0.2.0"
 
-#: Fraction of a quote's words that must appear in the source span for the
-#: quote to count as grounded. Not 100%: models normalize whitespace, quotes,
-#: and hyphenation. Low enough to tolerate that, high enough that a fabricated
-#: quote fails.
-QUOTE_GROUNDING_THRESHOLD = 0.6
+#: Fraction of a quote's words that must appear **in their original order** in
+#: the source span for the quote to count as grounded. See `_grounded` for why
+#: order is the load-bearing part.
+#:
+#: Chosen from the observed margin, not by feel. Eliding words *from* a quote
+#: does not lower this ratio — only a word the source does not have in that
+#: position does — so every legitimate quote measured (hyphenation changes,
+#: curly quotes, ellipsis, dropped interior words) scored **1.000**, while
+#: quotes reassembled from the span's own vocabulary scored **0.500-0.857**.
+#: 0.9 sits in that gap and still tolerates one substituted word in ten, which
+#: covers pluralization and similar drift. Tests pin both sides of the margin.
+QUOTE_GROUNDING_THRESHOLD = 0.9
 
 #: Minimum span length worth a model call. Low on purpose: see `_select`.
 MIN_SPAN_CHARS = 40
@@ -446,26 +454,74 @@ def extraction_provenance(
 # -- helpers ---------------------------------------------------------------
 
 
+def _squash(text: str) -> str:
+    """Reduce text to lower-case alphanumerics.
+
+    Deletes every distinction a model routinely gets wrong when transcribing a
+    quote — whitespace, straight vs curly quotes, hyphens, em dashes, trailing
+    punctuation — while preserving the one that carries meaning: the order of
+    the characters.
+    """
+    return "".join(c for c in text.lower() if c.isalnum())
+
+
+def _tokens(text: str) -> list[str]:
+    return [w for w in re.sub(r"[^0-9a-z]+", " ", text.lower()).split() if w]
+
+
+def _ordered_overlap(quote_words: Sequence[str], text_words: Sequence[str]) -> float:
+    """Fraction of the quote's words appearing in the text *in the same order*.
+
+    A longest-common-subsequence ratio. Unlike a set intersection this cannot
+    be satisfied by rearranging the source's own vocabulary.
+    """
+    if not quote_words:
+        return 0.0
+    previous = [0] * (len(text_words) + 1)
+    for q in quote_words:
+        current = [0] * (len(text_words) + 1)
+        for j, t in enumerate(text_words, 1):
+            current[j] = previous[j - 1] + 1 if q == t else max(previous[j], current[j - 1])
+        previous = current
+    return previous[len(text_words)] / len(quote_words)
+
+
 def _grounded(quote: str, text: str) -> bool:
     """Is this quote actually present in the span?
 
-    Exact substring first (the common case), then a word-overlap fallback that
-    tolerates whitespace and punctuation normalization without accepting an
-    invented quote.
-    """
-    normalized_quote = " ".join(quote.lower().split())
-    normalized_text = " ".join(text.lower().split())
-    if not normalized_quote:
-        return False
-    if normalized_quote in normalized_text:
-        return True
+    **Order is the whole point.** An earlier version compared bag-of-words
+    overlap, which accepts any quote assembled from the span's own vocabulary —
+    including one that inverts the meaning. Given a span saying "RAG improves
+    accuracy", the fabricated quote "RAG does not improve accuracy" scored 100%
+    and was stored as evidence. That defeats the rule this function exists to
+    enforce: nothing is stored without evidence.
 
-    words = [w.strip(".,;:!?\"'()[]") for w in normalized_quote.split()]
-    words = [w for w in words if len(w) > 2]
-    if not words:
+    Two order-preserving checks, cheapest first:
+
+    1. The quote, stripped to bare alphanumerics, appears as a **substring** of
+       the span stripped the same way. This is the common case and absorbs all
+       formatting noise. A quote may use ``...`` to elide, in which case each
+       segment must appear in order.
+    2. Otherwise, a longest-common-subsequence ratio over words, which tolerates
+       a model dropping interior words but still requires what remains to be in
+       the original sequence.
+    """
+    if not quote.strip():
         return False
-    present = sum(1 for w in words if w in normalized_text)
-    return present / len(words) >= QUOTE_GROUNDING_THRESHOLD
+
+    squashed_text = _squash(text)
+    segments = [seg for seg in re.split(r"\.\.\.|…", quote) if _squash(seg)]
+    if segments:
+        position = 0
+        for segment in segments:
+            found = squashed_text.find(_squash(segment), position)
+            if found < 0:
+                break
+            position = found + len(_squash(segment))
+        else:
+            return True
+
+    return _ordered_overlap(_tokens(quote), _tokens(text)) >= QUOTE_GROUNDING_THRESHOLD
 
 
 def _status(attempted: int, succeeded: int) -> ExtractionStatus:

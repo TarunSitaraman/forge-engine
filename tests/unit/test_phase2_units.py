@@ -307,10 +307,62 @@ class TestExtraction:
             ("Grounds  Generation   in retrieved passages", True),  # whitespace/case
             ("completely fabricated statement never written", False),
             ("", False),
+            ("   ", False),
         ],
     )
     def test_grounding_check(self, quote, expected):
         assert _grounded(quote, self.SPAN_TEXT) is expected
+
+    @pytest.mark.parametrize(
+        "quote",
+        [
+            "Retrieval-Augmented Generation grounds generation",  # hyphenation
+            "\u201cgrounds generation in retrieved passages\u201d",  # curly quotes
+            "grounds generation ... on open-domain questions",  # elided with ellipsis
+            "grounds generation in passages, which reduces hallucination",  # dropped word
+        ],
+    )
+    def test_formatting_noise_is_still_grounded(self, quote):
+        """The tolerance that motivated a fuzzy check must survive tightening it."""
+        assert _grounded(quote, self.SPAN_TEXT) is True
+
+    @pytest.mark.parametrize(
+        "quote",
+        [
+            # Every word below appears in SPAN_TEXT. Only the order is wrong,
+            # which is exactly what a bag-of-words check cannot see.
+            "retrieved passages reduces generation grounds hallucination",
+            "open-domain generation grounds retrieved questions considerably",
+            # Meaning inverted using only the span's own vocabulary.
+            "Retrieval Augmented Generation reduces retrieved passages considerably",
+        ],
+    )
+    def test_quote_reassembled_from_span_vocabulary_is_not_grounded(self, quote):
+        """Order is the load-bearing part of the grounding check.
+
+        Until 2026-08-19 `_grounded` scored bag-of-words overlap, so any quote
+        built from the span's own words scored 1.0 and was stored as evidence —
+        including one that inverted the span's meaning. That defeats the rule
+        the function exists to enforce, and no test caught it because the only
+        negative case used vocabulary foreign to the span, which is the one
+        kind of fabrication a word-set check does detect.
+        """
+        assert _grounded(quote, self.SPAN_TEXT) is False
+
+    def test_ungrounded_reordering_is_dropped_end_to_end(self, scripted_extractor):
+        """The unit rule has to actually reject the claim in the pipeline."""
+        extractor = scripted_extractor(
+            claims=[
+                {
+                    "statement": "Retrieval reduces retrieved passages",
+                    "evidence_quote": "retrieved passages reduces generation grounds hallucination",
+                    "concept": "RAG",
+                }
+            ]
+        )
+        result = extractor.extract([make_span(self.SPAN_TEXT)])
+        assert result.claims == []
+        assert any(f["kind"] == "ungrounded_quote" for f in result.failures)
 
     def test_short_spans_are_still_extracted(self):
         """A 55-char definition is meaningful; an earlier 120-char floor lost it."""
