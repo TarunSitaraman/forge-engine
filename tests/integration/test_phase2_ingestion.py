@@ -536,3 +536,76 @@ def _all_spans(store):
         for document in store.documents_for_source(source.id):
             spans.extend(store.spans_for_document(document.id))
     return spans
+
+
+class TestChunkerProvenanceOnUnchangedSources:
+    """`forge index` and `forge ingest` write spans to the same table.
+
+    Phase 1 indexing produces heading-delimited spans (`chunk_strategy`
+    "heading") for retrieval; ingestion produces structurally grouped,
+    sentence-split ones. Until 2026-08-19 the unchanged-source short-circuit
+    checked only the content hash, so a vault indexed before it was ingested —
+    the documented order — kept Phase 1's spans and extracted over them.
+
+    Measured on Technologies/Docs: 208 spans instead of 98, hence 416 model
+    calls instead of 196, over boundaries the extraction prompt never targeted.
+    """
+
+    def test_ingest_rechunks_spans_left_by_the_corpus_indexer(self, settings, fixture_vault):
+        from forge.corpus import IndexPipeline
+        from forge.ingestion import CHUNK_STRATEGY, IngestionPipeline, IngestOptions
+        from forge.storage import SqliteStore
+
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        IndexPipeline(settings, store).run()
+
+        indexed = [s for s in _all_spans(store)]
+        assert indexed, "the indexer must have written spans for this test to mean anything"
+        assert {s.chunk_strategy for s in indexed} == {"heading"}
+
+        report = IngestionPipeline(settings, store).ingest_path(
+            fixture_vault, IngestOptions(extract=False)
+        )
+        assert report.totals()["llm_calls"] == 0
+
+        # Ingestion adds its own spans; Phase 1's are kept, because retrieval
+        # is still using them. What must not happen is the two being conflated.
+        after = _all_spans(store)
+        assert {s.chunk_strategy for s in after} == {"heading", CHUNK_STRATEGY}
+
+        pipeline = IngestionPipeline(settings, store)
+        owned = [
+            span
+            for source in store.list_sources()
+            for span in pipeline._spans_for_source(source.id)
+        ]
+        assert owned, "ingestion must own some spans"
+        assert {s.chunk_strategy for s in owned} == {CHUNK_STRATEGY}
+        assert len(owned) == len([s for s in after if s.chunk_strategy == CHUNK_STRATEGY])
+        store.close()
+
+    def test_a_second_ingest_still_short_circuits(self, settings, fixture_vault):
+        """Re-chunking must trigger on foreign spans only, not on every run."""
+        from forge.domain import IngestionStatus
+        from forge.ingestion import IngestionPipeline, IngestOptions
+        from forge.storage import SqliteStore
+
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        pipeline = IngestionPipeline(settings, store)
+        pipeline.ingest_path(fixture_vault, IngestOptions(extract=False))
+        first = _all_spans(store)
+
+        second = pipeline.ingest_path(fixture_vault, IngestOptions(extract=False))
+        assert all(s.status is IngestionStatus.UNCHANGED for s in second.sources)
+        assert {s.id for s in _all_spans(store)} == {s.id for s in first}
+        store.close()
+
+
+def _all_spans(store):
+    spans = []
+    for source in store.list_sources():
+        for document in store.documents_for_source(source.id):
+            spans.extend(store.spans_for_document(document.id))
+    return spans

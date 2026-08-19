@@ -164,6 +164,89 @@ quality are both **unmeasured**; see `provider-availability.md`.
 
 ---
 
+## 2b. The first complete run (2026-08-19) — and the bug it exposed
+
+`Technologies/Docs`, ASUS, qwen3:8b, reasoning on.
+
+```
+19 source(s) in 20370.86s | 208 spans | 1386 concepts | 1170 claims | 2169 proposals
+LLM calls: 416  cache: {'hits': 0, 'misses': 19, 'writes': 19}
+```
+
+**5.66 h, 49.0 s/call, 97.9 s/span.** Every projection above is per-call, and
+this is the first per-call figure taken from a *complete* scope rather than
+three spans of one document. It is **4.6× faster than the 455 s/span** the
+three-span sample implied.
+
+Both numbers are real. They differ because they measured different span sizes,
+which is the finding:
+
+### The run extracted over the wrong spans
+
+`forge index` and `forge ingest` both write to the `spans` table, for different
+jobs. Phase 1 produces heading-delimited spans for retrieval
+(`chunk_strategy="heading"`); ingestion produces structurally grouped,
+sentence-split spans for evidence (`"structural/0.2.0"`). They share a document.
+
+The unchanged-source short-circuit checked only the content hash, so a vault
+indexed *before* it was ingested — the order every runbook here recommends —
+extracted over Phase 1's spans:
+
+| | Spans | Calls |
+|---|---:|---:|
+| Clean store, ingestion chunker | **98** | **196** |
+| After `forge index` (what actually ran) | **208** | **416** |
+
+So the run cost **2.1× more model calls than necessary**, over boundaries the
+extraction prompt was never written for. Reproduced locally and fixed: ingestion
+now reads back only spans its own chunker produced. Phase 1's are kept rather
+than deleted — retrieval is still using them. Regression tests in
+`tests/integration/test_phase2_ingestion.py::TestChunkerProvenanceOnUnchangedSources`.
+
+This is the same *class* of bug as the 2026-08-15 one in §3: an "unchanged"
+short-circuit answering a narrower question than the caller needed. Twice now,
+so it is worth stating as a rule: **"unchanged" describes the source, never the
+derived state.**
+
+### What that does to the latency numbers
+
+Index spans are roughly half the size of ingestion spans, and per-call latency
+fell **4.6×** for a ~2× reduction in span size. That is strongly superlinear,
+but it rests on two samples at two sizes and one of them was three spans, so
+treat it as a direction to investigate, not a law. The honest summary:
+
+* **49 s/call over ~1,100-char spans** — measured, complete scope, n=416.
+* **~228 s/call over ~2,400-char spans** — measured, n=6, one timeout included.
+* A corrected `Technologies/Docs` run makes 196 calls over the larger spans. Its
+  wall time is **not predictable from either figure** and is the next thing
+  worth measuring.
+
+The `[unchanged] … no work done` line printed against every source during this
+run was also false — extraction was running. Fixed: an unchanged source that
+still extracts now reports what it produced.
+
+### The review bottleneck is now real, not projected
+
+**2,169 proposals** from 19 documents. §5 estimated ~5 h of review for the whole
+vault at one claim per span; one twentieth of the vault has produced 6 h of
+reading at the same optimistic 10 s each. Scaled naively, the full vault is on
+the order of **100+ hours of human review** — which is the argument for
+extracting selectively, made concrete.
+
+Before approving any of it, run the grounding audit (§3 of
+`provider-availability.md` has the background):
+
+```powershell
+python scripts\audit_grounding.py
+```
+
+These proposals were extracted under the pre-2026-08-19 bag-of-words grounding
+rule, which accepted quotes reassembled from the span's own vocabulary. The
+audit re-checks every stored quote against the order-preserving rule at zero
+model calls.
+
+---
+
 ## 3. Why this is resumable
 
 Extraction results are cached under a derivation key covering content hash,

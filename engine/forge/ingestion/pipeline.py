@@ -47,7 +47,7 @@ from ..proposals.service import ProposalService, claim_proposal, concept_proposa
 from ..sources.base import AcquisitionResult
 from ..sources.registry import AdapterRegistry
 from ..storage.sqlite_store import SqliteStore
-from .chunking import build_spans
+from .chunking import CHUNK_STRATEGY, build_spans
 from .derivation import CacheStats, extraction_key
 from .report import IngestionReport, SourceReport
 
@@ -180,11 +180,12 @@ class IngestionPipeline:
             probe = self.registry.acquire(path)
             if not probe.ok:
                 return self._failed(report, probe, started)
-            if probe.content_hash == existing.content_hash:
+            stored_spans = self._spans_for_source(existing.id)
+            if probe.content_hash == existing.content_hash and stored_spans:
                 report.status = IngestionStatus.UNCHANGED
                 report.source_id = existing.id
                 report.content_hash = existing.content_hash
-                report.spans = len(self._spans_for_source(existing.id))
+                report.spans = len(stored_spans)
 
                 # Unchanged content does not imply extracted content. A vault
                 # ingested deterministically first — the normal order, since
@@ -207,6 +208,12 @@ class IngestionPipeline:
                 report.duration_seconds = time.perf_counter() - started
                 log.info("source_unchanged", locator=locator)
                 return report
+            if probe.content_hash == existing.content_hash:
+                # Content unchanged, but this source has no spans *this*
+                # chunker produced — so there is real work to do. See
+                # `_spans_for_source` for why that is not the same question as
+                # "does this source have spans".
+                log.info("rechunking_for_ingestion", locator=locator)
             acquisition = probe
         else:
             acquisition = self.registry.acquire(path)
@@ -484,9 +491,30 @@ class IngestionPipeline:
         return len(self.store.documents_for_source(source_id)) + 1
 
     def _spans_for_source(self, source_id: str) -> list:
+        """Spans this pipeline owns — never another chunker's.
+
+        `forge index` and `forge ingest` both write spans, for different jobs:
+        Phase 1 produces heading-delimited spans for retrieval, ingestion
+        produces structurally grouped, sentence-split ones for evidence. They
+        share a table and a document, so an indexed-then-ingested vault holds
+        both, and reading them all back conflates two chunkings.
+
+        That is not hypothetical. Until 2026-08-19 the unchanged-source
+        short-circuit reported and extracted over whatever spans existed, so a
+        vault indexed first — the documented order — extracted over Phase 1's
+        boundaries: 208 spans instead of 98 on `Technologies/Docs`, hence 416
+        model calls instead of 196.
+
+        Filtering rather than deleting is deliberate. The Phase 1 spans are not
+        stale; retrieval is still using them.
+        """
         spans: list = []
         for document in self.store.documents_for_source(source_id):
-            spans.extend(self.store.spans_for_document(document.id))
+            spans.extend(
+                span
+                for span in self.store.spans_for_document(document.id)
+                if span.chunk_strategy == CHUNK_STRATEGY
+            )
         return spans
 
     def _failed(

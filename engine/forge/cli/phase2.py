@@ -531,7 +531,20 @@ def _print_source(source: Any) -> None:
                 f"{source.proposals_created} proposals"
             )
     elif source.status is IngestionStatus.UNCHANGED:
-        typer.echo(f"    unchanged ({source.spans} spans already stored) — no work done")
+        # "Unchanged" describes the *source*, not the run. Extraction still
+        # runs over an unchanged source that was never extracted, so claiming
+        # "no work done" while 2 model calls per span are in flight is simply
+        # false — and it hid a 5.7-hour run's real behaviour on 2026-08-19.
+        did_extract = source.proposals_created or source.concepts_proposed or source.claims_proposed
+        if did_extract:
+            typer.echo(f"    source unchanged ({source.spans} spans reused)")
+            typer.echo(
+                f"    extraction: {source.extraction_status.value} | "
+                f"{source.concepts_proposed} concepts, {source.claims_proposed} claims, "
+                f"{source.proposals_created} proposals"
+            )
+        else:
+            typer.echo(f"    unchanged ({source.spans} spans already stored) — no work done")
     if source.detail:
         typer.echo(f"    {source.detail}")
     for warning in source.warnings[:5]:
