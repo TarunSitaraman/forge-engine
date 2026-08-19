@@ -5,10 +5,11 @@ subsets are worth spending that on, and how to run it without babysitting.*
 
 **Headline: the call count is settled — 3,372 calls for the whole vault, 196
 for `Technologies/Docs/`. The per-call latency is not. The 63 s/call borrowed
-from the Phase 4 assessment eval understates real extraction by roughly 7×
-(§2). The leading suspect was that Qwen3 reasons before every answer because
-nothing tells it not to — that has now been tested, and turning reasoning off
-buys 2.5× at the cost of a false-positive conflict, so it is rejected (§2).
+from the Phase 4 assessment eval understates real extraction by roughly 3.6×
+(§2 — this was stated as 7× until 2026-08-19; see the correction there). The
+leading suspect was that Qwen3 reasons before every answer because nothing
+tells it not to — that has now been tested, and turning reasoning off buys 2.5×
+at the cost of a false-positive conflict, so it is rejected (§2).
 Extraction is resumable at document granularity, so it does not need to finish
 in one sitting.**
 
@@ -70,10 +71,33 @@ hardware and model, produced:
 | 4 | 704.5 s (one timeout + retry) | ~235 s |
 | 5 | 183.3 s | ~92 s |
 
-Mean ≈ **455 s/span**, roughly **7× the assessment figure**, and one later gap
-exceeded 60 minutes with no span completing at all. On those three points
-`Technologies/Docs/` projects to **~26 h**, not 3.4 h, and the whole vault to
-well over a week.
+Mean ≈ **455 s/span** = **~228 s/call**, roughly **3.6× the assessment figure**,
+and one later gap exceeded 60 minutes with no span completing at all.
+
+> **Correction, 2026-08-19.** This section previously said **7×** and projected
+> `Technologies/Docs/` at **~26 h**. Both were wrong: 455 s is *per span* and
+> the 63 s baseline is *per call*, and a span is two calls. Comparing them
+> directly double-counted. Like-for-like it is 228 s/call vs 63 s/call, or
+> equivalently 455 s/span vs 126 s/span — **3.6× either way**. This is the same
+> unit mismatch as the 7,237-vs-1,697 span error in §1 that caused this document
+> to be written, which is worth stating plainly: *check the denominator before
+> dividing two latency numbers.* The whole-vault conclusion is unchanged, since
+> it was stated qualitatively.
+
+Re-projected on extraction's own measured rate:
+
+| Scope | Spans | At 455 s/span | Excluding the timeout span |
+|---|---:|---:|---:|
+| **Whole vault** | 1,686 | 213 h (~9 days) | 155 h |
+| `Projects/` | 160 | 20.2 h | 14.7 h |
+| `Technologies/Docs/` | 98 | **12.4 h** | **9.0 h** |
+| `DSA/01_Patterns/` | 94 | 11.9 h | 8.6 h |
+| `Courses/` | 37 | 4.7 h | 3.4 h |
+
+The right-hand column drops span 4, whose 704.5 s included a timeout and a full
+retry; the true rate is somewhere between the columns. The practical consequence
+of the correction is that `Technologies/Docs/` is **an overnight run, not a
+two-day one** — which changes whether it is worth starting at all.
 
 Three data points from one document are not a characterisation either — they
 are recorded here so the next estimate starts from extraction's own numbers
@@ -178,9 +202,9 @@ $env:FORGE_LLM_PROVIDER="ollama"
 $env:FORGE_MODEL_DEFAULT="qwen3:8b"
 $env:FORGE_LLM_TIMEOUT="300"
 
-python -m forge.cli.main ingest "Technologies/Docs" --extract -v    # ~3.4 h
-python -m forge.cli.main ingest "DSA/01_Patterns"   --extract -v    # ~3.3 h
-python -m forge.cli.main ingest "Projects"          --extract -v    # ~5.6 h
+python -m forge.cli.main ingest "Technologies/Docs" --extract -v    # ~9-12 h
+python -m forge.cli.main ingest "DSA/01_Patterns"   --extract -v    # ~9-12 h
+python -m forge.cli.main ingest "Projects"          --extract -v    # ~15-20 h
 ```
 
 `-v` is what makes a multi-hour run observable. Two progress signals are
