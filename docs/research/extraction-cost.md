@@ -201,20 +201,30 @@ python -m forge.cli.main proposals show <id>
 python -m forge.cli.main proposals approve <id>
 ```
 
-### Do this before the first run
+### Before the first run — done, 2026-08-19
 
-Four concept-name collisions are undecided. Extracting first means every
-downstream concept inherits an unresolved identity:
+Four concept-name collisions were undecided. Extracting with them open means
+every downstream concept inherits an unresolved identity, so they were settled
+first. Now recorded in `config/concept-identity.yaml` (committed, so it travels
+with the vault rather than living on one machine):
 
 ```
-Binary Search   pattern/Binary Search      vs  algorithm/Binary Search
-Heap            pattern/Heap               vs  data-structure/Heap
-Trie            pattern/Trie               vs  data-structure/Trie
-weekly-review   competitiveprogramming/…   vs  templates/weekly-review
+Binary Search   -> pattern/Binary Search
+Heap            -> pattern/Heap
+Trie            -> pattern/Trie
+weekly-review   -> templates/weekly-review
 ```
 
-Resolve with `forge identity decide "<name>" <qualified-name>`. These are
-naming decisions about your own vault — the engine deliberately will not guess.
+The three DSA names default to `DSA/01_Patterns/` because that is where the
+vault's depth is and because prose in `DSA/` and `Projects/` is almost always
+discussing the solving technique rather than the bare construct. `weekly-review`
+defaults to the reusable template, with the Competitive-Programming file reading
+as one filled-in instance of it.
+
+These were naming decisions about the vault, not inferences — the engine
+deliberately will not guess, and `forge identity decide "<name>"
+<qualified-name>` is how you change one. `forge identity clear` reopens a
+collision if a decision turns out wrong.
 
 ---
 
