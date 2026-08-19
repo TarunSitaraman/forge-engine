@@ -127,11 +127,15 @@ understood reason: it has never completed a call.
 | A real model returns schema-valid JSON in practice | **MEASURED** — 5/5, see §6 |
 | Real assessment latency | **MEASURED, high variance** — typical 40-60 s, worst case >300 s, see §6 and §7 |
 | Real classification accuracy | **MEASURED** — 5/5 on two independent runs, see §6 and §7 |
-| False-positive conflict rate | **0 of 2 adversarial cases** — encouraging, not yet a rate |
+| False-positive conflict rate | **0 of 2 adversarial cases** with reasoning on; **1 of 2 with reasoning off**, see §8 |
+| Extraction quality | **Unmeasured, and no eval exists** — `tests/fixtures/eval/` covers assessment and retrieval only |
 
-The last row was the single largest open risk carried out of Phase 4. It is now
-partially answered — see §6 — but two adversarial cases cannot establish a
-rate, so it remains the thing most worth measuring next.
+The false-positive row was the single largest open risk carried out of Phase 4.
+It is now partially answered — see §6 — but two adversarial cases cannot
+establish a rate, so it remains the thing most worth measuring next. §8 is why
+that matters concretely: a configuration change that looked like a pure latency
+win flipped one of those two cases, and a 2-case set is the only thing standing
+between that and going unnoticed.
 
 ---
 
@@ -331,5 +335,96 @@ once, which has not been done.
 $env:FORGE_LLM_PROVIDER="ollama"
 $env:FORGE_MODEL_DEFAULT="qwen3:8b"
 $env:FORGE_LLM_TIMEOUT="300"
+python scripts\assessment_eval.py --provider ollama
+```
+
+---
+
+## 8. Reasoning off (2026-08-19) — 5.1× faster, and it breaks the case that matters
+
+`extraction-cost.md` §2 asked for exactly one experiment: run the same
+assessment set with Qwen3's reasoning disabled, on the theory that the ~7×
+gap between assessment latency and real extraction latency was chain-of-thought
+being generated at full token cost and then discarded. Same machine, same
+model, same dataset, one variable changed.
+
+```powershell
+$env:FORGE_OLLAMA_THINK="0"
+python scripts\assessment_eval.py --provider ollama
+```
+
+```
+ollama/qwen3:8b   valid=1.00 grounded=1.00 class=0.80 proposal=0.80 cache=1.00  21867ms/case
+
+  [FAIL] insufficient-partial-overlap  expected=INSUFFICIENT_EVIDENCE  actual=POTENTIAL_CONFLICT
+         expected proposal None but produced ProposalType.CLAIM_CONFLICT
+```
+
+Note the model id carries `+nothink`, so none of this shared a derivation-cache
+entry with §6 or §7 and none of it can be averaged with them.
+
+### The speedup is real, and smaller than the headline
+
+Two honest numbers, because the means are not comparable to each other:
+
+| Comparison | Think on | Think off | Ratio |
+|---|---:|---:|---:|
+| Reported mean/case | 112,078 ms | 21,867 ms | **5.1×** |
+| Typical case (median-ish) | ~45 s | ~18 s | **2.5×** |
+
+The 5.1× is inflated from the *think-on* side: §7's mean carries a 345 s
+timeout-and-retry outlier. Per-case wall times with reasoning off were 22 / 18 /
+15 / 20 s — no outlier at all, which is itself a finding: the case that blew
+both the 120 s and the 300 s timeout was the adversarial one, and without a
+reasoning phase it simply does not take long. **2.5× is the number to plan
+with**; 5.1× is what the two report lines say and is the wrong one to quote.
+
+### The accuracy cost lands on the worst possible case
+
+Accuracy fell from 5/5 to 4/5, and the one that broke is
+`insufficient-partial-overlap` — evidence that *partially* overlaps an existing
+claim without contradicting it. With reasoning off the model called it
+`POTENTIAL_CONFLICT` and emitted a `CLAIM_CONFLICT` proposal.
+
+That is a **false-positive conflict**: precisely the failure mode §4 names as
+"the single largest open risk carried out of Phase 4." Think-on classified this
+same case correctly on both 2026-08-14 and 2026-08-19. One of the two
+adversarial cases in the set now fails, and it fails by manufacturing a
+conflict that is not there — the direction that costs human review attention and
+erodes trust in every proposal the engine raises.
+
+Structured-output validity and grounding both held at 1.00, so this is not the
+model falling apart. It is a narrower and more specific loss: without a
+reasoning phase it stops distinguishing "overlaps but does not contradict" from
+"contradicts."
+
+### Decision
+
+**Rejected for assessment.** A 2.5× speedup does not buy a false-positive
+conflict on a 5-case set where only two cases probe that behaviour at all.
+`FORGE_OLLAMA_THINK` stays opt-in and off by default.
+
+**Unmeasured for extraction, and currently unmeasurable.** The experiment was
+motivated by extraction cost but was run on the *assessment* set, because
+`tests/fixtures/eval/` contains only `assessment-v1.yaml` and
+`retrieval-v1.yaml` — there is no extraction-quality eval. Extraction asks a
+different question (pull concepts and claims out of a span, with every quote
+grounded) and reasoning may well matter less there. Nothing here licenses that
+guess in either direction.
+
+So the honest state is: reasoning-off is disqualified on the task we can
+measure, and untested on the task we wanted it for. Building an
+extraction-quality eval is the prerequisite for revisiting it — and until that
+exists, running the vault with `+nothink` risks spending a full extraction pass
+whose output nothing can grade, with a cache key that guarantees redoing it if
+the answer turns out to be no.
+
+### Reproducing
+
+```powershell
+$env:FORGE_LLM_PROVIDER="ollama"
+$env:FORGE_MODEL_DEFAULT="qwen3:8b"
+$env:FORGE_LLM_TIMEOUT="300"
+$env:FORGE_OLLAMA_THINK="0"
 python scripts\assessment_eval.py --provider ollama
 ```

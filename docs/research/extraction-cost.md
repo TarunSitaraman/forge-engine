@@ -6,9 +6,11 @@ subsets are worth spending that on, and how to run it without babysitting.*
 **Headline: the call count is settled — 3,372 calls for the whole vault, 196
 for `Technologies/Docs/`. The per-call latency is not. The 63 s/call borrowed
 from the Phase 4 assessment eval understates real extraction by roughly 7×
-(§2), and the leading suspect is that Qwen3 was reasoning before every answer
-because nothing told it not to. Extraction is resumable at document
-granularity, so it does not need to finish in one sitting.**
+(§2). The leading suspect was that Qwen3 reasons before every answer because
+nothing tells it not to — that has now been tested, and turning reasoning off
+buys 2.5× at the cost of a false-positive conflict, so it is rejected (§2).
+Extraction is resumable at document granularity, so it does not need to finish
+in one sitting.**
 
 ---
 
@@ -90,17 +92,40 @@ the model *does*, not a tuning flag, so it is opt-in, and it appends
 never share a derivation cache entry, and must never be averaged in an
 evaluation.
 
-**Measure before committing hours to it:**
+**Measured, 2026-08-19 — and the answer is no.** Full write-up in
+`provider-availability.md` §8; the short version:
 
-```powershell
-$env:FORGE_OLLAMA_THINK="0"
-python scripts\assessment_eval.py --provider ollama
-```
+| | Think on | Think off |
+|---|---:|---:|
+| Reported mean/case | 112,078 ms | 21,867 ms |
+| Typical case | ~45 s | ~18 s |
+| Classification accuracy | 5/5 | **4/5** |
 
-If accuracy holds at 5/5 and latency drops sharply, extraction with reasoning
-off is justified on evidence. If accuracy falls, the honest conclusion is that
-this hardware cannot extract the whole vault in reasonable time and the work
-belongs on the cloud path.
+Latency dropped — **2.5×** typical-vs-typical, which is the number to plan with
+(the 5.1× the two report lines imply is inflated by think-on's 345 s
+timeout-and-retry outlier). But accuracy fell, and it fell on
+`insufficient-partial-overlap`: with reasoning off the model turned partial
+overlap into `POTENTIAL_CONFLICT` and raised a `CLAIM_CONFLICT` proposal. That
+is a **false-positive conflict**, the exact failure mode
+`provider-availability.md` §4 calls the largest open risk carried out of
+Phase 4. Validity and grounding both held at 1.00, so this is a specific loss of
+discrimination, not a general collapse.
+
+**So reasoning-off is rejected for assessment, and remains unmeasured for
+extraction.** The experiment could only be run against the assessment set:
+`tests/fixtures/eval/` holds `assessment-v1.yaml` and `retrieval-v1.yaml` and
+nothing else, so **there is no extraction-quality eval** to grade the task this
+section actually cares about. Extraction asks a different question and reasoning
+may matter less there — but that is a guess, and running the vault with
+`+nothink` on the strength of it means spending a full pass whose output nothing
+can score, with a cache key (§3) that guarantees redoing it if the answer turns
+out to be no.
+
+Which leaves the original conclusion standing, unimproved: at ~455 s/span this
+hardware does not extract the whole vault in reasonable time. The two ways
+forward are **extract selectively** (§4's ordering — `Technologies/Docs/` first)
+or **measure the cloud path**, which remains unmeasured. Building an
+extraction-quality eval is the prerequisite for revisiting reasoning-off at all.
 
 The per-document cap rarely binds: ingestion chunking produces roughly 5–12
 usable spans per document, so `--max-spans 12` truncates almost nothing. Raising
@@ -208,8 +233,8 @@ the binding constraint is review attention, not inference throughput.
 ## Related
 
 * [`provider-availability.md`](provider-availability.md) — where the 63 s/call
-  figure comes from, and what the 5/5 assessment result does and does not
-  establish.
+  figure comes from, what the 5/5 assessment result does and does not
+  establish, and (§8) the reasoning-off experiment this document asked for.
 * [`retrieval-baseline.md`](retrieval-baseline.md) — the deterministic
   retrieval path, which needs no extraction at all.
 * [`../architecture/phase-2-implementation.md`](../architecture/phase-2-implementation.md)
