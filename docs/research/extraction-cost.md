@@ -245,6 +245,62 @@ rule, which accepted quotes reassembled from the span's own vocabulary. The
 audit re-checks every stored quote against the order-preserving rule at zero
 model calls.
 
+### First measured quote-fidelity rate (2026-08-19)
+
+`forge proposals audit-grounding` over the 1,170 claims from that run:
+
+```
+1170 quote(s) checked, 30 ungrounded (2.56%).
+```
+
+**2.56%** is the first number Forge has on how often a stored "quote" is not
+actually a quote. It is one model, one scope, and one chunking, so it is a
+measurement rather than a rate — but it is no longer unmeasured.
+
+**The failures are not hallucinations. They are tables.** 29 of 30 are cheat
+sheet rows rewritten as prose:
+
+| Source (a table row) | What the model stored as a *quote* |
+|---|---|
+| `\| az login \| Sign in \|` | "The command `az login` is used to login." |
+| `\| docker ps \| List running containers \|` | "The command to list running Docker containers is `docker ps`." |
+| `\| kubectl logs -f pod \| Live logs \|` | "The command `kubectl logs -f pod` is used to get live logs of a pod." |
+
+Every fact in those sentences is correct and present in the span. What is absent
+is the *sentence* — the model composed prose from tabular content and cited it
+as verbatim. The old bag-of-words rule saw the words and accepted it; the
+order-preserving rule sees that no such sentence exists and drops it. Both are
+behaving correctly, and the drop is right: `EvidenceRelation.QUOTES` asserts the
+span contains this text, which is a deterministic claim a model is not permitted
+to make.
+
+The 30th is different and worth the whole audit on its own:
+
+```
+'Increment | `INNE key`'
+```
+
+There is no `INNE` command in Redis; the source says `INCR`. That one is a
+genuine fabrication in a fragment that looks structurally like a real table row,
+and no amount of reading 2,169 proposals by hand would reliably have caught it.
+
+**What this says about the prompt, not the model.** The failure clusters
+entirely in `azure.md`, `docker.md`, `kubernetes.md` and `redis.md` — the
+documents with large command tables. Asking for a verbatim quote from tabular
+content is asking for something a table often does not contain: a sentence. That
+is an extraction-prompt problem, and it is the concrete first case for the
+extraction-quality eval that §2 says does not exist yet.
+
+Reject them in one pass; the audit knows which they are:
+
+```powershell
+forge proposals audit-grounding --reject            # dry run, the default
+forge proposals audit-grounding --reject --no-dry-run
+```
+
+Already-decided proposals are skipped — a human decision is not the audit's to
+overturn.
+
 ---
 
 ## 3. Why this is resumable

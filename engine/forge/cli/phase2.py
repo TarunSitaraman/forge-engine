@@ -278,6 +278,10 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
     def proposals_audit_grounding(
         vault: Optional[Path] = typer.Option(None),
         show_passing: bool = typer.Option(False, "--show-passing", help="Print every row."),
+        reject: bool = typer.Option(
+            False, "--reject", help="Reject every pending proposal that fails the check."
+        ),
+        dry_run: bool = typer.Option(True, help="With --reject, preview without deciding."),
         json_out: bool = typer.Option(False, "--json"),
     ) -> None:
         """Re-check stored evidence quotes against the current grounding rule.
@@ -294,13 +298,34 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         store.initialize()
         try:
             checks = audit_grounding(store)
+            failed = [c for c in checks if not c.grounded]
+
+            rejected: list[str] = []
+            if reject and not dry_run:
+                service = ProposalService(store)
+                # Only PENDING can be rejected; anything already decided is
+                # someone's decision and is not this command's to overturn.
+                for check in failed:
+                    if check.status != ProposalStatus.PENDING.value:
+                        continue
+                    if check.proposal_id in rejected:
+                        continue
+                    service.reject(
+                        check.proposal_id,
+                        by="audit-grounding",
+                        note="evidence quote is not verbatim in the cited span",
+                    )
+                    rejected.append(check.proposal_id)
         finally:
             store.close()
 
-        failed = [c for c in checks if not c.grounded]
-
         if _emit(
-            {"checked": len(checks), "ungrounded": [c.to_dict() for c in failed]}, json_out
+            {
+                "checked": len(checks),
+                "ungrounded": [c.to_dict() for c in failed],
+                "rejected": rejected,
+            },
+            json_out,
         ):
             raise typer.Exit(code=1 if failed else 0)
 
@@ -319,13 +344,25 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             if check.note:
                 typer.echo(f"     note : {check.note}")
 
-        typer.echo(f"\n{len(checks)} quote(s) checked, {len(failed)} ungrounded.")
+        rate = len(failed) / len(checks) if checks else 0.0
+        typer.echo(
+            f"\n{len(checks)} quote(s) checked, {len(failed)} ungrounded ({rate:.2%})."
+        )
         if failed:
-            typer.echo(
-                "\nThese were admitted under the pre-2026-08-19 bag-of-words rule and\n"
-                "would be dropped by extraction today. Reject rather than approve:\n"
-                "  forge proposals reject <id>"
-            )
+            if rejected:
+                typer.echo(f"{len(rejected)} pending proposal(s) rejected.")
+            elif reject:
+                pending = {c.proposal_id for c in failed if c.status == ProposalStatus.PENDING.value}
+                typer.echo(
+                    f"\ndry run — would reject {len(pending)} pending proposal(s).\n"
+                    "Re-run with --no-dry-run to apply."
+                )
+            else:
+                typer.echo(
+                    "\nThese were admitted under the pre-2026-08-19 bag-of-words rule and\n"
+                    "would be dropped by extraction today. Reject rather than approve:\n"
+                    "  forge proposals audit-grounding --reject --no-dry-run"
+                )
             raise typer.Exit(code=1)
 
     @proposals_app.command("show")

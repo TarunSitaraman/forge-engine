@@ -181,3 +181,80 @@ class TestAuditCli:
         )
         assert result.exit_code == 1, result.output
         assert "1 ungrounded" in result.output
+
+    def test_reject_is_a_dry_run_by_default(self, tmp_path, store):
+        from typer.testing import CliRunner
+
+        from forge.cli.main import app
+        from forge.domain import ProposalStatus
+
+        store.put_proposal(
+            _proposal("retrieved passages reduces generation grounds hallucination", "p-bad")
+        )
+        store.close()
+
+        (tmp_path / ".git").mkdir()
+        result = CliRunner().invoke(
+            app, ["proposals", "audit-grounding", "--reject"], env=self._env(tmp_path)
+        )
+        assert result.exit_code == 1
+        assert "dry run" in result.output
+
+        from forge.storage import SqliteStore
+
+        reopened = SqliteStore(tmp_path / ".forge" / "forge.db")
+        reopened.initialize()
+        assert reopened.get_proposal("p-bad").status is ProposalStatus.PENDING
+        reopened.close()
+
+    def test_reject_no_dry_run_rejects_only_the_failures(self, tmp_path, store):
+        from typer.testing import CliRunner
+
+        from forge.cli.main import app
+        from forge.domain import ProposalStatus
+        from forge.storage import SqliteStore
+
+        store.put_proposal(_proposal("grounds generation in retrieved passages", "p-good"))
+        store.put_proposal(
+            _proposal("retrieved passages reduces generation grounds hallucination", "p-bad")
+        )
+        store.close()
+
+        (tmp_path / ".git").mkdir()
+        result = CliRunner().invoke(
+            app,
+            ["proposals", "audit-grounding", "--reject", "--no-dry-run"],
+            env=self._env(tmp_path),
+        )
+        assert result.exit_code == 1
+        assert "1 pending proposal(s) rejected" in result.output
+
+        reopened = SqliteStore(tmp_path / ".forge" / "forge.db")
+        reopened.initialize()
+        assert reopened.get_proposal("p-bad").status is ProposalStatus.REJECTED
+        assert reopened.get_proposal("p-good").status is ProposalStatus.PENDING
+        reopened.close()
+
+    def test_an_already_decided_proposal_is_not_overturned(self, tmp_path, store):
+        """A human decision is not this command's to reverse."""
+        from typer.testing import CliRunner
+
+        from forge.cli.main import app
+        from forge.domain import ProposalStatus
+        from forge.storage import SqliteStore
+
+        bad = _proposal("retrieved passages reduces generation grounds hallucination", "p-appr")
+        store.put_proposal(bad.approve(by="human"))
+        store.close()
+
+        (tmp_path / ".git").mkdir()
+        CliRunner().invoke(
+            app,
+            ["proposals", "audit-grounding", "--reject", "--no-dry-run"],
+            env=self._env(tmp_path),
+        )
+
+        reopened = SqliteStore(tmp_path / ".forge" / "forge.db")
+        reopened.initialize()
+        assert reopened.get_proposal("p-appr").status is ProposalStatus.APPROVED
+        reopened.close()
