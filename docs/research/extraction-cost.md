@@ -301,6 +301,41 @@ forge proposals audit-grounding --reject --no-dry-run
 Already-decided proposals are skipped — a human decision is not the audit's to
 overturn.
 
+### The clean number: think-on, ingestion spans (2026-08-20)
+
+One document, a fresh store, reasoning on, no cache and no timeouts —
+the first extraction measurement with no confound in it.
+
+```
+1 source(s) in 1311.16s | 4 spans | 17 concepts | 30 claims | 44 proposals
+LLM calls: 8  cache: {'hits': 0, 'misses': 1, 'writes': 1}
+```
+
+**327 s/span, 164 s/call.** Per-span times were 179 / 502 / 482 / 146 s — a
+3.4× spread within one document, so span size dominates and any single-document
+mean carries wide error bars.
+
+This **supersedes the 228 s/call** figure from the three-span sample, which
+included a timeout and a retry. It is also 3.3× the 49 s/call of the first full
+run — consistent with that run being reasoning-off over spans half this size,
+and notably *less* than the ~5× that a naive stacking of both effects predicts.
+
+| Scope | Spans | Think-on, ingestion spans |
+|---|---:|---:|
+| **`Technologies/Docs/`** | 98 | **8.9 h** |
+| `DSA/01_Patterns/` | 94 | 8.6 h |
+| `Projects/` | 160 | 14.6 h |
+| `Courses/` | 37 | 3.4 h |
+| Whole vault | 1,686 | 153 h (~6.4 days) |
+
+So a correct `Technologies/Docs` run is **an overnight job, and about 1.6×
+the wall time of the confounded one** — 8.9 h against 5.66 h. The extra cost
+buys reasoning-on output over the boundaries the prompt was designed for.
+
+Whole-vault extraction on this hardware remains out of reach at 6.4 days.
+Selective extraction, or the still-unmeasured cloud path, are the only routes
+to full coverage.
+
 ---
 
 ## 3. Why this is resumable
