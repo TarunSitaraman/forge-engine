@@ -6,6 +6,7 @@ Import :func:`get_provider`, never a concrete provider class.
 from __future__ import annotations
 
 from ..config import Settings
+from ..logging import get_logger
 from .base import (
     CALLS,
     CallRecorder,
@@ -24,17 +25,55 @@ from .cloud import CloudProvider
 from .mock import MockProvider, fixture_provider, malformed_provider, unavailable_provider
 from .ollama import OllamaProvider
 
+log = get_logger(__name__)
+
 
 def get_provider(settings: Settings) -> LLMProvider:
-    """Build the configured provider.
+    """Build the configured provider, or its configured fallback.
 
     The only place in the engine that knows which providers exist. Selection is
     **explicit**: an unavailable provider is reported as unavailable, never
     quietly replaced by a different one. See :func:`require_provider`.
+
+    `FORGE_LLM_FALLBACK` relaxes that, but narrowly and on purpose:
+
+    * It is **opt-in**. With nothing set, behaviour is exactly as before.
+    * Failover happens **once, before any work**, decided by a health check —
+      never mid-run and never per call. Whichever provider is returned is the
+      one that answers every call in that run, so the model identity recorded
+      in each derivation key is the model that actually produced the result.
+      A per-call fallback would break that and is deliberately not offered.
+    * It triggers only on *unavailability*. A provider that answers badly is
+      not a provider that is down, and swapping on bad output would silently
+      mix two models' results under one run.
+    * It is **loud**. The switch is logged at warning level and `forge status`
+      reports it.
     """
-    if settings.llm.provider == "mock":
+    primary = _build(settings, settings.llm.provider)
+    if settings.llm.fallback is None:
+        return primary
+
+    try:
+        healthy, detail = primary.health()
+    except Exception as exc:  # a provider that cannot even be probed is down
+        healthy, detail = False, f"{type(exc).__name__}: {exc}"
+    if healthy:
+        return primary
+
+    log.warning(
+        "provider_fallback",
+        requested=settings.llm.provider,
+        using=settings.llm.fallback,
+        reason=detail,
+    )
+    return _build(settings, settings.llm.fallback)
+
+
+def _build(settings: Settings, provider: str) -> LLMProvider:
+    """Construct one named provider. No fallback logic lives here."""
+    if provider == "mock":
         return MockProvider()
-    if settings.llm.provider == "ollama":
+    if provider == "ollama":
         # `llm.base_url` remains the Phase 1-3 spelling and stays authoritative
         # when it has been set away from the default; `llm.ollama.base_url` is
         # the preferred one and wins otherwise.
@@ -51,7 +90,7 @@ def get_provider(settings: Settings) -> LLMProvider:
             max_retries=settings.llm.ollama.max_retries,
             think=settings.llm.ollama.think,
         )
-    if settings.llm.provider == "cloud":
+    if provider == "cloud":
         cloud = settings.llm.cloud
         return CloudProvider(
             vendor=cloud.vendor,

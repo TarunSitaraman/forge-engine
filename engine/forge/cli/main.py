@@ -124,9 +124,17 @@ def status(
     model_identity = settings.llm.models.get("extraction") or next(
         iter(settings.llm.models.values()), "?"
     )
+    # What is *configured* and what is *serving* can differ when a fallback is
+    # set. Report the one doing the work — a status line naming a provider that
+    # is not answering is worse than no status line.
+    serving = settings.llm.provider
     try:
         provider = get_provider(settings)
         provider_ok, provider_detail = provider.health()
+        try:
+            serving = provider.capabilities.name
+        except Exception:  # capabilities may probe the network; keep status alive
+            pass
         # The variant is part of the derivation key, so a mode left set in the
         # environment silently produces a different cached corpus. Reasoning
         # off was measured and rejected (provider-availability.md §8) yet stayed
@@ -148,6 +156,8 @@ def status(
         "store_counts": store.counts(),
         "llm": {
             "provider": settings.llm.provider,
+            "fallback": settings.llm.fallback,
+            "serving": serving,
             "base_url": settings.llm.base_url,
             "models": settings.llm.models,
             "model_identity": model_identity,
@@ -167,7 +177,19 @@ def status(
             "  spans={spans} documents={documents} concepts={concepts} "
             "claims={claims} revisions={revisions}".format(**counts)
         )
-        typer.echo(f"llm provider   : {settings.llm.provider} ({'OK' if provider_ok else 'UNAVAILABLE'})")
+        # If the fallback is serving, the configured provider is by definition
+        # the one that failed its health check. Reporting its state from the
+        # fallback's health would print "ollama (OK)" while ollama is down.
+        fallback_active = not serving.startswith(settings.llm.provider)
+        state = "UNAVAILABLE" if fallback_active else ("OK" if provider_ok else "UNAVAILABLE")
+        typer.echo(f"llm provider   : {settings.llm.provider} ({state})")
+        if settings.llm.fallback:
+            typer.echo(f"  fallback       : {settings.llm.fallback}")
+        if fallback_active:
+            typer.echo(
+                f"  SERVING        : {serving} "
+                f"({'OK' if provider_ok else 'UNAVAILABLE'})  <- fallback is active"
+            )
         typer.echo(f"  model identity : {model_identity}")
         if model_identity.endswith("+nothink"):
             typer.echo(

@@ -607,3 +607,89 @@ class TestOllamaThinking:
 
         assert key_for(False) != key_for(True) != key_for(None)
         assert key_for(False) != key_for(None)
+
+
+class TestProviderFallback:
+    """`FORGE_LLM_FALLBACK` relaxes explicit selection — narrowly, and loudly.
+
+    The engine's rule is that an unavailable provider is reported, never
+    silently replaced, because model identity is part of every derivation key.
+    Fallback is safe only because it is decided ONCE, before any work: whichever
+    provider is returned answers every call in that run, so the identity
+    recorded is the identity that produced the result.
+    """
+
+    def _settings(self, tmp_path, **llm):
+        from forge.config import Settings
+
+        (tmp_path / ".git").mkdir(exist_ok=True)
+        base = Settings.load(vault_path=tmp_path)
+        return base.model_copy(update={"llm": base.llm.model_copy(update=llm)})
+
+    def test_no_fallback_configured_returns_the_primary(self, tmp_path):
+        from forge.llm import get_provider
+        from forge.llm.mock import MockProvider
+
+        settings = self._settings(tmp_path, provider="mock")
+        assert isinstance(get_provider(settings), MockProvider)
+
+    def test_healthy_primary_is_never_replaced(self, tmp_path):
+        from forge.llm import get_provider
+        from forge.llm.mock import MockProvider
+
+        settings = self._settings(tmp_path, provider="mock", fallback="ollama")
+        assert isinstance(get_provider(settings), MockProvider)
+
+    def test_unavailable_primary_falls_back(self, tmp_path):
+        from forge.llm import get_provider
+        from forge.llm.mock import MockProvider
+
+        settings = self._settings(
+            tmp_path,
+            provider="ollama",
+            fallback="mock",
+            base_url="http://127.0.0.1:9",  # nothing listens here
+        )
+        assert isinstance(get_provider(settings), MockProvider)
+
+    def test_the_returned_provider_reports_its_own_identity(self, tmp_path):
+        """The whole safety argument: identity must match who is answering."""
+        from forge.llm import get_provider
+
+        settings = self._settings(
+            tmp_path, provider="ollama", fallback="mock", base_url="http://127.0.0.1:9"
+        )
+        provider = get_provider(settings)
+        assert provider.capabilities.name == "mock"
+
+    def test_a_fallback_equal_to_the_primary_is_refused(self):
+        """model_copy skips validators, so construct the settings properly."""
+        import pytest as _pytest
+
+        from forge.config import LLMSettings
+
+        with _pytest.raises(Exception) as exc:
+            LLMSettings(provider="ollama", fallback="ollama")
+        assert "same as" in str(exc.value)
+
+    def test_a_bad_fallback_is_a_clean_config_error_not_a_traceback(
+        self, monkeypatch, tmp_path
+    ):
+        from forge.config import ConfigError, Settings
+
+        (tmp_path / ".git").mkdir(exist_ok=True)
+        monkeypatch.setenv("FORGE_LLM_PROVIDER", "ollama")
+        monkeypatch.setenv("FORGE_LLM_FALLBACK", "ollama")
+        import pytest as _pytest
+
+        with _pytest.raises(ConfigError) as exc:
+            Settings.load(vault_path=tmp_path)
+        assert "same as" in str(exc.value)
+
+    def test_fallback_is_read_from_the_environment(self, monkeypatch, tmp_path):
+        from forge.config import Settings
+
+        (tmp_path / ".git").mkdir(exist_ok=True)
+        monkeypatch.setenv("FORGE_LLM_PROVIDER", "ollama")
+        monkeypatch.setenv("FORGE_LLM_FALLBACK", "cloud")
+        assert Settings.load(vault_path=tmp_path).llm.fallback == "cloud"

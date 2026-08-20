@@ -120,10 +120,12 @@ CLOUD_PRESETS: dict[str, dict[str, object]] = {
         "api_key_env": "TOGETHER_API_KEY",
         "max_tokens": 8192,
     },
+    # Free tier caps the *context* at 8K (input + output together), so an
+    # 8192 output ceiling cannot be honoured alongside any prompt at all.
     "cerebras": {
         "base_url": "https://api.cerebras.ai",
         "api_key_env": "CEREBRAS_API_KEY",
-        "max_tokens": 8192,
+        "max_tokens": 4096,
     },
     "fireworks": {
         "base_url": "https://api.fireworks.ai/inference",
@@ -243,6 +245,13 @@ class LLMSettings(BaseModel):
     """Provider configuration. Nothing here is required for Phase 1 indexing."""
 
     provider: ProviderName = "ollama"
+    #: Provider to use when `provider` is unreachable at startup. Opt-in and
+    #: off by default: a silent provider swap would attribute derived results
+    #: to a model that never produced them. Failover is decided **once**, by a
+    #: health check before any work, so whichever provider is chosen is the one
+    #: whose identity lands in every derivation key for that run. Forge never
+    #: switches mid-run.
+    fallback: ProviderName | None = None
     #: Retained as the Ollama URL for backwards compatibility with Phases 1-3
     #: and `FORGE_OLLAMA_URL`. `ollama.base_url` is the preferred spelling.
     base_url: str = "http://localhost:11434"
@@ -267,6 +276,16 @@ class LLMSettings(BaseModel):
             return self.models[role]
         except KeyError as exc:  # pragma: no cover - guarded by validator
             raise ConfigError(f"No model configured for role {role!r}") from exc
+
+    @model_validator(mode="after")
+    def _fallback_is_a_different_provider(self) -> LLMSettings:
+        if self.fallback is not None and self.fallback == self.provider:
+            raise ValueError(
+                f"FORGE_LLM_FALLBACK is {self.fallback!r}, the same as "
+                f"FORGE_LLM_PROVIDER. A fallback to the provider that just "
+                f"failed cannot help; leave it unset or name a different one."
+            )
+        return self
 
     @model_validator(mode="after")
     def _all_roles_bound(self) -> LLMSettings:
@@ -338,6 +357,7 @@ class Settings(BaseModel):
         try:
             llm = LLMSettings(
                 provider=env.get("FORGE_LLM_PROVIDER", "ollama"),  # type: ignore[arg-type]
+                fallback=env.get("FORGE_LLM_FALLBACK") or None,  # type: ignore[arg-type]
                 base_url=ollama_url,
                 timeout_seconds=timeout,
                 max_retries=retries,
