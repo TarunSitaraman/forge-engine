@@ -361,7 +361,12 @@ class IngestionPipeline:
             schema_version=self.extractor.schema_version,
         )
 
-        if (cached := self.store.get_derivation(key.value())) is not None:
+        # `--force` means redo the work. It used to stop at re-parsing: the
+        # extraction cache was consulted regardless, so a document whose result
+        # was already stored could not be re-extracted at all short of editing
+        # it or bumping a version. That left no way to recover a bad cached
+        # result — e.g. a PARTIAL written before partials stopped being cached.
+        if not opts.force and (cached := self.store.get_derivation(key.value())) is not None:
             cache.hit()
             log.info("extraction_cache_hit", **key.describe())
             return ExtractionResult.from_dict(cached)

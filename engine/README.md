@@ -19,7 +19,7 @@ Read-only with respect to the Markdown vault. Everything it writes lives in
 pip install -e ".[dev]"     # Python 3.10+
 forge index
 forge diagnostics
-python -m pytest tests -q   # 829 tests, offline, no model required
+python -m pytest tests -q   # 830 tests, offline, no model required
 ```
 
 ## Layout

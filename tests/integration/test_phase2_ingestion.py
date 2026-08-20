@@ -687,3 +687,52 @@ class TestPartialExtractionIsNotCached:
         assert GoodExtractor.calls == after_first, "a cached success must cost no calls"
         assert report.cache.to_dict()["hits"] == 1
         store.close()
+
+
+class TestForceRedoesExtraction:
+    """`--force` has to reach the extraction cache, not stop at re-parsing.
+
+    Without this there is no way to re-extract a document whose result is
+    already cached — which matters for recovering a result stored under an old
+    rule, such as a PARTIAL written before partials stopped being cached.
+    """
+
+    def _pipeline(self, settings, store):
+        from forge.domain import ExtractionStatus
+        from forge.extraction.extractor import ExtractionResult
+        from forge.ingestion import IngestionPipeline
+
+        class CountingExtractor:
+            version = "extractor/test"
+            prompt_version = "p/1"
+            schema_version = "s/1"
+            calls = 0
+
+            def model_id(self):
+                return "test-model"
+
+            def extract(self, spans):
+                CountingExtractor.calls += 1
+                return ExtractionResult(status=ExtractionStatus.SUCCEEDED, llm_calls=1)
+
+        extractor = CountingExtractor()
+        return IngestionPipeline(settings, store, extractor=extractor), CountingExtractor
+
+    def test_force_re_extracts_a_cached_document(self, settings, fixture_vault):
+        from forge.ingestion import IngestOptions
+        from forge.storage import SqliteStore
+
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        pipeline, counter = self._pipeline(settings, store)
+        target = fixture_vault / "DSA" / "01_Patterns" / "DFS.md"
+
+        pipeline.ingest_path(target, IngestOptions(extract=True))
+        cached_run = pipeline.ingest_path(target, IngestOptions(extract=True))
+        assert cached_run.cache.to_dict()["hits"] == 1
+        before_force = counter.calls
+
+        forced = pipeline.ingest_path(target, IngestOptions(extract=True, force=True))
+        assert counter.calls > before_force, "--force must re-run extraction"
+        assert forced.cache.to_dict()["hits"] == 0
+        store.close()
