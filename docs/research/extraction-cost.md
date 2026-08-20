@@ -413,11 +413,19 @@ Recommended order — highest concept density first:
 
 ```powershell
 # Windows / ASUS. Provider and model come from ~/.config/forge/forge.env, so
-# the only thing worth overriding per-run is the timeout. 120 s (the default)
-# and 300 s have both been exceeded by a single call on this hardware, and a
-# retry costs the whole timeout before any work resumes — see
-# provider-availability.md §7. 900 is headroom, not a measurement.
-$env:FORGE_LLM_TIMEOUT="900"
+# the only thing worth overriding per-run is the timeout.
+#
+# PICK THIS DEliberately — bigger is NOT safer. Ollama retries twice, so the
+# worst case for one call is timeout x 3 before any work resumes. At 900 s that
+# is 45 minutes of waiting per stalled call, and 2026-08-20 measured exactly
+# that: one span burned 2,792 s, of which 2,700 s was three timeouts and 92 s
+# was the attempt that succeeded. The stalls are hangs, not slow completions —
+# the retry that worked was among the fastest calls of the run.
+#
+# Successful calls have measured 73-250 s on this hardware. 420 s gives ~1.7x
+# headroom over the slowest observed success and caps a stalled call at 21
+# minutes instead of 45.
+$env:FORGE_LLM_TIMEOUT="420"
 
 # Check what will actually be used before committing hours to it:
 forge status

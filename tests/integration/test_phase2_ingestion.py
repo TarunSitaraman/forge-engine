@@ -609,3 +609,81 @@ def _all_spans(store):
         for document in store.documents_for_source(source.id):
             spans.extend(store.spans_for_document(document.id))
     return spans
+
+
+class TestPartialExtractionIsNotCached:
+    """A transient call failure must not become a permanent cached result.
+
+    Observed 2026-08-20: three consecutive timeouts on one span's concept call
+    produced `concepts=0`, status PARTIAL — which was then cached. Re-running
+    reported a cache hit and never retried, so a 15-minute network stall became
+    a permanently concept-free document.
+    """
+
+    def test_a_partial_result_is_not_written_to_the_cache(self, settings, fixture_vault):
+        from forge.domain import ExtractionStatus
+        from forge.extraction.extractor import ExtractionResult
+        from forge.ingestion import IngestionPipeline, IngestOptions
+        from forge.storage import SqliteStore
+
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+
+        class PartialExtractor:
+            version = "extractor/test"
+            prompt_version = "p/1"
+            schema_version = "s/1"
+            calls = 0
+
+            def model_id(self):
+                return "test-model"
+
+            def extract(self, spans):
+                PartialExtractor.calls += 1
+                return ExtractionResult(status=ExtractionStatus.PARTIAL, llm_calls=1)
+
+        extractor = PartialExtractor()
+        pipeline = IngestionPipeline(settings, store, extractor=extractor)
+        target = fixture_vault / "DSA" / "01_Patterns" / "DFS.md"
+
+        pipeline.ingest_path(target, IngestOptions(extract=True))
+        after_first = PartialExtractor.calls
+
+        report = pipeline.ingest_path(target, IngestOptions(extract=True))
+        assert PartialExtractor.calls > after_first, "a partial result must be retried"
+        assert report.cache.to_dict()["hits"] == 0
+        store.close()
+
+    def test_a_successful_result_is_still_cached(self, settings, fixture_vault):
+        from forge.domain import ExtractionStatus
+        from forge.extraction.extractor import ExtractionResult
+        from forge.ingestion import IngestionPipeline, IngestOptions
+        from forge.storage import SqliteStore
+
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+
+        class GoodExtractor:
+            version = "extractor/test"
+            prompt_version = "p/1"
+            schema_version = "s/1"
+            calls = 0
+
+            def model_id(self):
+                return "test-model"
+
+            def extract(self, spans):
+                GoodExtractor.calls += 1
+                return ExtractionResult(status=ExtractionStatus.SUCCEEDED, llm_calls=1)
+
+        extractor = GoodExtractor()
+        pipeline = IngestionPipeline(settings, store, extractor=extractor)
+        target = fixture_vault / "DSA" / "01_Patterns" / "DFS.md"
+
+        pipeline.ingest_path(target, IngestOptions(extract=True))
+        after_first = GoodExtractor.calls
+
+        report = pipeline.ingest_path(target, IngestOptions(extract=True))
+        assert GoodExtractor.calls == after_first, "a cached success must cost no calls"
+        assert report.cache.to_dict()["hits"] == 1
+        store.close()

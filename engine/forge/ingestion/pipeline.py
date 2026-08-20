@@ -371,10 +371,23 @@ class IngestionPipeline:
         result = self.extractor.extract(spans)
         result.llm_calls = max(result.llm_calls, CALLS.count - before)
 
-        # Only cache outcomes worth reusing. Caching a provider-unavailable
-        # result would make the run permanently model-free once Ollama came
-        # back up.
-        if result.status in (ExtractionStatus.SUCCEEDED, ExtractionStatus.PARTIAL):
+        # Only cache outcomes worth reusing.
+        #
+        # SUCCEEDED only, deliberately. PARTIAL means some calls failed, and on
+        # this hardware that is overwhelmingly a timeout — a transient failure,
+        # not a property of the input. Caching it writes the transient failure
+        # into the derivation key permanently: a span whose concept call timed
+        # out returns `concepts=0` forever, and re-running reports a cache hit
+        # rather than retrying. Observed 2026-08-20, when `_index.md` lost its
+        # concepts to three consecutive timeouts and cached the empty result.
+        #
+        # This is the same reasoning that already excluded provider-unavailable
+        # results, applied one step further. The cost is that a span which fails
+        # deterministically re-spends its calls on every run; the benefit is
+        # that a transient failure never becomes permanent. Given extraction is
+        # resumable and re-running a *successful* scope is still free, that
+        # trade is the right way round.
+        if result.status is ExtractionStatus.SUCCEEDED:
             self.store.put_derivation(
                 key.value(),
                 "extraction",
