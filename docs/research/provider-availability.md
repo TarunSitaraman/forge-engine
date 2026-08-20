@@ -428,3 +428,52 @@ $env:FORGE_LLM_TIMEOUT="300"
 $env:FORGE_OLLAMA_THINK="0"
 python scripts\assessment_eval.py --provider ollama
 ```
+
+
+---
+
+## 9. `+nothink` ran an entire extraction unnoticed (2026-08-20)
+
+§8 measured reasoning-off, rejected it, and recorded that its effect on
+*extraction* was unmeasured. It was not unmeasured — it was governing extraction
+the whole time, and nothing said so.
+
+`FORGE_OLLAMA_THINK=0` was exported into a PowerShell session for the §8
+experiment and stayed there. The next day's full `Technologies/Docs` run —
+5.66 h, 416 calls, 2,169 proposals — ran with reasoning off. The tell only
+surfaced by accident, in a cache-hit log line:
+
+```
+extraction_cache_hit  model_id=qwen3:8b+nothink  prompt_version=extract-prompts/0.3.0
+```
+
+**The caching layer behaved correctly throughout.** `identity_variant()` appends
+`+nothink`, that is part of the derivation key, and think-on and think-off
+results never shared an entry. The mechanism designed to keep the two modes
+apart did its job. What was missing was any way to *see* which mode was active:
+`forge status` reported the provider and its reachability but never the model
+identity extraction would cache under.
+
+Fixed: `forge status` now prints `model identity` including the variant, and
+says plainly when reasoning is off. Three tests pin it.
+
+### Two conclusions, and one of them is uncomfortable
+
+**The cost numbers make more sense now.** The run measured 49 s/call over
+~1,100-char spans. §8 measured reasoning-off as ~2.5× faster on typical cases,
+which puts a think-on equivalent near 120 s/call — and the 228 s/call figure
+from the earlier structural-span sample is roughly double that for roughly
+double the span size. Three measurements that looked mutually inconsistent are
+consistent once mode and span size are both accounted for.
+
+**The quality assessment of that run is confounded.** A 25+25 sample put claims
+at ~60-70% usable and concepts at ~35-40%, and that was attributed to the
+extraction prompt. The prompt was genuinely underspecified — it never said what
+qualifies as a concept — so the `0.3.0` rewrite stands on its own. But the
+*magnitude* cannot be attributed cleanly: some share of that junk may be
+reasoning-off, which §8 already showed degrades classification. **Do not quote
+"~35-40% concept precision" as a property of the prompt.** It is a property of
+one run under a mode nobody knew was on.
+
+Separating the two needs a think-on run of the same scope, which is the next
+measurement.

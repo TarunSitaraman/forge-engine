@@ -336,3 +336,41 @@ class TestProposalSampling:
         )
         assert result.exit_code == 0
         assert "random sample of 5 from 5" in result.output
+
+
+class TestStatusReportsModelIdentity:
+    """`forge status` must show the identity extraction will actually cache under.
+
+    FORGE_OLLAMA_THINK=0 appends "+nothink" to the model id, which is part of
+    the derivation key. It was left exported after the 2026-08-19 experiment
+    and silently governed a 5.7-hour extraction run, because nothing in the CLI
+    displayed it.
+    """
+
+    def _env(self, settings, **extra):
+        return {
+            "FORGE_VAULT_PATH": str(settings.vault_path),
+            "FORGE_STATE_DIR": str(settings.state_dir),
+            **extra,
+        }
+
+    def test_identity_is_plain_when_no_mode_is_set(self, settings):
+        env = self._env(settings, FORGE_LLM_PROVIDER="ollama")
+        result = runner.invoke(app, ["status"], env=env)
+        assert result.exit_code == 0
+        assert "model identity :" in result.stdout
+        assert "+nothink" not in result.stdout
+        assert "reasoning is OFF" not in result.stdout
+
+    def test_reasoning_off_is_shown_and_flagged(self, settings):
+        env = self._env(settings, FORGE_LLM_PROVIDER="ollama", FORGE_OLLAMA_THINK="0")
+        result = runner.invoke(app, ["status"], env=env)
+        assert result.exit_code == 0
+        assert "+nothink" in result.stdout
+        assert "reasoning is OFF" in result.stdout
+
+    def test_identity_is_in_the_json_payload(self, settings):
+        env = self._env(settings, FORGE_LLM_PROVIDER="ollama", FORGE_OLLAMA_THINK="0")
+        result = runner.invoke(app, ["status", "--json"], env=env)
+        assert result.exit_code == 0
+        assert json.loads(result.stdout)["llm"]["model_identity"].endswith("+nothink")

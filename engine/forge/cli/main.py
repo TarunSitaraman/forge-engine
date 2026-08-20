@@ -121,8 +121,17 @@ def status(
     previous = {s.locator: s.content_hash for s in store.list_sources()}
 
     provider_ok, provider_detail = False, "not checked"
+    model_identity = settings.llm.models.get("extraction") or next(
+        iter(settings.llm.models.values()), "?"
+    )
     try:
-        provider_ok, provider_detail = get_provider(settings).health()
+        provider = get_provider(settings)
+        provider_ok, provider_detail = provider.health()
+        # The variant is part of the derivation key, so a mode left set in the
+        # environment silently produces a different cached corpus. Reasoning
+        # off was measured and rejected (provider-availability.md §8) yet stayed
+        # exported for a whole extraction run because nothing displayed it.
+        model_identity += str(getattr(provider, "identity_variant", "") or "")
     except ProviderUnavailable as exc:
         provider_detail = str(exc)
     except Exception as exc:  # provider misconfiguration must not break status
@@ -141,6 +150,7 @@ def status(
             "provider": settings.llm.provider,
             "base_url": settings.llm.base_url,
             "models": settings.llm.models,
+            "model_identity": model_identity,
             "reachable": provider_ok,
             "detail": provider_detail,
         },
@@ -158,6 +168,12 @@ def status(
             "claims={claims} revisions={revisions}".format(**counts)
         )
         typer.echo(f"llm provider   : {settings.llm.provider} ({'OK' if provider_ok else 'UNAVAILABLE'})")
+        typer.echo(f"  model identity : {model_identity}")
+        if model_identity.endswith("+nothink"):
+            typer.echo(
+                "  NOTE: reasoning is OFF (FORGE_OLLAMA_THINK=0). Measured and "
+                "rejected —\n         see docs/research/provider-availability.md §8."
+            )
         typer.echo(f"  {provider_detail}")
     store.close()
 
