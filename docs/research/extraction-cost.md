@@ -336,6 +336,48 @@ Whole-vault extraction on this hardware remains out of reach at 6.4 days.
 Selective extraction, or the still-unmeasured cloud path, are the only routes
 to full coverage.
 
+### Did the `0.3.0` prompt work? Partly — and the residue is not a prompt problem
+
+Same document, reasoning on, new prompt. All 14 concept proposals and 20 of 30
+claims read by hand.
+
+| Failure mode | `0.2.0`, think-off | `0.3.0`, think-on |
+|---|---:|---:|
+| Concept junk (`RAM`, `Answer`, `maxmemory`, `VARCHAR(n)`) | ~60% of sample | **0** |
+| Document-referential claims ("The text provides…") | ~8% | **0** |
+| Near-duplicate claims | ~12% | **25%** |
+| Table content mishandled | 2.56% ungrounded | 15%, new shape |
+
+**The two rules that could work, did.** Every one of the 14 concepts is a real
+RAG concept — `Reranking`, `Recall@k`, `Metadata filtering`, `hybrid (keyword +
+vector) search`. Nothing in the `RAM`/`Fluency` class survived. No claim refers
+to the document.
+
+**The two that failed, failed structurally.**
+
+*Deduplication cannot be a prompt rule.* The extractor sends **one span per
+call**, so the model physically cannot see that another span already produced
+"Evaluating retrieval quality involves calculating recall at k" when it emits
+"Evaluating a RAG system requires a labeled evaluation set with recall@k
+metrics". Three clusters in 20 claims, 5 redundant. The same applies to
+concepts: `RAG` / `Retrieval Augmented Generation`, `Reranking` / `Reranker`,
+`Hybrid search` / `hybrid (keyword + vector) search` — three alias pairs in 14.
+Asking the prompt to fix this was a category error. **Cross-span dedup is
+deterministic post-processing, and belongs in code.**
+
+*Tables changed shape rather than resolving.* The `0.3.0` rule stopped the model
+rewriting rows as prose, which removed the grounding failures. But it now emits
+raw table cells as claim *statements*: "How many chunks retrieved; higher recall
+but more dilution/cost". The quote is honest; the statement is a fragment, not
+an assertion. Fixing this properly means the chunker or the prompt treating a
+parameter table as a unit rather than a source of sentences.
+
+**Usable-claim rate is ~60% either way, but the residue changed character** —
+from junk that must be rejected to duplicates that can be merged mechanically.
+That is the more tractable failure, and it does not require another model run:
+like the grounding audit (§2b), dedup is deterministic and applies retroactively
+to proposals already extracted. **It is not a reason to delay a run.**
+
 ---
 
 ## 3. Why this is resumable
