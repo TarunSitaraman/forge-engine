@@ -77,6 +77,28 @@ QUOTE_GROUNDING_THRESHOLD = 0.9
 #: Minimum span length worth a model call. Low on purpose: see `_select`.
 MIN_SPAN_CHARS = 40
 
+#: A span whose lines are this proportion Markdown links is a navigation
+#: artifact — a table of contents or an index — not prose. See `_is_navigation`.
+#:
+#: Measured over all 1,532 vault spans on 2026-08-20 rather than chosen by feel.
+#: Prose sits far below: median 0.079, p90 0.280, p95 0.440. The index files
+#: form a clearly separated cluster at 0.75-0.90 (`DSA/00_Index/*`,
+#: `Technologies/Prompt-Library/_index.md`, the project `_index.md` hubs).
+#: 0.5 sits in the empty gap between them and skips 59 spans, 3.9% of the
+#: corpus — 118 model calls that would produce concepts whose only evidence is
+#: a link row.
+#:
+#: **Deliberately not lowered further.** `Technologies/Docs/_index.md`'s first
+#: span scores 0.39 because it mixes a heading and an intro paragraph with its
+#: table, and it is the span that has repeatedly stalled the model. Dropping the
+#: threshold to catch it would cross p95 and start discarding prose, trading a
+#: known-good rule for one document. Exclude that file from a run instead.
+NAVIGATION_LINK_RATIO = 0.5
+
+#: Below this many linked lines the ratio is noise: a two-line section that
+#: happens to contain one link is still prose.
+NAVIGATION_MIN_LINKS = 4
+
 
 @dataclass
 class ConceptCandidate:
@@ -407,9 +429,46 @@ class CandidateExtractor:
         the wrong failure: better to spend a cheap call than to lose the
         concept.
         """
-        usable = [s for s in spans if len(s.text.strip()) >= MIN_SPAN_CHARS]
+        usable = [
+            s
+            for s in spans
+            if len(s.text.strip()) >= MIN_SPAN_CHARS and not _is_navigation(s.text)
+        ]
         chosen = sorted(usable, key=lambda s: -len(s.text))[: self.max_spans]
         return sorted(chosen, key=lambda s: s.ordinal)
+
+
+def _is_navigation(text: str) -> bool:
+    """Is this span a table of contents rather than prose?
+
+    An index span — `| Azure | [`azure.md`](azure.md) |` repeated 18 times —
+    contains no assertions and no concepts of its own. Extracting from it is
+    wrong twice over: it produces a concept whose only evidence is a navigation
+    row, when that concept's canonical home is the document being linked to,
+    which is exactly the duplication the vault forbids.
+
+    It is also where the model reliably stalls. `Technologies/Docs/_index.md`
+    timed out three consecutive times on 2026-08-19 and again on 2026-08-20,
+    always on the same link-table span: asked for the concepts in a list of
+    every technology in the vault, the model generates until it runs out of
+    budget. Skipping costs nothing and removes 21 minutes of dead waiting per
+    run at a 420 s timeout.
+
+    Deliberately conservative — it must not catch prose that merely cites
+    sources. A span qualifies only when it has several linked lines *and* they
+    dominate it.
+    """
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines:
+        return False
+    linked = sum(1 for line in lines if _LINK.search(line))
+    if linked < NAVIGATION_MIN_LINKS:
+        return False
+    return linked / len(lines) >= NAVIGATION_LINK_RATIO
+
+
+#: Markdown inline links and wikilinks.
+_LINK = re.compile(r"\[[^\]]*\]\([^)]*\)|\[\[[^\]]+\]\]")
 
 
 # -- provenance ------------------------------------------------------------

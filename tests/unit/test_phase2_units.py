@@ -485,3 +485,59 @@ class TestPromptContract:
         old = extraction_key(prompt_version="extract-prompts/0.2.0", **base)
         new = extraction_key(prompt_version="extract-prompts/0.3.0", **base)
         assert old.value() != new.value()
+
+
+class TestNavigationSpansAreNotExtracted:
+    """A table of contents has no concepts of its own.
+
+    Extracting from an index span produces a concept whose only evidence is a
+    navigation row, when that concept's canonical home is the document being
+    linked to — the duplication the vault exists to prevent.
+
+    The threshold was measured across all 1,532 vault spans, not chosen: prose
+    has median link-line ratio 0.079 and p95 0.440, while index files cluster
+    at 0.75-0.90. 0.5 sits in the gap.
+    """
+
+    INDEX = "\n".join(
+        ["# Docs", "", "| Technology | File |", "|---|---|"]
+        + [f"| Tech{i} | [`t{i}.md`](t{i}.md) |" for i in range(18)]
+    )
+    PROSE = (
+        "Retrieval Augmented Generation grounds generation in retrieved passages.\n"
+        "It reduces hallucination on open-domain questions considerably.\n"
+        "See [the RAG doc](rag.md) for the full treatment.\n"
+        "Chunking strategy matters more than embedding choice in practice.\n"
+    )
+
+    def test_an_index_span_is_recognised(self):
+        from forge.extraction.extractor import _is_navigation
+
+        assert _is_navigation(self.INDEX) is True
+
+    def test_prose_that_cites_a_source_is_not(self):
+        from forge.extraction.extractor import _is_navigation
+
+        assert _is_navigation(self.PROSE) is False
+
+    def test_a_short_span_with_one_link_is_not(self):
+        """Below the link-count floor the ratio is noise."""
+        from forge.extraction.extractor import _is_navigation
+
+        assert _is_navigation("A definition.\nSee [x](x.md).") is False
+
+    def test_navigation_spans_cost_no_model_calls(self):
+        from forge.extraction.extractor import CandidateExtractor
+        from forge.llm import MockProvider
+
+        extractor = CandidateExtractor(MockProvider(default_response="{}"))
+        selected = extractor._select([make_span(self.INDEX, "sp-index")])
+        assert selected == []
+
+    def test_prose_spans_are_still_selected(self):
+        from forge.extraction.extractor import CandidateExtractor
+        from forge.llm import MockProvider
+
+        extractor = CandidateExtractor(MockProvider(default_response="{}"))
+        selected = extractor._select([make_span(self.PROSE, "sp-prose")])
+        assert len(selected) == 1
