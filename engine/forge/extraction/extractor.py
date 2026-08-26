@@ -145,6 +145,10 @@ class ExtractionResult:
     failures: list[dict[str, str]] = field(default_factory=list)
     model_id: str | None = None
     provider: str | None = None
+    #: The provider became unusable — a rejected credential, a vanished
+    #: endpoint. Distinct from a failed span: retrying cannot help, and every
+    #: remaining call would fail identically. The pipeline aborts the run on it.
+    provider_unavailable: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -270,6 +274,16 @@ class CandidateExtractor:
             if failure:
                 result.failures.append(failure)
                 span_ok = False
+                if failure["kind"] == "provider_unavailable":
+                    # A rejected credential is not a bad span. Continuing would
+                    # make one identically-failing call per remaining span —
+                    # 190 of them on 2026-08-22, reported as `llm_calls: 0`
+                    # against a rate-limited free tier. Stop at the first one.
+                    result.provider_unavailable = True
+                    result.status = ExtractionStatus.FAILED
+                    result.duration_seconds = time.perf_counter() - started
+                    log.warning("extraction_aborted_provider_unavailable", error=failure["error"])
+                    return result
             result.concepts.extend(concepts)
 
             claims, calls, failure, drops = self._claims(span)

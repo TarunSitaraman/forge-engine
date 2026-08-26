@@ -105,6 +105,22 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             f"{totals['claims_proposed']} claims | {totals['proposals_created']} proposals"
         )
         typer.echo(f"LLM calls: {totals['llm_calls']}  cache: {report.cache.to_dict()}")
+
+        if report.aborted:
+            typer.echo(
+                f"\nRUN ABORTED after {len(report.sources)} of {report.attempted_targets} "
+                f"source(s): {report.abort_reason}",
+                err=True,
+            )
+            typer.echo(
+                "The provider rejected the request, so every remaining call would fail\n"
+                "identically. Nothing was cached. Check the credential named in\n"
+                "FORGE_CLOUD_PRESET's api_key_env (`forge status` shows which), then re-run —\n"
+                "completed sources are served from cache.",
+                err=True,
+            )
+            store.close()
+            raise typer.Exit(code=2)
         if not extract:
             typer.echo("(deterministic ingestion only — pass --extract for concept/claim candidates)")
         store.close()

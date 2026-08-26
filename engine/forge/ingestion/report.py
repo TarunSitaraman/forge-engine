@@ -40,6 +40,10 @@ class SourceReport:
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
+    #: The provider itself became unusable while processing this source.
+    provider_unavailable: bool = False
+    provider_error: str | None = None
+
     @property
     def ok(self) -> bool:
         return self.status in (IngestionStatus.INGESTED, IngestionStatus.UNCHANGED)
@@ -75,6 +79,13 @@ class IngestionReport:
     cache: CacheStats = field(default_factory=CacheStats)
     duration_seconds: float = 0.0
 
+    #: The run stopped early rather than completing every target.
+    aborted: bool = False
+    abort_reason: str | None = None
+    #: How many targets the run set out to process, so an abort can say
+    #: "3 of 19" rather than just reporting the three it reached.
+    attempted_targets: int = 0
+
     def add(self, report: SourceReport) -> SourceReport:
         self.sources.append(report)
         return report
@@ -106,6 +117,8 @@ class IngestionReport:
             "by_status": self.by_status(),
             "cache": self.cache.to_dict(),
             "duration_seconds": round(self.duration_seconds, 3),
+            "aborted": self.aborted,
+            "abort_reason": self.abort_reason,
             "sources": [s.to_dict() for s in self.sources],
         }
 

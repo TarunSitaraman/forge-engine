@@ -115,9 +115,27 @@ class IngestionPipeline:
             report.duration_seconds = time.perf_counter() - started
             return report
 
+        report.attempted_targets = len(targets)
         for position, target in enumerate(targets, start=1):
             # Rebuilt per source so each file sees what earlier files proposed.
-            report.add(self._ingest_one(target, opts, self._matcher(), report.cache))
+            source_report = self._ingest_one(target, opts, self._matcher(), report.cache)
+            report.add(source_report)
+
+            # A provider that rejected the credential will reject the next call
+            # too. Grinding through the remaining sources produces one doomed
+            # call per span, burns a rate-limited quota, and buries the real
+            # error under a screen of identical ones. Stop and say why.
+            if source_report.provider_unavailable:
+                report.aborted = True
+                report.abort_reason = source_report.provider_error or "provider unavailable"
+                log.error(
+                    "ingest_aborted",
+                    reason=report.abort_reason,
+                    completed=position,
+                    of=len(targets),
+                )
+                break
+
             if opts.extract:
                 # Extraction runs for hours; a run with no visible progress
                 # cannot be distinguished from a stalled one. The estimate is
@@ -271,6 +289,12 @@ class IngestionPipeline:
         if opts.extract and spans:
             result = self._extract(source, spans, opts, cache)
             report.extraction_status = result.status
+            report.provider_unavailable = result.provider_unavailable
+            if result.provider_unavailable:
+                report.provider_error = next(
+                    (f["error"] for f in result.failures if f["kind"] == "provider_unavailable"),
+                    None,
+                )
             report.llm_calls = result.llm_calls
             report.concepts_proposed = len(result.concepts)
             report.claims_proposed = len(result.claims)

@@ -736,3 +736,93 @@ class TestForceRedoesExtraction:
         assert counter.calls > before_force, "--force must re-run extraction"
         assert forced.cache.to_dict()["hits"] == 0
         store.close()
+
+
+class TestCredentialRejectionAbortsTheRun:
+    """A rejected credential must stop the run, not repeat itself per span.
+
+    Observed 2026-08-22: a bad GROQ_API_KEY produced ~190 doomed HTTP calls
+    across 19 sources, reported `llm_calls: 0`, printed `[ok]` on every source,
+    and buried the real cause under a screen of identical errors. A 401 is not
+    a bad span — retrying cannot help and every remaining call fails the same
+    way, while burning a rate-limited quota.
+    """
+
+    def _pipeline(self, settings, store):
+        from forge.ingestion import IngestionPipeline
+        from forge.llm.base import ProviderUnavailable
+
+        class RejectingProvider:
+            calls = 0
+            identity_variant = ""
+
+            @property
+            def capabilities(self):
+                from forge.llm.base import ProviderCapabilities
+
+                return ProviderCapabilities(
+                    name="cloud:openai",
+                    supports_structured_output=True,
+                    supports_streaming=False,
+                    available_models=("some-model",),
+                )
+
+            def health(self):
+                return True, "reachable"  # auth is checked per call, not by health
+
+            def structured(self, request, schema):
+                RejectingProvider.calls += 1
+                raise ProviderUnavailable(
+                    "cloud provider rejected the credential in GROQ_API_KEY (401)"
+                )
+
+            def complete(self, request):
+                return self.structured(request, None)
+
+        from forge.extraction import CandidateExtractor
+
+        provider = RejectingProvider()
+        return IngestionPipeline(settings, store, extractor=CandidateExtractor(provider)), RejectingProvider
+
+    def test_the_run_aborts_at_the_first_rejection(self, settings, fixture_vault):
+        from forge.ingestion import IngestOptions
+        from forge.storage import SqliteStore
+
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        pipeline, provider = self._pipeline(settings, store)
+
+        report = pipeline.ingest_path(fixture_vault, IngestOptions(extract=True))
+
+        assert report.aborted is True
+        assert "401" in (report.abort_reason or "")
+        # One source attempted, not every source in the vault.
+        assert len(report.sources) == 1
+        # And one call, not one per span.
+        assert provider.calls == 1
+        store.close()
+
+    def test_nothing_is_cached_from_an_aborted_run(self, settings, fixture_vault):
+        from forge.ingestion import IngestOptions
+        from forge.storage import SqliteStore
+
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        pipeline, _ = self._pipeline(settings, store)
+
+        report = pipeline.ingest_path(fixture_vault, IngestOptions(extract=True))
+        assert report.cache.to_dict()["writes"] == 0
+        store.close()
+
+    def test_the_abort_is_visible_in_json(self, settings, fixture_vault):
+        from forge.ingestion import IngestOptions
+        from forge.storage import SqliteStore
+
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        pipeline, _ = self._pipeline(settings, store)
+
+        payload = pipeline.ingest_path(fixture_vault, IngestOptions(extract=True)).to_dict()
+        assert payload["aborted"] is True
+        assert "401" in payload["abort_reason"]
+        store.close()
