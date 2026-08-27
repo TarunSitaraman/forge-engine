@@ -382,6 +382,74 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         store.close()
 
     @app.command()
+    def ask(
+        question: str = typer.Argument(..., help="What you want to know."),
+        vault: Optional[Path] = typer.Option(None),
+        passages: int = typer.Option(8, help="Spans to put in front of the model."),
+        semantic: bool = typer.Option(False, "--semantic", help="Re-rank with embeddings."),
+        show_passages: bool = typer.Option(False, "--show-passages"),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Answer a question from the vault, citing every statement.
+
+        One model call. Retrieval does the work; the model only writes up what
+        was retrieved, and every citation is checked against the passages
+        actually supplied. If retrieval finds nothing, no call is made and you
+        are told the vault has nothing — the model never falls back on its own
+        knowledge, which would make the answer untraceable.
+
+        Exits 1 when the vault cannot answer, or when a citation does not
+        resolve, so it composes in a script.
+        """
+        from ..answering import Answerer
+        from ..llm import get_provider
+        from ..llm.base import ProviderUnavailable
+        from ..retrieval import SearchService
+
+        settings = settings_factory(vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+
+        provider = None
+        try:
+            provider = get_provider(settings)
+        except ProviderUnavailable as exc:
+            typer.echo(f"no model available: {exc}", err=True)
+        except Exception as exc:
+            typer.echo(f"provider error: {type(exc).__name__}: {exc}", err=True)
+
+        answer = Answerer(
+            SearchService(store, embeddings=_embedding_provider(settings, "hashing")),
+            provider,
+            passages=passages,
+        ).ask(question, semantic=semantic)
+        store.close()
+
+        if _emit(answer.to_dict(), json_out):
+            raise typer.Exit(code=0 if (answer.answered and answer.grounded) else 1)
+
+        typer.echo(answer.text)
+        if answer.sources():
+            typer.echo("\nsources:")
+            for n, src in zip(answer.cited, answer.sources()):
+                typer.echo(f"  [{n}] {src}")
+        if answer.invalid_citations:
+            typer.echo(
+                f"\nWARNING: the answer cited {answer.invalid_citations}, which were "
+                f"never supplied — only {len(answer.passages)} passages were given. "
+                f"Treat those statements as unsupported.",
+                err=True,
+            )
+        if show_passages:
+            typer.echo("\npassages considered:")
+            for i, hit in enumerate(answer.passages, 1):
+                typer.echo(f"  [{i}] {hit.citation}  (score {hit.score:.3f})")
+        typer.echo(f"\nllm calls: {answer.llm_calls}")
+
+        if not answer.answered or not answer.grounded:
+            raise typer.Exit(code=1)
+
+    @app.command()
     def bootstrap(
         vault: Optional[Path] = typer.Option(None),
         apply: bool = typer.Option(

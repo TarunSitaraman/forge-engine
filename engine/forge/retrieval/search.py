@@ -15,7 +15,9 @@ any caller.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import re
+
+from dataclasses import dataclass, field, replace
 from typing import Any, Sequence
 
 from ..domain import Concept, Document, ProvenanceTier, Source, Span, TrustTier
@@ -27,6 +29,9 @@ from ..storage.sqlite_store import SqliteStore
 log = get_logger(__name__)
 
 
+_WORD_RE = re.compile(r"[a-z0-9]+")
+
+
 @dataclass
 class SearchQuery:
     """A retrieval request. All filters are optional and combine with AND."""
@@ -35,6 +40,19 @@ class SearchQuery:
     limit: int = 20
     #: Restrict to these source locators (substring match).
     source_contains: str | None = None
+    #: Drop spans whose source locator starts with any of these path prefixes.
+    #:
+    #: Needed because the vault and the engine's own documentation share one
+    #: index: `docs/` describes how Forge works, and answering "what is RAG?"
+    #: from `docs/cli.md` retrieves the manual instead of the knowledge.
+    #: Measured before this existed, `docs/` took five of the top eight spans.
+    #:
+    #: **Prefix, not substring** — that distinction cost an hour. A substring
+    #: test for `"docs/"` also matches `Technologies/Docs/rag.md`, so excluding
+    #: the engine manual silently deleted the entire canonical technology
+    #: reference folder, and the best possible answer to "what is retrieval
+    #: augmented generation?" stopped appearing anywhere in the top 40.
+    exclude_sources: tuple[str, ...] = ()
     #: Restrict to these source kinds, e.g. {"pdf"}.
     source_kinds: set[str] = field(default_factory=set)
     trust_tiers: set[TrustTier] = field(default_factory=set)
@@ -44,6 +62,16 @@ class SearchQuery:
     heading_contains: str | None = None
     #: Use embeddings to re-rank when available.
     semantic: bool = False
+    #: Multiply a hit's score when the query's terms appear in the span's
+    #: heading path or its source's filename. 1.0 disables it.
+    #:
+    #: BM25 scores a span by its own text, so a page *named* for the topic
+    #: loses to a page that merely mentions it often. Asking "what is retrieval
+    #: augmented generation?" ranked four Prompt-Library spans above
+    #: `Technologies/Docs/rag.md`, the canonical reference, which did not make
+    #: the top eight at all. In a vault whose organising rule is one canonical
+    #: home per concept, the filename is a strong relevance signal.
+    title_boost: float = 1.0
 
 
 @dataclass
@@ -127,11 +155,35 @@ class SearchService:
             if self._passes(hit, query):
                 hits.append(hit)
 
+        if query.title_boost != 1.0:
+            hits = [self._boosted(h, query) for h in hits]
+
         if query.semantic and self.semantic_available:
             hits = self._rerank(query.text, hits)
 
         hits.sort(key=lambda h: -h.score)
         return hits[: query.limit]
+
+    def _boosted(self, hit: SearchHit, query: SearchQuery) -> SearchHit:
+        """Raise a hit whose heading path or filename matches the query.
+
+        Boost is applied once, not per matching term: a filename that matches
+        the topic is one signal, and compounding it would let a long query
+        overwhelm the text score entirely.
+        """
+        terms = {t for t in _WORD_RE.findall(query.text.lower()) if len(t) > 2}
+        if not terms:
+            return hit
+
+        haystacks = [" ".join(hit.span.heading_path).lower()]
+        if hit.source is not None:
+            stem = hit.source.locator.rsplit("/", 1)[-1]
+            haystacks.append(stem.removesuffix(".md").replace("-", " ").lower())
+
+        matched = any(t in hay for hay in haystacks for t in terms)
+        if not matched:
+            return hit
+        return replace(hit, score=hit.score * query.title_boost)
 
     def _passes(self, hit: SearchHit, query: SearchQuery) -> bool:
         source, span = hit.source, hit.span
@@ -139,6 +191,10 @@ class SearchService:
             source is None or query.source_contains.lower() not in source.locator.lower()
         ):
             return False
+        if query.exclude_sources and source is not None:
+            locator = source.locator.lower().lstrip("./")
+            if any(locator.startswith(bad.lower()) for bad in query.exclude_sources):
+                return False
         if query.source_kinds and (source is None or source.kind.value not in query.source_kinds):
             return False
         if query.trust_tiers and (source is None or source.trust_tier not in query.trust_tiers):

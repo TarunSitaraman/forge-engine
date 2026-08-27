@@ -264,3 +264,63 @@ class TestLookups:
         assert len(service.concepts("rag")) == 1
         assert len(service.concepts("retrieval augmented")) == 1, "aliases are searched"
         assert service.concepts("nothing") == []
+
+
+class TestSourceExclusion:
+    """Excluding a folder must match a path prefix, never a substring.
+
+    A substring test for "docs/" also matches `Technologies/Docs/rag.md`, so
+    excluding the engine's own manual silently deleted the entire canonical
+    technology reference folder — the best answer to "what is retrieval
+    augmented generation?" stopped appearing anywhere in the top 40.
+    """
+
+    def test_a_prefix_is_excluded(self):
+        from forge.retrieval.search import SearchQuery
+
+        q = SearchQuery(text="x", exclude_sources=("docs/",))
+        assert _excluded(q, "docs/cli.md") is True
+
+    def test_the_same_word_deeper_in_the_path_is_kept(self):
+        from forge.retrieval.search import SearchQuery
+
+        q = SearchQuery(text="x", exclude_sources=("docs/",))
+        assert _excluded(q, "Technologies/Docs/rag.md") is False
+
+    def test_exclusion_is_case_insensitive(self):
+        from forge.retrieval.search import SearchQuery
+
+        q = SearchQuery(text="x", exclude_sources=("DOCS/",))
+        assert _excluded(q, "docs/cli.md") is True
+
+    def test_nothing_is_excluded_by_default(self):
+        from forge.retrieval.search import SearchQuery
+
+        q = SearchQuery(text="x")
+        assert _excluded(q, "docs/cli.md") is False
+
+
+def _excluded(query, locator):
+    """Run the real filter, so the test tracks the implementation."""
+    from forge.domain import Source, SourceKind
+    from forge.retrieval.search import SearchHit, SearchService
+
+    source = Source.for_path(locator, kind=SourceKind.MARKDOWN, content_hash="h")
+    span = _make_span("body")
+    hit = SearchHit(span=span, document=None, source=source, score=1.0)
+    return not SearchService.__dict__["_passes"](None, hit, query)
+
+
+def _make_span(text):
+    from forge.domain import Span
+
+    return Span(
+        id="sp1",
+        document_id="d1",
+        ordinal=0,
+        locator="L1",
+        start_line=1,
+        end_line=1,
+        text=text,
+        content_hash="h",
+    )
