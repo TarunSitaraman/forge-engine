@@ -18,6 +18,7 @@ from ..domain import LinkType, ProposalStatus, ProposalType, SafetyClass
 from ..embeddings import HashingEmbeddingProvider, NullEmbeddingProvider, OllamaEmbeddingProvider
 from ..evaluation import DEFAULT_DATASET, EvalDataset, RetrievalEvaluator
 from ..graph import KnowledgeGraph, check_integrity
+from ..llm.base import CALLS
 from ..identity import IdentityConfig, IdentityService
 from ..matching import build_ambiguity_index
 from ..proposals import ProposalService
@@ -378,6 +379,65 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             ):
                 typer.echo(f"{key:20}: {data[key]}")
             typer.echo(f"{'by_type':20}: {data['by_type']}")
+        store.close()
+
+    @app.command()
+    def bootstrap(
+        vault: Optional[Path] = typer.Option(None),
+        apply: bool = typer.Option(
+            False, "--apply", help="Write the concepts and edges to the store."
+        ),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Seed the knowledge graph from vault structure. Zero model calls.
+
+        Filenames become concepts and links become MENTIONS edges. The vault
+        already states what its concepts are — a human decided `Binary Search`
+        deserves one canonical home and created the page. Reading that is
+        deterministic; inferring it from prose is what extraction did badly.
+
+        Nothing is written to the vault. This populates the derived store only,
+        and it is a preview until `--apply`.
+        """
+        from ..bootstrap import build_plan
+        from ..corpus.indexer import CorpusIndexer
+
+        settings = settings_factory(vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+
+        CALLS.reset()
+        indexer = CorpusIndexer(settings)
+        plan = build_plan(indexer.build_index(), decided=indexer._decided_targets())
+
+        written = 0
+        if apply:
+            for concept in plan.concepts:
+                store.put_concept(concept)
+            for link in plan.links:
+                store.put_link(link)
+            written = len(plan.concepts) + len(plan.links)
+
+        payload = {**plan.to_dict(), "applied": apply, "written": written, "llm_calls": CALLS.count}
+        if not _emit(payload, json_out):
+            typer.echo(f"concepts     : {len(plan.concepts)}")
+            typer.echo(f"edges        : {len(plan.links)} (RELATED_TO, score 1.0)")
+            typer.echo(f"pages skipped: {len(plan.skipped_pages)} (navigation, chapters, artifacts)")
+            typer.echo(f"llm calls    : {CALLS.count}")
+            typer.echo("\nby kind:")
+            for kind, n in plan.by_kind().items():
+                typer.echo(f"  {n:5}  {kind}")
+            if plan.undecided_collisions:
+                typer.echo(
+                    f"\n{len(plan.undecided_collisions)} undecided name collision(s) left out "
+                    f"of the graph — the engine will not pick one:"
+                )
+                for name, paths in sorted(plan.undecided_collisions.items())[:10]:
+                    typer.echo(f"  {name}: {', '.join(paths)}")
+                typer.echo("  Resolve with `forge identity decide \"<name>\" <qualified-name>`.")
+            typer.echo(
+                f"\n{'written to the store' if apply else 'preview only — re-run with --apply to write'}"
+            )
         store.close()
 
     # -- identity ----------------------------------------------------------

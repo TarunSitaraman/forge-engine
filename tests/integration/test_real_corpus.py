@@ -375,3 +375,70 @@ class TestStatsMatchReality:
         stats = compute_stats(real_index)
         assert sum(v["files"] for v in stats.by_folder.values()) == stats.file_count
         assert sum(v["lines"] for v in stats.by_folder.values()) == stats.total_lines
+
+
+class TestBootstrapOnRealData:
+    """Seeding the graph from this vault's own structure, with no model.
+
+    The direction plan's phase 2. Extraction spent 5.66 hours on one twentieth
+    of the vault and produced concepts like `RAM` and `Fluency`; the filenames
+    produce the concepts a human already curated, in under a second.
+    """
+
+    def _plan(self, real_index):
+        from forge.bootstrap import build_plan
+
+        return build_plan(real_index)
+
+    def test_it_makes_no_model_calls(self, real_index):
+        from forge.llm.base import CALLS
+
+        CALLS.reset()
+        self._plan(real_index)
+        assert CALLS.count == 0
+
+    def test_it_produces_hundreds_of_concepts_and_thousands_of_edges(self, real_index):
+        plan = self._plan(real_index)
+        assert len(plan.concepts) > 400
+        assert len(plan.links) > 1500
+
+    def test_navigation_pages_never_become_concepts(self, real_index):
+        plan = self._plan(real_index)
+        paths = {c.vault_path for c in plan.concepts}
+        for nav in (
+            "Technologies/Docs/_index.md",
+            "DSA/00_Index/Pattern Index.md",
+            "README.md",
+        ):
+            assert nav not in paths
+
+    def test_every_concept_names_a_real_page(self, real_index):
+        known = {f.path for f in real_index.files}
+        for c in self._plan(real_index).concepts:
+            assert c.vault_path in known
+
+    def test_concept_ids_are_unique(self, real_index):
+        concepts = self._plan(real_index).concepts
+        assert len({c.id for c in concepts}) == len(concepts)
+
+    def test_every_edge_connects_two_concepts_in_the_plan(self, real_index):
+        plan = self._plan(real_index)
+        ids = {c.id for c in plan.concepts}
+        for link in plan.links:
+            assert link.from_id in ids and link.to_id in ids
+
+    def test_the_seeded_graph_passes_its_own_integrity_check(self, real_index, tmp_path):
+        from forge.graph import check_integrity
+        from forge.storage import SqliteStore
+
+        store = SqliteStore(tmp_path / "graph.db")
+        store.initialize()
+        plan = self._plan(real_index)
+        for c in plan.concepts:
+            store.put_concept(c)
+        for link in plan.links:
+            store.put_link(link)
+
+        report = check_integrity(store)
+        assert report.clean, report.findings[:5]
+        store.close()

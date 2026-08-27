@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from ..domain import LinkType
+from ..domain import Derivation, LinkType
 from ..logging import get_logger
 from ..storage.sqlite_store import SqliteStore
 from .graph import SUPPORTED_GRAPH_TYPES
@@ -49,7 +49,8 @@ CODE_DESCRIPTIONS: dict[IntegrityCode, str] = {
         "Claim requires evidence by its provenance tier but has none."
     ),
     IntegrityCode.ORPHAN_CONCEPT: (
-        "Concept has no origin proposal and no claims — nothing explains why it exists."
+        "Concept has no origin proposal, no claims, and no canonical vault page "
+        "— nothing explains why it exists."
     ),
     IntegrityCode.SELF_RELATIONSHIP: "Relationship connects an entity to itself.",
 }
@@ -200,7 +201,20 @@ def check_integrity(store: SqliteStore) -> IntegrityReport:
 
     claimed_concepts = {c.subject_concept_id for c in claims.values() if c.subject_concept_id}
     for concept_id, concept in sorted(concepts.items()):
-        if not concept.origin_proposal_id and concept_id not in claimed_concepts:
+        # A canonical vault page explains a concept at least as well as a
+        # proposal does. A proposal is a model's suggestion that a human
+        # approved; a page is the human's own act of deciding this idea
+        # deserves one canonical home. The rule being enforced is "no
+        # unexplained orphan", not "no concept without a proposal", so a
+        # deterministically-derived concept that names its page is explained.
+        explained_by_vault = bool(concept.vault_path) and (
+            concept.provenance.derivation is Derivation.DETERMINISTIC
+        )
+        if (
+            not concept.origin_proposal_id
+            and concept_id not in claimed_concepts
+            and not explained_by_vault
+        ):
             report.findings.append(
                 Finding(
                     IntegrityCode.ORPHAN_CONCEPT,
