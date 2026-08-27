@@ -168,3 +168,86 @@ class TestNormalize:
     )
     def test_equivalent_after_normalization(self, a, b):
         assert normalize(a) == normalize(b)
+
+
+class TestIdentityDecisionsResolveAmbiguity:
+    """A recorded decision must outrank the ambiguity it was recorded to settle.
+
+    `DSA/01_Patterns/Heap.md` and `DSA/03_DataStructures/Heap.md` both exist and
+    both should, so a bare `[[Heap]]` is genuinely ambiguous and the engine must
+    not guess. But `forge identity decide` exists precisely so a human can say
+    what the bare name means — and until 2026-08-27 the link resolver never read
+    that answer. On the real corpus this accounted for 180 of 274 unresolved
+    link occurrences: Heap 74, Binary Search 66, Trie 40.
+    """
+
+    PATHS = [
+        "DSA/01_Patterns/Heap.md",
+        "DSA/03_DataStructures/Heap.md",
+        "DSA/01_Patterns/DFS.md",
+    ]
+
+    def _link(self, target, line=1):
+        return wl(target, line)
+
+    def test_without_a_decision_it_stays_ambiguous(self):
+        index = LinkIndex.build(self.PATHS)
+        got = resolve_wikilink(self._link("Heap"), "src.md", index)
+        assert got.status is LinkStatus.AMBIGUOUS
+        assert len(got.candidates) == 2
+
+    def test_a_decision_resolves_it(self):
+        index = LinkIndex.build(self.PATHS, decided={"heap": "DSA/01_Patterns/Heap.md"})
+        got = resolve_wikilink(self._link("Heap"), "src.md", index)
+        assert got.status is LinkStatus.RESOLVED
+        assert got.resolved_path == "DSA/01_Patterns/Heap.md"
+
+    def test_the_decision_is_matched_regardless_of_casing(self):
+        index = LinkIndex.build(self.PATHS, decided={"heap": "DSA/01_Patterns/Heap.md"})
+        got = resolve_wikilink(self._link("heap"), "src.md", index)
+        assert got.resolved_path == "DSA/01_Patterns/Heap.md"
+
+    def test_a_decision_naming_a_file_that_is_not_a_candidate_is_ignored(self):
+        """Guard against a stale decision silently retargeting a link."""
+        index = LinkIndex.build(self.PATHS, decided={"heap": "DSA/99_Gone/Heap.md"})
+        got = resolve_wikilink(self._link("Heap"), "src.md", index)
+        assert got.status is LinkStatus.AMBIGUOUS
+
+    def test_unrelated_links_are_unaffected(self):
+        index = LinkIndex.build(self.PATHS, decided={"heap": "DSA/01_Patterns/Heap.md"})
+        got = resolve_wikilink(self._link("DFS"), "src.md", index)
+        assert got.status is LinkStatus.RESOLVED
+        assert got.resolved_path == "DSA/01_Patterns/DFS.md"
+
+
+class TestLinksToNonMarkdownFiles:
+    """A link to real config, code or an image is a link, not a defect.
+
+    The index is built from `.md` paths, so `](config/concept-identity.yaml)`
+    had no entry and was reported MISSING even though it resolves on GitHub and
+    in Obsidian. A checker that reports working links as broken trains people to
+    ignore it, which costs more than the false positive itself.
+    """
+
+    def _md_link(self, target):
+        from forge.parsing.markdown import MarkdownLink
+
+        return MarkdownLink(text="t", target=target, line=1)
+
+    def test_a_real_non_markdown_file_resolves(self):
+        index = LinkIndex.build(
+            ["README.md"], other_files={"config/concept-identity.yaml"}
+        )
+        got = resolve_markdown_link(self._md_link("config/concept-identity.yaml"), "README.md", index)
+        assert got.status is LinkStatus.RESOLVED
+
+    def test_a_non_markdown_file_that_does_not_exist_is_still_missing(self):
+        index = LinkIndex.build(["README.md"], other_files={"config/real.yaml"})
+        got = resolve_markdown_link(self._md_link("config/imaginary.yaml"), "README.md", index)
+        assert got.status is LinkStatus.MISSING
+
+    def test_markdown_targets_are_unaffected(self):
+        index = LinkIndex.build(["README.md", "docs/a.md"], other_files={"x.png"})
+        got = resolve_markdown_link(self._md_link("docs/a.md"), "README.md", index)
+        assert got.status is LinkStatus.RESOLVED
+        assert got.resolved_path == "docs/a.md"

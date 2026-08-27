@@ -96,11 +96,39 @@ class LinkIndex:
     #: legitimately target a directory (``](../personal-agent/)``), which
     #: resolves fine on GitHub and in Obsidian but has no ``.md`` path.
     directories: set[str] = field(default_factory=set)
+    #: Non-Markdown files that exist in the repository — config, code, images.
+    #:
+    #: The index is built from indexed `.md` paths, so a Markdown link to
+    #: `config/concept-identity.yaml` or a PNG has no entry and was reported
+    #: MISSING even though it resolves fine on GitHub and in Obsidian. That is
+    #: a property of the index, not a defect in the link. Populated by the
+    #: caller, which is the only layer that may touch the filesystem.
+    other_files: set[str] = field(default_factory=set)
+    #: Normalized bare name -> vault path, for names a human has explicitly
+    #: disambiguated. Keyed through `normalize()` on both sides, so a decision
+    #: recorded for "Binary Search" also settles `[[binary search]]`.
+    #:
+    #: Two files may legitimately share a stem — `DSA/01_Patterns/Heap.md` and
+    #: `DSA/03_DataStructures/Heap.md` both exist and both should. A bare
+    #: `[[Heap]]` is then genuinely ambiguous, and the engine must not guess.
+    #: But once a human has recorded what the bare name means, continuing to
+    #: report it as unresolved is the engine ignoring an answer it was given.
+    #: `forge identity decide` writes that answer; this is where it is read.
+    decided: dict[str, str] = field(default_factory=dict)
 
     @classmethod
-    def build(cls, paths: Iterable[str]) -> LinkIndex:
+    def build(
+        cls,
+        paths: Iterable[str],
+        decided: dict[str, str] | None = None,
+        other_files: set[str] | None = None,
+    ) -> LinkIndex:
         ordered = tuple(sorted(paths))
-        idx = cls(paths=ordered)
+        idx = cls(
+            paths=ordered,
+            decided=dict(decided or {}),
+            other_files=set(other_files or ()),
+        )
         for p in ordered:
             parent = PurePosixPath(p).parent
             while str(parent) not in (".", "/", ""):
@@ -147,6 +175,9 @@ def resolve_wikilink(link: WikiLink, source_path: str, index: LinkIndex) -> Reso
     if (hits := index.by_stem.get(target)) is not None:
         if len(hits) == 1:
             return make(LinkStatus.RESOLVED, resolved_path=hits[0])
+        # A recorded decision outranks the ambiguity it was recorded to settle.
+        if (chosen := index.decided.get(normalize(target))) is not None and chosen in hits:
+            return make(LinkStatus.RESOLVED, resolved_path=chosen)
         return make(LinkStatus.AMBIGUOUS, candidates=tuple(hits))
 
     # 2. Exact relative-path match (with or without .md).
@@ -158,6 +189,8 @@ def resolve_wikilink(link: WikiLink, source_path: str, index: LinkIndex) -> Reso
     if (hits := index.by_lower_stem.get(target.casefold())) is not None:
         if len(hits) == 1:
             return make(LinkStatus.CASE_MISMATCH, resolved_path=hits[0])
+        if (chosen := index.decided.get(normalize(target))) is not None and chosen in hits:
+            return make(LinkStatus.CASE_MISMATCH, resolved_path=chosen)
         return make(LinkStatus.AMBIGUOUS, candidates=tuple(hits))
 
     # 4. Case-insensitive relative path.
@@ -214,6 +247,9 @@ def resolve_markdown_link(
         # A directory link. Valid on GitHub and in Obsidian; it simply has no
         # .md target to point at.
         status, resolved = LinkStatus.RESOLVED, candidate + "/"
+    elif candidate in index.other_files:
+        # A link to a real non-Markdown file. Not indexed, but not broken.
+        status, resolved = LinkStatus.RESOLVED, candidate
     else:
         status, resolved = LinkStatus.MISSING, None
 

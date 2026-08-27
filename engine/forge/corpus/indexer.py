@@ -74,12 +74,66 @@ class CorpusIndexer:
             elif entry.is_file() and entry.suffix.lower() == ".md":
                 yield entry
 
+    def _non_markdown_files(self) -> set[str]:
+        """Repository files that are not indexed Markdown.
+
+        A link to `config/concept-identity.yaml`, a script, or an image is a
+        real link; it simply has no entry in a Markdown index. Without this the
+        checker reports it MISSING, which trains people to ignore the report.
+        """
+        root = self.settings.vault_path
+        found: set[str] = set()
+        for path in root.rglob("*"):
+            if not path.is_file() or path.suffix.lower() == ".md":
+                continue
+            rel = path.relative_to(root).as_posix()
+            if rel.startswith((".git/", ".forge/")):
+                continue
+            found.add(rel)
+        return found
+
+    def _decided_targets(self) -> dict[str, str]:
+        """Bare name -> vault path, from the recorded identity decisions.
+
+        Reporting `[[Heap]]` as unresolved after a human has recorded what it
+        means is the engine ignoring an answer it was given. Missing or
+        malformed config is not fatal here — link resolution simply falls back
+        to reporting the ambiguity, which is the pre-existing behaviour.
+        """
+        try:
+            from ..identity.config import IdentityConfig
+
+            config = IdentityConfig.load()
+        except Exception as exc:
+            log.warning("identity_config_unreadable", error=str(exc))
+            return {}
+
+        from ..parsing.links import normalize
+
+        decided: dict[str, str] = {}
+        for resolution in config.collisions.values():
+            if not resolution.default:
+                continue
+            identity = resolution.identity_for(resolution.default)
+            if identity is None or not identity.vault_path:
+                continue
+            # Key by normalized name: the config stores collisions under a
+            # normalized key, links are written in display form, and the
+            # resolver normalizes too. Deriving the key from the identity's
+            # canonical name keeps all three in agreement.
+            decided[normalize(identity.canonical_name)] = identity.vault_path
+        return decided
+
     # -- indexing ----------------------------------------------------------
 
     def build_index(self, paths: Sequence[str] | None = None) -> CorpusIndex:
         started = time.perf_counter()
         rel_paths = list(paths) if paths is not None else self.discover()
-        link_index = LinkIndex.build(rel_paths)
+        link_index = LinkIndex.build(
+            rel_paths,
+            decided=self._decided_targets(),
+            other_files=self._non_markdown_files(),
+        )
 
         files: list[IndexedFile] = []
         for rel in rel_paths:

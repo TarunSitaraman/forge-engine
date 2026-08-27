@@ -154,14 +154,38 @@ class TestKnownHardCases:
         assert resolved.get("DFS") == "DSA/01_Patterns/DFS.md"
         assert resolved.get("BFS") == "DSA/01_Patterns/BFS.md"
 
-    def test_real_stem_collisions_are_flagged_ambiguous(self, real_index):
-        """The corpus violates its own one-canonical-home rule in three places."""
+    def test_real_stem_collisions_resolve_through_recorded_decisions(self, real_index):
+        """The stem collisions are real; the ambiguity they caused is decided.
+
+        `Heap`, `Binary Search` and `Trie` each name two legitimate files — a
+        pattern page and a data-structure/algorithm page. This test used to
+        assert the resulting links stayed AMBIGUOUS, which was right until a
+        human recorded what the bare names mean. They now resolve to the
+        decided target, which cleared 180 of 274 unresolved link occurrences.
+
+        The invariant that must not break — the engine never guessing an
+        undecided collision — is pinned in `tests/unit/test_links.py`, where it
+        can be tested without requiring the corpus to stay broken.
+        """
+        by_stem: dict[str, set[str]] = {}
+        for path in (f.path for f in real_index.files):
+            by_stem.setdefault(path.rsplit("/", 1)[-1][:-3], set()).add(path)
+        for name in ("Heap", "Binary Search", "Trie"):
+            assert len(by_stem.get(name, ())) > 1, f"{name} should still collide on stem"
+
         report = link_report(real_index)
-        ambiguous = report.ambiguous_targets
-        assert "Heap" in ambiguous
-        assert "Binary Search" in ambiguous
-        for candidates in ambiguous.values():
-            assert len(candidates) > 1
+        assert report.ambiguous_targets == {}
+
+        resolved = {
+            link.target: link.resolved_path
+            for f in real_index.files
+            for link in f.links
+            if link.target in ("Heap", "Binary Search", "Trie")
+            and link.status is LinkStatus.RESOLVED
+        }
+        assert resolved.get("Heap") == "DSA/01_Patterns/Heap.md"
+        assert resolved.get("Binary Search") == "DSA/01_Patterns/Binary Search.md"
+        assert resolved.get("Trie") == "DSA/01_Patterns/Trie.md"
 
     def test_ambiguous_links_are_never_silently_resolved(self, real_index):
         for f in real_index.files:
@@ -229,7 +253,12 @@ class TestDiagnosticsOnRealData:
         """
         with_related = [f for f in real_index.files if f.related]
         assert with_related, "the related: graph must not be empty"
-        assert sum(len(f.related) for f in with_related) == 746
+        # 745, not the 746 measured immediately after the repair: one entry
+        # pointed at `Dynamic Array`, a concept with no page and no business
+        # having one — it belongs inside `Array.md`. A `related:` list holds
+        # links or nothing, so the dangling entry was removed rather than left
+        # as a bare string among real links.
+        assert sum(len(f.related) for f in with_related) == 745
 
     def test_unresolved_links_are_reported(self, real_index):
         """Exit criterion 3."""
