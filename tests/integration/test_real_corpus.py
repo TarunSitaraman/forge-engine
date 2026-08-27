@@ -188,15 +188,29 @@ class TestCodeFenceHazardOnRealData:
 
 
 class TestDiagnosticsOnRealData:
-    def test_frontmatter_defects_are_found(self, real_index):
-        """Exit criterion 4: malformed frontmatter is reported."""
+    def test_frontmatter_is_clean(self, real_index):
+        """The corpus's 283 malformed `related:` fields were repaired 2026-08-27.
+
+        This assertion used to require the defects to be *present*, as a way of
+        proving the detector worked. That made it a test which fails when the
+        vault improves — the detector's behaviour is properly covered by
+        `tests/unit/test_frontmatter.py` against synthetic input, which needs no
+        broken file in the user's knowledge base to stay meaningful.
+
+        What is worth asserting here is the corpus invariant: no frontmatter
+        errors, and nothing left to repair.
+        """
         report = frontmatter_report(real_index)
-        assert report.by_code.get(DiagnosticCode.YAML_PARSE_ERROR.value, 0) > 0
-        assert report.by_code.get(DiagnosticCode.NESTED_LIST_WIKILINKS.value, 0) > 0
-        assert report.repairable_files > 0
+        assert report.by_code.get(DiagnosticCode.YAML_PARSE_ERROR.value, 0) == 0
+        assert report.by_code.get(DiagnosticCode.NESTED_LIST_WIKILINKS.value, 0) == 0
+        assert report.repairable_files == 0
 
     def test_every_parse_error_has_a_verified_repair(self, real_index):
-        """All 68 hard failures are mechanically repairable — but not applied."""
+        """Any future parse error must be mechanically repairable.
+
+        Passes vacuously now that the corpus is clean; it earns its place as a
+        guard on new content rather than as a description of current state.
+        """
         unrepairable = [
             f.path
             for f in real_index.files
@@ -205,15 +219,17 @@ class TestDiagnosticsOnRealData:
         ]
         assert unrepairable == []
 
-    def test_related_links_recoverable_despite_broken_yaml(self, real_index):
-        """Reading the related: graph needs no repair to any file."""
-        broken_with_related = [
-            f
-            for f in real_index.files
-            if any(d.code is DiagnosticCode.YAML_PARSE_ERROR for d in f.diagnostics)
-            and f.related
-        ]
-        assert len(broken_with_related) > 0
+    def test_the_related_graph_survived_the_repair(self, real_index):
+        """The repair must not destroy the links it repairs.
+
+        `related:` is recovered by text-extracting `[[...]]` from raw
+        frontmatter, so a repair emitting bare strings would have silently
+        zeroed this graph — measured at 746 edges before the repair, and the
+        reason the repair quotes each wikilink whole rather than its name.
+        """
+        with_related = [f for f in real_index.files if f.related]
+        assert with_related, "the related: graph must not be empty"
+        assert sum(len(f.related) for f in with_related) == 746
 
     def test_unresolved_links_are_reported(self, real_index):
         """Exit criterion 3."""

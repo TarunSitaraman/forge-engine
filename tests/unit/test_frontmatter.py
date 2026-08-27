@@ -55,14 +55,14 @@ class TestParseErrors:
         assert repair.key == "related"
         assert repair.verified
         assert repair.proposed.strip() == (
-            'related: ["Pattern Index", "Template Index", "Complexities Cheat Sheet"]'
+            'related: ["[[Pattern Index]]", "[[Template Index]]", "[[Complexities Cheat Sheet]]"]'
         )
 
     def test_repaired_text_actually_parses(self):
         result = parse_frontmatter(PARSE_ERROR_FM)
         assert result.repaired_text is not None
         data = yaml.safe_load(result.repaired_text)
-        assert data["related"] == ["Pattern Index", "Template Index", "Complexities Cheat Sheet"]
+        assert data["related"] == ["[[Pattern Index]]", "[[Template Index]]", "[[Complexities Cheat Sheet]]"]
 
 
 class TestNestedLists:
@@ -88,7 +88,7 @@ class TestNestedLists:
         result = parse_frontmatter(NESTED_LIST_FM)
         assert result.repairs and result.repairs[0].verified
         data = yaml.safe_load(result.repaired_text)
-        assert data["related"] == ["Python - Greedy", "Heap", "Sorting"]
+        assert data["related"] == ["[[Python - Greedy]]", "[[Heap]]", "[[Sorting]]"]
 
 
 class TestValidAndAbsent:
@@ -139,7 +139,7 @@ related: [[Binary Search Tree]], [[Tree Traversal]"""
         result = parse_frontmatter(self.TRUNCATED_FM)
         assert result.repairs[0].verified
         data = yaml.safe_load(result.repaired_text)
-        assert data["related"] == ["Binary Search Tree", "Tree Traversal"]
+        assert data["related"] == ["[[Binary Search Tree]]", "[[Tree Traversal]]"]
 
     def test_text_extraction_also_recovers_it(self):
         assert extract_wikilink_values(self.TRUNCATED_FM, "related") == [
@@ -165,7 +165,7 @@ class TestRepairSafety:
     def test_quotes_in_names_are_escaped(self):
         result = parse_frontmatter('related: [[He said "hi"]]')
         assert result.repairs
-        assert yaml.safe_load(result.repaired_text)["related"] == ['He said "hi"']
+        assert yaml.safe_load(result.repaired_text)["related"] == ['[[He said "hi"]]']
 
 
 class TestWikilinkRecovery:
@@ -186,3 +186,52 @@ class TestWikilinkRecovery:
 
     def test_missing_key_returns_empty(self):
         assert extract_wikilink_values(VALID_FM, "related") == []
+
+
+class TestRepairPreservesTheLinkGraph:
+    """The repair must not destroy the links it is repairing.
+
+    `related:` is read in two places by *text extraction* of `[[...]]` from the
+    raw frontmatter — `extract_wikilink_values`, which is how `CorpusIndexer`
+    builds the related graph, and `parse_markdown`, which counts frontmatter
+    wikilinks. Neither falls back to the parsed YAML.
+
+    An earlier repair emitted `related: ["A", "B"]`. Valid YAML, and it silently
+    returned both readers to zero: measured on the corpus, applying it would
+    have dropped 746 `related:` edges. Quoting the wikilink whole keeps every
+    reader working, and keeps the field an Obsidian property link.
+    """
+
+    BROKEN = "type: pattern\nrelated: [[[Python - BFS]], [[Graph Traversal]]]"
+
+    def _repaired(self):
+        result = parse_frontmatter(self.BROKEN)
+        assert result.repairs and result.repairs[0].verified
+        return result.repaired_text
+
+    def test_the_repair_is_valid_yaml_and_a_real_list(self):
+        import yaml
+
+        data = yaml.safe_load(self._repaired())
+        assert data["related"] == ["[[Python - BFS]]", "[[Graph Traversal]]"]
+
+    def test_text_extraction_still_finds_the_links(self):
+        assert extract_wikilink_values(self._repaired(), "related") == [
+            "Python - BFS",
+            "Graph Traversal",
+        ]
+
+    def test_the_markdown_parser_still_sees_frontmatter_wikilinks(self):
+        from forge.parsing.markdown import parse_markdown
+
+        doc = f"---\n{self._repaired()}\n---\n\n# Title\n\nbody\n"
+        found = [w.target for w in parse_markdown(doc).wikilinks if w.in_frontmatter]
+        assert found == ["Python - BFS", "Graph Traversal"]
+
+    def test_the_repaired_file_reports_no_diagnostics(self):
+        assert parse_frontmatter(self._repaired()).diagnostics == []
+
+    def test_repairing_twice_changes_nothing(self):
+        """The repaired form must be a fixed point, or repeated runs churn."""
+        once = self._repaired()
+        assert parse_frontmatter(once).repairs == []

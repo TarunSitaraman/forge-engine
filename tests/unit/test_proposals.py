@@ -410,3 +410,84 @@ class TestWriteBack:
         (fixture_vault / approved.operation.target).unlink()
         report = applier.apply([approved], apply=True)
         assert "no longer exists" in report.refused[0].refused_reason
+
+
+class TestBulkApply:
+    """`approve-all --apply` must go through the same gate as single apply.
+
+    Phase 1 of the direction plan is 283 identical repairs. Without a batched
+    path that is 283 invocations; with one that skips the applier it would be
+    283 unguarded writes. It uses ProposalApplier either way, so refusals and
+    per-file backups behave the same in bulk as they do singly.
+    """
+
+    def _env(self, settings):
+        return {
+            "FORGE_VAULT_PATH": str(settings.vault_path),
+            "FORGE_STATE_DIR": str(settings.state_dir),
+        }
+
+    def test_approve_all_without_apply_leaves_the_vault_untouched(self, settings, fixture_vault):
+        from typer.testing import CliRunner
+
+        from forge.cli.main import app
+
+        runner = CliRunner()
+        env = self._env(settings)
+        runner.invoke(app, ["index"], env=env)
+        runner.invoke(app, ["proposals", "generate"], env=env)
+
+        before = {p: p.read_bytes() for p in sorted(fixture_vault.rglob("*.md"))}
+        result = runner.invoke(
+            app,
+            ["proposals", "approve-all", "--no-dry-run"],
+            env=env,
+        )
+        assert result.exit_code == 0
+        assert {p: p.read_bytes() for p in sorted(fixture_vault.rglob("*.md"))} == before
+
+    def test_approve_all_with_apply_writes_and_backs_up(self, settings, fixture_vault):
+        from typer.testing import CliRunner
+
+        from forge.cli.main import app
+
+        runner = CliRunner()
+        env = self._env(settings)
+        runner.invoke(app, ["index"], env=env)
+        gen = runner.invoke(app, ["proposals", "generate", "--json"], env=env)
+        import json as _json
+
+        if _json.loads(gen.stdout)["built"] == 0:
+            pytest.skip("fixture vault has no repairable frontmatter")
+
+        before = {p: p.read_bytes() for p in sorted(fixture_vault.rglob("*.md"))}
+        result = runner.invoke(
+            app,
+            ["proposals", "approve-all", "--no-dry-run", "--apply"],
+            env=env,
+        )
+        assert result.exit_code == 0
+
+        after = {p: p.read_bytes() for p in sorted(fixture_vault.rglob("*.md"))}
+        assert after != before, "--apply must actually write"
+        assert (settings.state_dir / "backups").exists(), "every write needs a backup"
+
+    def test_applying_twice_is_a_no_op(self, settings, fixture_vault):
+        """The repaired form is a fixed point, so a second pass finds nothing."""
+        from typer.testing import CliRunner
+
+        from forge.cli.main import app
+
+        runner = CliRunner()
+        env = self._env(settings)
+        runner.invoke(app, ["index"], env=env)
+        runner.invoke(app, ["proposals", "generate"], env=env)
+        runner.invoke(app, ["proposals", "approve-all", "--no-dry-run", "--apply"], env=env)
+
+        settled = {p: p.read_bytes() for p in sorted(fixture_vault.rglob("*.md"))}
+        runner.invoke(app, ["index"], env=env)
+        second = runner.invoke(app, ["proposals", "generate", "--json"], env=env)
+        import json as _json
+
+        assert _json.loads(second.stdout)["built"] == 0
+        assert {p: p.read_bytes() for p in sorted(fixture_vault.rglob("*.md"))} == settled

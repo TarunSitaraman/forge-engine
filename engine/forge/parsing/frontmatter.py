@@ -342,7 +342,21 @@ def _propose_wikilink_repairs(raw: str) -> tuple[list[RepairProposal], list[Diag
         if residue.strip(" ,[]"):
             continue
 
-        rendered = ", ".join(_yaml_quote(n) for n in names)
+        # Quote the wikilink *including its brackets*, not just the name.
+        #
+        # Emitting `related: ["A", "B"]` is valid YAML and was the original
+        # repair, but it silently destroys the links. Two consumers read these
+        # fields by text-extracting `[[...]]` from the raw frontmatter —
+        # `extract_wikilink_values`, which is how `CorpusIndexer` builds the
+        # `related` graph, and `parse_markdown`, which counts frontmatter
+        # wikilinks. Strip the brackets and both return nothing: measured on
+        # the corpus, that repair would have dropped 746 `related:` edges.
+        # Obsidian likewise renders a bare string as text and a quoted
+        # wikilink as a link.
+        #
+        # `["[[A]]", "[[B]]"]` satisfies every reader: valid YAML, a real
+        # list once parsed, still text-extractable, still an Obsidian link.
+        rendered = ", ".join(_yaml_quote(f"[[{n}]]") for n in names)
         proposals.append(
             RepairProposal(
                 key=m.group("key"),
@@ -351,7 +365,8 @@ def _propose_wikilink_repairs(raw: str) -> tuple[list[RepairProposal], list[Diag
                 proposed=f"{m.group('indent')}{m.group('key')}: [{rendered}]",
                 reason=(
                     "Unquoted [[wikilinks]] collide with YAML flow-sequence syntax; "
-                    "quoting preserves the link names as a plain string list."
+                    "quoting each wikilink makes the field valid YAML while keeping "
+                    "the links readable by the indexer and by Obsidian."
                 ),
             )
         )

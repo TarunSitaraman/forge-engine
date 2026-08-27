@@ -534,6 +534,11 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             help="Explicitly allow bulk approval of ambiguous proposals. Off by default.",
         ),
         dry_run: bool = typer.Option(True, help="Preview without approving."),
+        apply: bool = typer.Option(
+            False,
+            "--apply",
+            help="Also write the approved repairs to the vault. Off by default.",
+        ),
         json_out: bool = typer.Option(False, "--json"),
     ) -> None:
         """Approve many proposals at once, with a guard on ambiguous ones.
@@ -591,10 +596,29 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             return
 
         approved = [service.approve(p.id, note=f"batch approval (safety={wanted.value})") for p in candidates]
-        payload = {"approved": len(approved), "safety": wanted.value}
+
+        # Approving records a decision; writing to the vault is a second,
+        # separately-gated step. --apply runs the same ProposalApplier the
+        # single-proposal path uses, so the refusal rules and the per-file
+        # backup under <state_dir>/backups apply identically in bulk.
+        apply_report = None
+        if apply:
+            applier = ProposalApplier(
+                settings.vault_path, store, settings.state_dir / "backups"
+            )
+            apply_report = applier.apply(approved, apply=True)
+
+        payload = {
+            "approved": len(approved),
+            "safety": wanted.value,
+            "apply": apply_report.to_dict() if apply_report else None,
+        }
         if not _emit(payload, json_out):
             typer.echo(f"approved {len(approved)} proposal(s) with safety={wanted.value}")
-            typer.echo("Nothing was written to the vault or activated.")
+            if apply_report is None:
+                typer.echo("Nothing was written to the vault or activated.")
+            else:
+                _print_apply(apply_report, applied_flag=True)
         store.close()
 
     @proposals_app.command("generate")
