@@ -382,6 +382,100 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         store.close()
 
     @app.command()
+    def upstream(
+        vault: Optional[Path] = typer.Option(None),
+        pin: bool = typer.Option(
+            False, "--pin", help="Record current commits, marking packs reviewed."
+        ),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Check documented external repositories for drift. Zero model calls.
+
+        `Projects/` describes repositories that live elsewhere and change
+        without the vault noticing. A page declares its upstream in
+        frontmatter:
+
+            upstream_repo: https://github.com/you/project
+            upstream_commit: 4e9355d6...
+
+        Detection is `git ls-remote` against the recorded commit — no API
+        token, no rate limit, and private repos work through the git
+        credentials you already have.
+
+        `--pin` records the current commit, which is how you say "I have
+        reviewed this pack against the repo as it stands now". Rewriting a
+        drifted pack is a separate step that needs judgement; this only
+        reports. Exits 1 when anything has drifted.
+        """
+        from ..corpus.indexer import CorpusIndexer
+        from ..upstream import CHECKED_KEY, COMMIT_KEY, check, declared_upstreams
+
+        settings = settings_factory(vault)
+        CALLS.reset()
+        index = CorpusIndexer(settings).build_index()
+        declared = declared_upstreams(index, settings.vault_path)
+
+        if not declared:
+            msg = (
+                "no page declares an upstream. Add to a project pack's frontmatter:\n"
+                "  upstream_repo: https://github.com/you/project"
+            )
+            if not _emit({"checked": 0, "detail": msg}, json_out):
+                typer.echo(msg)
+            return
+
+        statuses = check(declared)
+        drifted = [s for s in statuses if s.drifted]
+
+        pinned: list[str] = []
+        if pin:
+            from datetime import date
+
+            for status in statuses:
+                if status.current is None:
+                    continue
+                target = settings.vault_path / status.path
+                text = target.read_text(encoding="utf-8")
+                updated = _rewrite_frontmatter_value(text, COMMIT_KEY, status.current)
+                updated = _rewrite_frontmatter_value(
+                    updated, CHECKED_KEY, date.today().isoformat()
+                )
+                if updated != text:
+                    target.write_text(updated, encoding="utf-8")
+                    pinned.append(status.path)
+
+        payload = {
+            "checked": len(statuses),
+            "drifted": len(drifted),
+            "pinned": pinned,
+            "llm_calls": CALLS.count,
+            "statuses": [s.to_dict() for s in statuses],
+        }
+        if not _emit(payload, json_out):
+            for status in statuses:
+                mark = {
+                    "current": "ok      ",
+                    "drifted": "DRIFTED ",
+                    "unpinned": "unpinned",
+                    "unreachable": "ERROR   ",
+                }[status.state]
+                typer.echo(f"{mark} {status.path}")
+                if status.state == "drifted":
+                    typer.echo(
+                        f"         documented {status.recorded[:12]} -> now {status.current[:12]}"
+                    )
+                elif status.state == "unpinned":
+                    typer.echo(f"         upstream at {status.current[:12]}; never pinned")
+                elif status.state == "unreachable":
+                    typer.echo(f"         {status.error}")
+            if pinned:
+                typer.echo(f"\npinned {len(pinned)} page(s) to the current commit")
+            typer.echo(f"\n{len(statuses)} checked, {len(drifted)} drifted, {CALLS.count} llm calls")
+
+        if drifted and not pin:
+            raise typer.Exit(code=1)
+
+    @app.command()
     def ask(
         question: str = typer.Argument(..., help="What you want to know."),
         vault: Optional[Path] = typer.Option(None),
@@ -741,3 +835,27 @@ def _resolve_entity(store: SqliteStore, token: str) -> str | None:
     if store.get_claim(token) is not None:
         return token
     return None
+
+
+def _rewrite_frontmatter_value(text: str, key: str, value: str) -> str:
+    """Set one frontmatter key, adding it if absent.
+
+    Deliberately line-based rather than a YAML round-trip: re-emitting the
+    document's frontmatter would reformat keys the user hand-wrote and reorder
+    them, turning a one-line pin into a noisy diff.
+    """
+    if not text.startswith("---\n"):
+        return text
+    end = text.find("\n---", 4)
+    if end == -1:
+        return text
+
+    head, rest = text[4:end], text[end:]
+    lines = head.split("\n")
+    for i, line in enumerate(lines):
+        if line.split(":", 1)[0].strip() == key:
+            lines[i] = f"{key}: {value}"
+            break
+    else:
+        lines.append(f"{key}: {value}")
+    return "---\n" + "\n".join(lines) + rest
