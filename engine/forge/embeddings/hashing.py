@@ -71,7 +71,7 @@ class HashingEmbeddingProvider:
         """Always true: nothing to download, nothing to reach."""
         return True
 
-    def embed(self, texts: Sequence[str]) -> list[list[float]]:
+    def embed(self, texts: Sequence[str], *, task: str = "document") -> list[list[float]]:
         return [self._vector(text) for text in texts]
 
     # -- internals ---------------------------------------------------------

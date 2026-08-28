@@ -38,7 +38,9 @@ class EmbeddingProvider(Protocol):
         """Whether this provider can currently serve requests. Never raises."""
         ...
 
-    def embed(self, texts: Sequence[str]) -> list[list[float]]: ...
+    def embed(self, texts: Sequence[str], *, task: str = "document") -> list[list[float]]:
+        """`task` is "document" or "query"; providers that do not care ignore it."""
+        ...
 
 
 class NullEmbeddingProvider:
@@ -60,7 +62,7 @@ class NullEmbeddingProvider:
     def available(self) -> bool:
         return False
 
-    def embed(self, texts: Sequence[str]) -> list[list[float]]:
+    def embed(self, texts: Sequence[str], *, task: str = "document") -> list[list[float]]:
         raise RuntimeError(
             "no embedding provider configured; lexical retrieval and deterministic "
             "matching remain available"

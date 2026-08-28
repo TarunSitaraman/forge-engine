@@ -271,3 +271,74 @@ database?" is **no, and here is the measurement.**
   — the standing no-vector-database position this measurement supports.
 * [`../architecture/phase-3-implementation.md`](../architecture/phase-3-implementation.md)
   — how retrieval, the graph, and activation fit together.
+
+
+---
+
+## Semantic retrieval was a re-rank, not a retriever (2026-08-28)
+
+**Found while wiring `forge ask`.** `SearchService` ran the lexical query
+first and used embeddings only to reorder those hits. A span BM25 never
+returned could not be recovered no matter how well it matched in embedding
+space, so the semantic signal could improve the *order* of an answer set but
+never its *contents*.
+
+That is exactly the shape of the failure in the labelled set. Per-category
+lexical recall:
+
+| Category | R@10 |
+|---|---:|
+| technology | 1.000 |
+| exact_concept | 0.933 |
+| project | 0.750 |
+| related_concept | 0.644 |
+| dsa | 0.500 |
+| **fuzzy_concept** | **0.100** |
+
+Nearly all the loss sits in one category, and its queries are the ones that
+describe a concept without naming it — *"stopping a language model from making
+things up by giving it real passages"* for `rag.md`, *"technique for finding
+the best contiguous subarray without recomputing"* for `Sliding Window.md`.
+Those share almost no vocabulary with their targets, so BM25 never retrieved
+them and re-ranking had nothing to fix.
+
+**The evaluation and the product were measuring different systems.**
+`RetrievalEvaluator` scores the query against *every* stored vector; the
+production path scored only what lexical found. Any hybrid number from the eval
+therefore described a retriever `forge search` did not implement.
+
+Fixed: the candidate set is now the union of lexical hits and the strongest
+direct vector matches, and the two signals are fused on one normalised scale.
+
+**A second defect fell out of the same code.** Lexical scores were normalised
+only for spans that had a vector, and spans without one kept their raw BM25
+value — around 19 against a fused maximum of 1.0. Any span missing an embedding
+therefore outranked every span with a good semantic match. This alone would
+make hybrid score worse than lexical, independent of embedding quality, and it
+is consistent with the measured result that hybrid degrades as semantic weight
+rises.
+
+**Not yet measured:** whether real embeddings now lift `fuzzy_concept`. The
+stored vectors are still `hashing-v1-256c`, a hashed bag of tokens and
+character 4-grams, which is not semantic at all — so the union retrieval has
+nothing meaningful to union in. That measurement needs an embedding model, and
+is the next step:
+
+```powershell
+ollama pull nomic-embed-text
+forge embeddings build --provider ollama
+forge retrieval-eval --methods lexical,semantic,hybrid --detail
+```
+
+Embedding ~7,000 spans is cheap in a way generation is not — this is a good use
+of the local GPU, unlike extraction.
+
+### `nomic-embed-text` needs asymmetric prefixes
+
+Verified against Nomic's model card: stored text must be prefixed
+`search_document: ` and queries `search_query: `. The provider applied neither,
+which produces perfectly valid vectors sitting in the wrong region of the
+space — nothing errors, and no stub test notices. Same class of defect as the
+cloud provider's message ordering. Now applied, and the prefix scheme is part
+of the model id (`nomic-embed-text+prefixed`) so prefixed and unprefixed
+vectors can never share a derivation-cache entry.

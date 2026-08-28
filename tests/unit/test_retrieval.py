@@ -46,7 +46,7 @@ class FakeEmbeddings:
     def available(self) -> bool:
         return self._available
 
-    def embed(self, texts):
+    def embed(self, texts, *, task="document"):
         self.calls += 1
         if self.explode:
             raise RuntimeError("embedding backend fell over")
@@ -324,3 +324,154 @@ def _make_span(text):
         text=text,
         content_hash="h",
     )
+
+
+class TestPrefixedEmbeddingModels:
+    """`nomic-embed-text` needs asymmetric task prefixes, and nothing errors
+    without them — the vectors are still valid, just in the wrong region.
+
+    Verified against Nomic's model card: `search_document:` on stored text,
+    `search_query:` on queries. This is the same class of defect as the cloud
+    provider's message ordering — a shape bug a stub cannot catch.
+    """
+
+    def _provider(self, model="nomic-embed-text"):
+        from forge.embeddings import OllamaEmbeddingProvider
+
+        return OllamaEmbeddingProvider(model=model)
+
+    def test_a_prefixed_model_is_recognised(self):
+        assert self._provider().needs_prefix is True
+        assert self._provider("nomic-embed-text:v1.5").needs_prefix is True
+
+    def test_other_models_are_left_alone(self):
+        assert self._provider("mxbai-embed-large").needs_prefix is False
+
+    def test_the_prefix_scheme_is_part_of_the_model_identity(self):
+        """Prefixed and unprefixed vectors must never share a cache entry."""
+        assert self._provider().model_id == "nomic-embed-text+prefixed"
+        assert self._provider("mxbai-embed-large").model_id == "mxbai-embed-large"
+
+    def test_documents_and_queries_get_different_prefixes(self):
+        from forge.embeddings.ollama_embeddings import DOCUMENT_PREFIX, QUERY_PREFIX
+
+        provider = self._provider()
+        sent = []
+
+        class _Client:
+            def post(self, _path, json):
+                sent.append(json["input"])
+
+                class _R:
+                    @staticmethod
+                    def raise_for_status():
+                        pass
+
+                    @staticmethod
+                    def json():
+                        return {"embeddings": [[0.0] for _ in json["input"]]}
+
+                return _R()
+
+        provider._client = _Client()
+        provider.embed(["a"], task="document")
+        provider.embed(["a"], task="query")
+        assert sent[0] == [f"{DOCUMENT_PREFIX}a"]
+        assert sent[1] == [f"{QUERY_PREFIX}a"]
+
+    def test_document_is_the_default_because_storing_is_the_common_path(self):
+        from forge.embeddings.ollama_embeddings import DOCUMENT_PREFIX
+
+        provider = self._provider()
+        sent = []
+
+        class _Client:
+            def post(self, _path, json):
+                sent.append(json["input"])
+
+                class _R:
+                    @staticmethod
+                    def raise_for_status():
+                        pass
+
+                    @staticmethod
+                    def json():
+                        return {"embeddings": [[0.0] for _ in json["input"]]}
+
+                return _R()
+
+        provider._client = _Client()
+        provider.embed(["a"])
+        assert sent[0] == [f"{DOCUMENT_PREFIX}a"]
+
+
+class TestSemanticFusionCanWin:
+    """Prove the hybrid path works when the embeddings are actually semantic.
+
+    Hybrid currently scores *worse* than lexical on the labelled set, but the
+    stored embeddings are a hashed bag of tokens — not semantic at all. This
+    separates the two questions: given embeddings that do encode meaning, does
+    fusion surface the right span? If not, no embedding model would fix it.
+    """
+
+    def test_semantic_signal_reorders_a_lexically_tied_result(self, populated):
+        store, _, _, spans = populated
+
+        target = spans[-1].id
+
+        class _Oracle:
+            """Embeddings that place `target` next to the query and others far."""
+
+            model_id = "oracle"
+            dimensions = 2
+            available = True
+
+            def embed(self, texts, *, task="document"):
+                out = []
+                for t in texts:
+                    out.append([1.0, 0.0] if (task == "query" or t == spans[-1].text) else [0.0, 1.0])
+                return out
+
+        service = SearchService(store, embeddings=_Oracle())
+        service.index_embeddings(spans)
+
+        # The span the oracle points at must be *retrievable*, which is the
+        # part that used to be impossible: semantic was a re-rank of lexical
+        # hits, so a span BM25 never returned could not be recovered at all.
+        hits = service.search(SearchQuery(text="retrieval", semantic=True, limit=10))
+        assert any(h.span.id == target for h in hits), "semantic must retrieve, not only reorder"
+        assert any(h.signal == "lexical+semantic" for h in hits)
+
+        # And it must win outright once the semantic signal is what we weight.
+        semantic_only = service.search(
+            SearchQuery(text="retrieval", semantic=True, limit=10, semantic_weight=1.0)
+        )
+        assert semantic_only[0].span.id == target
+
+
+class TestFusionScoreNormalisation:
+    """A span without an embedding must not outrank one with a good match.
+
+    The fusion previously normalised lexical scores only for spans that had a
+    vector and left the rest on the raw BM25 scale, so any span missing an
+    embedding scored ~19 against a fused maximum of 1.0 and automatically won.
+    """
+
+    def test_all_returned_scores_are_on_one_scale(self, populated):
+        store, _, _, spans = populated
+
+        class _Partial:
+            """Embeds only the first span, leaving the rest without vectors."""
+
+            model_id = "partial"
+            dimensions = 2
+            available = True
+
+            def embed(self, texts, *, task="document"):
+                return [[1.0, 0.0] for _ in texts]
+
+        service = SearchService(store, embeddings=_Partial())
+        service.index_embeddings(spans[:1])
+        hits = service.search(SearchQuery(text="retrieval", semantic=True, limit=10))
+        assert hits
+        assert all(0.0 <= h.score <= 1.0 for h in hits), [h.score for h in hits]

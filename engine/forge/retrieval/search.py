@@ -72,6 +72,9 @@ class SearchQuery:
     #: the top eight at all. In a vault whose organising rule is one canonical
     #: home per concept, the filename is a strong relevance signal.
     title_boost: float = 1.0
+    #: Share of the fused score given to embedding similarity when
+    #: ``semantic`` is on. The remainder goes to the normalized lexical score.
+    semantic_weight: float = 0.5
 
 
 @dataclass
@@ -159,7 +162,7 @@ class SearchService:
             hits = [self._boosted(h, query) for h in hits]
 
         if query.semantic and self.semantic_available:
-            hits = self._rerank(query.text, hits)
+            hits = self._fuse(query, hits)
 
         hits.sort(key=lambda h: -h.score)
         return hits[: query.limit]
@@ -207,14 +210,39 @@ class SearchService:
                 return False
         return True
 
-    def _rerank(self, text: str, hits: list[SearchHit]) -> list[SearchHit]:
-        """Blend lexical rank with embedding similarity.
+    def _fuse(self, query: SearchQuery, hits: list[SearchHit]) -> list[SearchHit]:
+        """Blend lexical results with a *first-class* semantic search.
+
+        Semantic retrieval used to be a re-rank of the lexical candidates,
+        which quietly capped it: a span BM25 never retrieved could not be
+        recovered no matter how well it matched in embedding space. That is
+        precisely the failing case — the labelled set's `fuzzy_concept`
+        queries score R@10 0.100 because a question like "stopping a language
+        model from making things up by giving it real passages" shares almost
+        no vocabulary with `rag.md`, so it was never a candidate at all.
+
+        It also meant the evaluation and the product measured different
+        systems: `RetrievalEvaluator` scores every stored vector, while this
+        path scored only what lexical found. Searching the vectors directly and
+        then fusing makes the two agree.
 
         Failures degrade to the lexical ordering rather than raising: retrieval
         must not break because an optional component misbehaved.
         """
+        text = query.text
         try:
-            query_vector = self.embeddings.embed([text])[0]
+            # The query side must declare itself: a model trained with
+            # asymmetric prefixes puts documents and questions in different
+            # regions, and embedding a question as a document quietly loses
+            # most of the benefit.
+            query_vector = self.embeddings.embed([text], task="query")[0]
+        except TypeError as exc:
+            # A provider whose signature does not match is a programming error,
+            # not an absent optional component. Logging it at info alongside
+            # genuine unavailability made a broken integration look exactly
+            # like "semantic is switched off".
+            log.warning("semantic_rerank_provider_incompatible", error=str(exc)[:160])
+            return hits
         except Exception as exc:
             log.info("semantic_rerank_unavailable", error=str(exc)[:120])
             return hits
@@ -223,15 +251,42 @@ class SearchService:
         if not stored:
             return hits
 
+        similarities = {
+            span_id: cosine(query_vector, vector) for span_id, vector in stored.items()
+        }
+
+        # Pull in the strongest semantic matches that lexical never found, so
+        # the candidate set is the union of both retrievers rather than
+        # whatever BM25 happened to return.
+        known = {h.span.id for h in hits}
+        extra = sorted(
+            (sid for sid in similarities if sid not in known),
+            key=lambda sid: -similarities[sid],
+        )[: max(query.limit, 10)]
+        for span_id in extra:
+            span = self.store.get_span(span_id)
+            if span is None:
+                continue
+            document = self.store.get_document(span.document_id)
+            source = self.store.get_source(document.source_id) if document else None
+            candidate = SearchHit(span=span, document=document, source=source, score=0.0)
+            if self._passes(candidate, query):
+                hits.append(candidate)
+
+        # Normalize lexical to [0,1] so the two signals are commensurable.
+        # Scoring only the embedded spans and leaving the rest on a raw BM25
+        # scale would let any span without a vector outrank every span with one.
         lexical_max = max((h.score for h in hits), default=1.0) or 1.0
         for hit in hits:
-            vector = stored.get(hit.span.id)
-            if vector is None:
+            lexical = hit.score / lexical_max
+            similarity = similarities.get(hit.span.id)
+            if similarity is None:
+                hit.score = query.semantic_weight * 0.0 + (1 - query.semantic_weight) * lexical
                 continue
-            similarity = cosine(query_vector, vector)
-            # Equal weighting. Not tuned — there is nothing to tune against
-            # until there is a labelled retrieval set (Phase 3).
-            hit.score = 0.5 * (hit.score / lexical_max) + 0.5 * similarity
+            hit.score = (
+                query.semantic_weight * similarity
+                + (1 - query.semantic_weight) * lexical
+            )
             hit.signal = "lexical+semantic"
         return hits
 

@@ -20,6 +20,18 @@ log = get_logger(__name__)
 
 DEFAULT_EMBED_MODEL = "nomic-embed-text"
 
+#: Models that require a task-instruction prefix on every input.
+#:
+#: `nomic-embed-text` is trained with `search_document:` on stored text and
+#: `search_query:` on queries; without them the two sit in different regions of
+#: the space and similarity degrades silently — output is still a valid vector,
+#: so nothing errors and no stub test notices. This is the same class of defect
+#: as the cloud provider's message ordering: a shape bug a mock cannot catch.
+PREFIXED_MODELS: tuple[str, ...] = ("nomic-embed-text",)
+
+DOCUMENT_PREFIX = "search_document: "
+QUERY_PREFIX = "search_query: "
+
 
 class OllamaEmbeddingProvider:
     """Embeddings from a local Ollama instance."""
@@ -40,8 +52,19 @@ class OllamaEmbeddingProvider:
         self._available: bool | None = None
 
     @property
+    def needs_prefix(self) -> bool:
+        base = self._model.split(":", 1)[0]
+        return base in PREFIXED_MODELS
+
+    @property
     def model_id(self) -> str:
-        return self._model
+        """Identity for the derivation key, including the prefix scheme.
+
+        Prefixed and unprefixed vectors are not comparable, so they must not
+        share a cache entry or be mixed in one index — the same reason the
+        generation provider appends `+nothink`.
+        """
+        return f"{self._model}+prefixed" if self.needs_prefix else self._model
 
     @property
     def dimensions(self) -> int:
@@ -75,11 +98,20 @@ class OllamaEmbeddingProvider:
             self._available = False
         return self._available
 
-    def embed(self, texts: Sequence[str]) -> list[list[float]]:
-        """Embed texts in batches. Raises only on a genuine transport failure."""
+    def embed(self, texts: Sequence[str], *, task: str = "document") -> list[list[float]]:
+        """Embed texts in batches. Raises only on a genuine transport failure.
+
+        `task` selects the instruction prefix for models that need one. It
+        defaults to "document" because storing is the common path; the query
+        side must pass "query" explicitly or the asymmetry is lost.
+        """
+        prefix = ""
+        if self.needs_prefix:
+            prefix = QUERY_PREFIX if task == "query" else DOCUMENT_PREFIX
+
         out: list[list[float]] = []
         for start in range(0, len(texts), self.batch_size):
-            batch = list(texts[start : start + self.batch_size])
+            batch = [f"{prefix}{t}" for t in texts[start : start + self.batch_size]]
             response = self._client.post(
                 "/api/embed", json={"model": self._model, "input": batch}
             )
