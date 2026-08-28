@@ -478,3 +478,41 @@ class TestEmbeddingModelMismatchIsExplained:
 
         assert store.embedded_models() == {"nomic-embed-text+prefixed": 1}
         store.close()
+
+
+class TestFusionUsesTheBestSpanPerDocument:
+    """Hybrid must aggregate a document's *best* span, like the other methods.
+
+    `_hybrid` built its two score maps with `dict(...)` over lists sorted by
+    descending score. `dict` keeps the last pair, so each document collapsed to
+    its worst span while `semantic` and `lexical` used its best. Measured
+    2026-08-28 on real embeddings: semantic beat lexical on every metric, yet
+    hybrid scored below both — which a convex combination cannot do, and is the
+    tell that its inputs were not what they claimed to be.
+    """
+
+    def test_dict_over_a_sorted_list_keeps_the_minimum(self):
+        """The trap this guards against, stated outright."""
+        descending = [("a.md", 0.9), ("a.md", 0.2)]
+        assert dict(descending)["a.md"] == 0.2
+
+    def test_best_per_key_keeps_the_maximum(self):
+        from forge.evaluation.runner import _best_per_key
+
+        assert _best_per_key([("a.md", 0.9), ("a.md", 0.2)]) == {"a.md": 0.9}
+
+    def test_order_does_not_matter(self):
+        from forge.evaluation.runner import _best_per_key
+
+        assert _best_per_key([("a.md", 0.2), ("a.md", 0.9)]) == {"a.md": 0.9}
+
+    def test_distinct_keys_are_kept_separately(self):
+        from forge.evaluation.runner import _best_per_key
+
+        got = _best_per_key([("a.md", 0.5), ("b.md", 0.7), ("a.md", 0.9)])
+        assert got == {"a.md": 0.9, "b.md": 0.7}
+
+    def test_empty_input_is_empty(self):
+        from forge.evaluation.runner import _best_per_key
+
+        assert _best_per_key([]) == {}

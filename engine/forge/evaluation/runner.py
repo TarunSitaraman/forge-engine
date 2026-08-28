@@ -183,8 +183,16 @@ class RetrievalEvaluator:
         weight.
         """
         lexical_hits = self.search.search(SearchQuery(text=text, limit=RETRIEVAL_DEPTH))
-        lexical = {h.source.locator: h.score for h in lexical_hits if h.source}
-        semantic = dict(self._semantic_scores(text))
+        # Aggregate to the *best* span per document, matching `_to_documents`.
+        #
+        # Both of these were built with `dict(...)` over lists sorted by
+        # descending score. `dict` keeps the last occurrence, so every document
+        # collapsed to its **worst** span while the lexical and semantic
+        # methods used its best. Measured 2026-08-28, that alone made hybrid
+        # score below both of the signals it blends — impossible for a convex
+        # combination, and the tell that the inputs were not what they claimed.
+        lexical = _best_per_key((h.source.locator, h.score) for h in lexical_hits if h.source)
+        semantic = _best_per_key(self._semantic_scores(text))
 
         lexical_norm = _normalize(lexical)
         semantic_norm = _normalize(semantic)
@@ -201,6 +209,11 @@ class RetrievalEvaluator:
         if not self.embeddings.available:
             return []
         try:
+            # Must declare itself as a query: a model with asymmetric task
+            # prefixes embeds questions and documents into different regions,
+            # and the stored spans were embedded as documents.
+            query_vector = self.embeddings.embed([text], task="query")[0]
+        except TypeError:
             query_vector = self.embeddings.embed([text])[0]
         except Exception as exc:  # pragma: no cover - provider failure
             log.warning("semantic_eval_unavailable", error=str(exc)[:120])
@@ -237,6 +250,19 @@ class RetrievalEvaluator:
         return self.embeddings.available and bool(
             self.store.get_embeddings("span", self.embeddings.model_id)
         )
+
+
+def _best_per_key(pairs: Any) -> dict[str, float]:
+    """Collapse (key, score) pairs to the highest score per key.
+
+    Never use `dict(pairs)` for this: it keeps the *last* pair, which on a
+    descending-sorted list is the minimum.
+    """
+    best: dict[str, float] = {}
+    for key, score in pairs:
+        if key not in best or score > best[key]:
+            best[key] = score
+    return best
 
 
 def _normalize(scores: dict[str, float]) -> dict[str, float]:

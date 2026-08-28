@@ -342,3 +342,49 @@ space — nothing errors, and no stub test notices. Same class of defect as the
 cloud provider's message ordering. Now applied, and the prefix scheme is part
 of the model id (`nomic-embed-text+prefixed`) so prefixed and unprefixed
 vectors can never share a derivation-cache entry.
+
+
+## Real embeddings, measured (2026-08-28)
+
+`nomic-embed-text` over 1,724 ingestion spans, whole vault, on the ASUS.
+
+| Method | R@5 | R@10 | P@5 | MRR | misses |
+|---|---:|---:|---:|---:|---:|
+| lexical | 0.406 | 0.588 | 0.158 | 0.427 | 6 |
+| **semantic** | **0.503** | **0.662** | **0.192** | **0.457** | **5** |
+| hybrid(w=0.25) | 0.336 | 0.608 | 0.142 | 0.353 | 6 |
+| hybrid(w=0.5) | 0.281 | 0.504 | 0.117 | 0.406 | 8 |
+| hybrid(w=0.75) | 0.315 | 0.433 | 0.133 | 0.271 | 10 |
+
+**Semantic beats lexical on every metric** — +0.097 R@5, +0.075 R@10, +0.030
+MRR. That is the first evidence embeddings earn their place on this corpus, and
+it replaces the earlier negative result, which was measured against a hashed
+bag of tokens rather than a real model.
+
+**Hybrid scored below both signals it blends, which is impossible.** A convex
+combination of two rankings cannot be worse than either input unless the inputs
+are not what they claim. They were not:
+
+`_hybrid` built both score maps with `dict(...)` over lists sorted by
+*descending* score. `dict` keeps the **last** pair, so every document collapsed
+to its **worst** span — while `lexical` and `semantic` went through
+`_to_documents`, which correctly keeps the best. Hybrid was blending each
+document's weakest evidence against the other methods' strongest, and weighting
+that signal harder is exactly why it degraded as `w` rose.
+
+Fixed with an explicit `_best_per_key`. **The lesson is small and sharp:
+`dict(pairs)` is a silent min when the pairs arrive sorted descending.**
+
+A second defect fixed in the same pass: the evaluator embedded the query with
+no task prefix while the stored spans were embedded as documents, so the two
+sat in different regions of `nomic-embed-text`'s space. Semantic won *despite*
+that handicap; the numbers above are a floor.
+
+**Not yet re-measured.** Both fixes landed after this run — the table above is
+the broken-fusion, unprefixed-query baseline. Re-running is the next step, and
+the open question is whether corrected hybrid now beats semantic alone or
+whether semantic-only is simply the right default for this corpus.
+
+`fuzzy_concept` remains the weak category and is worth its own look once the
+re-run lands: it is the one semantic should most help, and the category the
+whole embeddings exercise was aimed at.
