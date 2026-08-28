@@ -95,11 +95,24 @@ class RetrievalEvaluator:
         semantic_ready = self._semantic_ready()
         if "semantic" in methods or "hybrid" in methods:
             if not semantic_ready:
-                run.notes.append(
-                    "semantic and hybrid skipped: no embeddings stored for "
-                    f"model {self.embeddings.model_id!r}. Build them with "
-                    "`forge embeddings build`."
-                )
+                # Name what *is* stored. The build and eval commands take the
+                # same --provider flag and must agree; when they do not, the
+                # bare "no embeddings" message sends people to rebuild vectors
+                # that already exist under a different model id.
+                available = self.store.embedded_models()
+                if available:
+                    have = ", ".join(f"{m} ({n})" for m, n in sorted(available.items()))
+                    run.notes.append(
+                        f"semantic and hybrid skipped: no embeddings for model "
+                        f"{self.embeddings.model_id!r}. Stored: {have}. "
+                        f"Re-run with a matching --provider, or build vectors "
+                        f"for this model."
+                    )
+                else:
+                    run.notes.append(
+                        "semantic and hybrid skipped: no embeddings stored at all. "
+                        "Build them with `forge embeddings build --provider ollama`."
+                    )
 
         if "lexical" in methods:
             run.summaries.append(self._evaluate(dataset, "lexical"))

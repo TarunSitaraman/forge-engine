@@ -431,3 +431,50 @@ class TestEvaluator:
         assert DEFAULT_FUSION_WEIGHTS[0] == 0.0 and DEFAULT_FUSION_WEIGHTS[-1] == 1.0, (
             "the anchors must reproduce the pure methods"
         )
+
+
+class TestEmbeddingModelMismatchIsExplained:
+    """`embeddings build --provider X` and `retrieval-eval --provider Y` are
+    one flag apart, and the mismatch is silent: semantic is skipped and the
+    message says "no embeddings", which sends people to rebuild vectors that
+    already exist under a different model id. Observed 2026-08-28.
+    """
+
+    def test_the_note_names_the_models_that_do_have_vectors(self, tmp_path):
+        from forge.storage import SqliteStore
+
+        store = SqliteStore(tmp_path / "e.db")
+        store.initialize()
+        assert store.embedded_models() == {}
+
+    def test_stored_models_are_counted_by_name(self, tmp_path):
+        from forge.domain import Document, Source, SourceKind, Span
+        from forge.storage import SqliteStore
+
+        store = SqliteStore(tmp_path / "e.db")
+        store.initialize()
+        src = Source.for_path("a.md", kind=SourceKind.MARKDOWN, content_hash="h")
+        store.put_source(src)
+        doc = Document(
+            id=Document.make_id(src.id, "h"),
+            source_id=src.id,
+            parser="p",
+            parser_version="1",
+            content_hash="h",
+        )
+        store.put_document(doc)
+        span = Span(
+            id="sp1",
+            document_id=doc.id,
+            ordinal=0,
+            locator="L1",
+            start_line=1,
+            end_line=1,
+            text="body",
+            content_hash="h1",
+        )
+        store.put_spans([span])
+        store.put_embedding("span", "sp1", "nomic-embed-text+prefixed", [0.1, 0.2])
+
+        assert store.embedded_models() == {"nomic-embed-text+prefixed": 1}
+        store.close()

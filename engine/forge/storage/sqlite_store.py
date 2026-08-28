@@ -993,6 +993,16 @@ class SqliteStore:
     def count_embeddings(self) -> int:
         return int(self._one("SELECT COUNT(*) AS n FROM embeddings")["n"])  # type: ignore[index]
 
+    def embedded_models(self) -> dict[str, int]:
+        """model_id -> vector count, for reporting what is actually stored.
+
+        `forge embeddings build --provider ollama` and `forge retrieval-eval
+        --provider hashing` are one flag apart, and the mismatch shows up as
+        "semantic skipped" with no hint that vectors exist under another name.
+        """
+        rows = self._all("SELECT model, COUNT(*) AS n FROM embeddings GROUP BY model")
+        return {str(r["model"]): int(r["n"]) for r in rows}
+
     # -- helpers -----------------------------------------------------------
 
     def counts(self) -> dict[str, int]:
