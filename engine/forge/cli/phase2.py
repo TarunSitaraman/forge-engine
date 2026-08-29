@@ -24,6 +24,7 @@ from ..ingestion import IngestionPipeline, IngestOptions
 from ..llm import CALLS, get_provider
 from ..proposals import ProposalApplier, ProposalService, audit as audit_grounding
 from ..proposals.dedup import CLAIM_SIMILARITY, DEDUP_VERSION, find_duplicates
+from ..ingestion import ExtractionPlanner
 from ..retrieval import SearchQuery, SearchService
 from ..storage.sqlite_store import SqliteStore
 
@@ -397,6 +398,93 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
                     "  forge proposals audit-grounding --reject --no-dry-run"
                 )
             raise typer.Exit(code=1)
+
+    @app.command("extract-plan")
+    def extract_plan(
+        path: Path = typer.Argument(..., help="File or directory the run would cover."),
+        vault: Optional[Path] = typer.Option(None),
+        max_spans: int = typer.Option(12, help="Max spans sent to the model per document."),
+        seconds_per_call: Optional[float] = typer.Option(
+            None,
+            help=(
+                "Your measured seconds per call, for a wall-clock estimate. "
+                "No default: an invented rate is a fabricated measurement."
+            ),
+        ),
+        limit: int = typer.Option(20, help="Pending sources to list, costliest first."),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """What would `forge ingest --extract` cost here? Zero model calls.
+
+        Extraction is the only expensive thing this engine does. Every input to
+        its cost is already deterministic and already stored — which spans the
+        chunker produced, which the extractor would select, and whether the
+        derivation cache already holds a result — so the size of a run is
+        computable before committing hours to it.
+
+        Cached sources cost nothing on a re-run, which is what makes extraction
+        incremental: after the first pass the price tracks what you have
+        written since, not what you have written in total.
+
+        Sources never ingested are counted and named, never estimated: their
+        span count is not knowable without chunking them.
+        """
+        settings = settings_factory(vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        try:
+            # The plan must be keyed on the same model identity the run would
+            # use, so the provider is constructed — but never called, and its
+            # health is never probed. A plan is free even with the box off.
+            try:
+                extractor = CandidateExtractor(get_provider(settings), max_spans=max_spans)
+            except Exception as exc:
+                typer.echo(f"could not construct LLM provider: {exc}", err=True)
+                raise typer.Exit(code=2)
+
+            CALLS.reset()
+            pipeline = IngestionPipeline(settings, store, extractor=extractor)
+            plan = ExtractionPlanner(pipeline, extractor).plan(path)
+            plan.seconds_per_call = seconds_per_call
+        finally:
+            store.close()
+
+        assert CALLS.count == 0, "planning must not call the model"
+
+        if _emit(plan.to_dict(), json_out):
+            return
+
+        typer.echo(f"model : {plan.model_id}  prompt {plan.prompt_version}  max-spans {plan.max_spans}")
+        typer.echo(
+            f"scope : {len(plan.sources)} source(s) — {len(plan.cached)} cached, "
+            f"{len(plan.pending)} pending, {len(plan.duplicates)} duplicate content, "
+            f"{len(plan.unknown)} not ingested\n"
+        )
+
+        for source in sorted(plan.pending, key=lambda s: -s.calls)[:limit]:
+            typer.echo(
+                f"{source.calls:>5} calls  {source.selected}/{source.spans} spans  {source.locator}"
+            )
+        if len(plan.pending) > limit:
+            typer.echo(f"... and {len(plan.pending) - limit} more")
+
+        typer.echo(f"\n{plan.calls} model call(s) to run this.")
+        if plan.estimated_hours is not None:
+            typer.echo(
+                f"At {plan.seconds_per_call:.1f} s/call that is {plan.estimated_hours:.1f} h — "
+                "your measured rate, not a prediction of it."
+            )
+        else:
+            typer.echo(
+                "Pass --seconds-per-call with a rate you have measured for a wall-clock\n"
+                "estimate. 49.0 s/call was measured on 8B-local on 2026-08-19; it belongs\n"
+                "to that machine and that model and does not transfer."
+            )
+        if plan.unknown:
+            typer.echo(
+                f"\n{len(plan.unknown)} source(s) are not ingested, so their cost is unknown,\n"
+                "not zero. Run `forge ingest <path>` first to price them."
+            )
 
     @proposals_app.command("duplicates")
     def proposals_duplicates(

@@ -338,6 +338,78 @@ class TestProposalSampling:
         assert "random sample of 5 from 5" in result.output
 
 
+class TestExtractPlanCommand:
+    """A cost preview is only useful if it is free and refuses to invent numbers."""
+
+    def _env(self, settings):
+        return {
+            "FORGE_VAULT_PATH": str(settings.vault_path),
+            "FORGE_STATE_DIR": str(settings.state_dir),
+        }
+
+    def test_it_prices_an_ingested_vault_without_calling_the_model(self, settings, tmp_path):
+        from forge.ingestion import IngestionPipeline, IngestOptions
+
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        IngestionPipeline(settings, store).ingest_path(settings.vault_path, IngestOptions())
+        store.close()
+
+        CALLS.reset()
+        result = runner.invoke(
+            app,
+            ["extract-plan", str(settings.vault_path), "--json"],
+            env=self._env(settings),
+        )
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        assert payload["calls"] > 0
+        assert CALLS.count == 0, "a plan must cost nothing"
+
+    def test_it_refuses_a_wall_clock_estimate_without_a_measured_rate(self, settings):
+        result = runner.invoke(
+            app,
+            ["extract-plan", str(settings.vault_path), "--json"],
+            env=self._env(settings),
+        )
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["estimated_hours"] is None
+        assert payload["seconds_per_call"] is None
+
+    def test_a_supplied_rate_produces_an_estimate(self, settings, tmp_path):
+        from forge.ingestion import IngestionPipeline, IngestOptions
+
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        IngestionPipeline(settings, store).ingest_path(settings.vault_path, IngestOptions())
+        store.close()
+
+        result = runner.invoke(
+            app,
+            [
+                "extract-plan",
+                str(settings.vault_path),
+                "--seconds-per-call",
+                "49",
+                "--json",
+            ],
+            env=self._env(settings),
+        )
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["estimated_hours"] == pytest.approx(payload["calls"] * 49 / 3600)
+
+    def test_an_unpriced_vault_reports_unknown_rather_than_free(self, settings):
+        """Reporting an uningested corpus as a zero-cost run is the dangerous bug."""
+        result = runner.invoke(
+            app, ["extract-plan", str(settings.vault_path)], env=self._env(settings)
+        )
+        assert result.exit_code == 0
+        assert "not ingested" in result.output
+        assert "unknown" in result.output
+
+
 class TestProposalDuplicatesCommand:
     """Dedup has to be reachable from the `forge` command, not just importable.
 
