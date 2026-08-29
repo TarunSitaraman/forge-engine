@@ -50,6 +50,26 @@ ENGINE_DOCS = ("docs/",)
 #: tuned optimum.
 TITLE_BOOST = 1.25
 
+#: Retrieval mode for answering. Measured on the 24-query labelled set with
+#: `nomic-embed-text` over 1,724 spans (2026-08-28):
+#:
+#:     method          R@5     R@10    P@5     MRR
+#:     lexical         0.406   0.588   0.158   0.427
+#:     semantic        0.628   0.733   0.242   0.653
+#:     hybrid(w=0.75)  0.607   0.774   0.225   0.626
+#:
+#: Lexical is the worst option on every metric, so answering no longer defaults
+#: to it. w=0.75 is chosen over semantic-alone because answering hands the model
+#: eight passages at once: getting the right document *into* that set (R@10,
+#: 0.774 vs 0.733) matters more than its rank within it, and the residual
+#: lexical weight still catches exact-term queries an embedding blurs.
+#:
+#: The two are within noise of each other on 24 queries — this is the better
+#: available choice, not a tuned optimum. With no embeddings stored, retrieval
+#: degrades to lexical on its own.
+ANSWER_SEMANTIC = True
+ANSWER_SEMANTIC_WEIGHT = 0.75
+
 _CITATION_RE = re.compile(r"\[(\d+)\]")
 
 #: The model's exact signal that the vault cannot answer the question.
@@ -116,7 +136,7 @@ class Answerer:
         self.passages = passages
         self.exclude_sources = exclude_sources
 
-    def ask(self, question: str, *, semantic: bool = False) -> Answer:
+    def ask(self, question: str, *, semantic: bool = ANSWER_SEMANTIC) -> Answer:
         hits = self.search.search(
             SearchQuery(
                 text=question,
@@ -124,6 +144,7 @@ class Answerer:
                 semantic=semantic,
                 exclude_sources=self.exclude_sources,
                 title_boost=TITLE_BOOST,
+                semantic_weight=ANSWER_SEMANTIC_WEIGHT,
             )
         )
         if not hits:

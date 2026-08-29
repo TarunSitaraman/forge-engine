@@ -107,3 +107,20 @@ class TestQueryConstruction:
         search = _FakeSearch(_hits(1))
         Answerer(search, MockProvider(default_response="x [1]")).ask("q")
         assert search.last_query.title_boost == 1.25
+
+    def test_answering_defaults_to_semantic_retrieval(self):
+        """Measured 2026-08-28: lexical is the worst option on every metric.
+
+        lexical R@10 0.588, semantic 0.733, hybrid(0.75) 0.774. Answering used
+        to default to lexical-only, which the labelled set says is the weakest
+        retriever available once real embeddings exist.
+        """
+        search = _FakeSearch(_hits(1))
+        Answerer(search, MockProvider(default_response="x [1]")).ask("q")
+        assert search.last_query.semantic is True
+        assert search.last_query.semantic_weight == 0.75
+
+    def test_semantic_can_still_be_turned_off(self):
+        search = _FakeSearch(_hits(1))
+        Answerer(search, MockProvider(default_response="x [1]")).ask("q", semantic=False)
+        assert search.last_query.semantic is False

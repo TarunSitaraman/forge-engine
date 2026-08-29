@@ -380,11 +380,36 @@ no task prefix while the stored spans were embedded as documents, so the two
 sat in different regions of `nomic-embed-text`'s space. Semantic won *despite*
 that handicap; the numbers above are a floor.
 
-**Not yet re-measured.** Both fixes landed after this run — the table above is
-the broken-fusion, unprefixed-query baseline. Re-running is the next step, and
-the open question is whether corrected hybrid now beats semantic alone or
-whether semantic-only is simply the right default for this corpus.
+### Re-measured after both fixes (2026-08-28)
 
-`fuzzy_concept` remains the weak category and is worth its own look once the
-re-run lands: it is the one semantic should most help, and the category the
-whole embeddings exercise was aimed at.
+| Method | R@5 | R@10 | P@5 | MRR | misses |
+|---|---:|---:|---:|---:|---:|
+| lexical | 0.406 | 0.588 | 0.158 | 0.427 | 6 |
+| semantic | **0.628** | 0.733 | **0.242** | **0.653** | 4 |
+| hybrid(w=0.25) | 0.447 | 0.747 | 0.175 | 0.515 | **3** |
+| hybrid(w=0.5) | 0.551 | 0.760 | 0.200 | 0.582 | **3** |
+| hybrid(w=0.75) | 0.607 | **0.774** | 0.225 | 0.626 | 4 |
+
+**Hybrid now beats lexical at every weight**, where before it lost at every
+weight. The contradiction is gone, which is the confirmation that the min-per-
+document aggregation was the cause rather than a coincidence.
+
+**The query-prefix fix was worth more than the fusion fix.** Semantic alone
+moved +0.125 R@5 and **+0.196 MRR** on nothing but embedding the query as
+`search_query:` instead of as a document. A one-line omission was costing about
+a third of the ranking quality, and it produced no error, no warning, and no
+failing test — the vectors were valid the whole time.
+
+**Lexical is now the worst option on every metric**, so `forge ask` no longer
+defaults to it. It uses `w=0.75`: answering hands the model eight passages at
+once, so getting the right document *into* that set (R@10 0.774 vs 0.733)
+matters more than its rank within it, while the residual lexical weight still
+catches exact-term queries an embedding blurs. Semantic-alone wins R@5, P@5 and
+MRR and is within noise on 24 queries — this is the better available choice,
+not a tuned optimum.
+
+**`fuzzy_concept` is still the weak category: R@10 0.200.** It improved from
+0.100 but remains far below every other category, and it is the one the whole
+embeddings exercise was aimed at. Five queries is too few to conclude much, and
+the honest reading is that describing a concept without naming it is still hard
+here — worth its own investigation rather than another round of weight tuning.

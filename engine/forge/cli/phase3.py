@@ -480,7 +480,11 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         question: str = typer.Argument(..., help="What you want to know."),
         vault: Optional[Path] = typer.Option(None),
         passages: int = typer.Option(8, help="Spans to put in front of the model."),
-        semantic: bool = typer.Option(False, "--semantic", help="Re-rank with embeddings."),
+        semantic: bool = typer.Option(
+            True,
+            "--semantic/--no-semantic",
+            help="Use embeddings alongside lexical retrieval. On by default.",
+        ),
         show_passages: bool = typer.Option(False, "--show-passages"),
         json_out: bool = typer.Option(False, "--json"),
     ) -> None:
