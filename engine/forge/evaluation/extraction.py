@@ -16,7 +16,15 @@ A set that only rewarded recall would score a maximally greedy extractor best,
 which is precisely the failure mode.
 
 Claims are scored on **grounding**, which needs no labels at all: a quote is
-either present in its span or it is not, and that check is deterministic.
+either present in its span or it is not, and that check is deterministic. The
+denominator has to include the claims the extractor *dropped* for exactly that
+reason, though — its returned `claims` have already passed `_grounded`, so
+scoring only those reports 1.000 for every model ever tested.
+
+**A case whose calls did not all return is not scored.** A timeout does not
+raise; it returns a truncated result, and a case that emitted nothing cannot
+emit anything forbidden. Folding those in made the first real run report
+`junk=0.00` partly because output was missing rather than clean.
 """
 
 from __future__ import annotations
@@ -97,8 +105,24 @@ class CaseScore:
     extra: list[str] = field(default_factory=list)
     claims: int = 0
     grounded_claims: int = 0
+    #: Claims the extractor discarded as ungrounded before returning. They are
+    #: the only reason the grounding rate can move: `result.claims` holds
+    #: survivors of the same check this eval applies, so scoring survivors
+    #: alone yields 1.000 by construction and measures nothing.
+    dropped_claims: int = 0
     llm_calls: int = 0
     error: str | None = None
+    #: The extractor's own verdict on this case. Anything but "succeeded"
+    #: means some call did not return, so the case's emitted set is truncated
+    #: and scoring it would understate junk and recall alike.
+    status: str = "succeeded"
+    #: Failure kinds the extractor reported — `llm_error`, `ungrounded_claim`.
+    failures: list[str] = field(default_factory=list)
+
+    @property
+    def complete(self) -> bool:
+        """Did every call for this case return? Only then is the score real."""
+        return self.status == "succeeded" and self.error is None
 
     @property
     def recall(self) -> float:
@@ -115,8 +139,12 @@ class CaseScore:
             "extra": self.extra,
             "claims": self.claims,
             "grounded_claims": self.grounded_claims,
+            "dropped_claims": self.dropped_claims,
             "llm_calls": self.llm_calls,
             "error": self.error,
+            "status": self.status,
+            "complete": self.complete,
+            "failures": self.failures,
         }
 
 
@@ -128,8 +156,28 @@ class ExtractionReport:
     duration_seconds: float = 0.0
 
     @property
+    def complete(self) -> list[CaseScore]:
+        """Cases every call returned for. Every rate below is over these only.
+
+        A timed-out case emits nothing, and nothing cannot be junk — so folding
+        it in makes a broken run look clean. Observed on the first real run,
+        2026-08-29: four timeouts in a 12-call run reported `junk=0.00`, which
+        was in part the absence of output rather than the absence of junk.
+        """
+        return [s for s in self.scores if s.complete]
+
+    @property
+    def failed(self) -> list[CaseScore]:
+        return [s for s in self.scores if not s.complete]
+
+    @property
+    def trustworthy(self) -> bool:
+        """No score is quotable as a property of the model unless this holds."""
+        return not self.failed and bool(self.scores)
+
+    @property
     def recall(self) -> float:
-        return _mean([s.recall for s in self.scores])
+        return _mean([s.recall for s in self.complete])
 
     @property
     def junk_rate(self) -> float:
@@ -138,14 +186,23 @@ class ExtractionReport:
         The headline number. Recall alone rewards a greedy extractor, which is
         the failure this corpus actually had.
         """
-        emitted = sum(len(s.found) + len(s.junk) + len(s.extra) for s in self.scores)
-        junk = sum(len(s.junk) for s in self.scores)
+        emitted = sum(len(s.found) + len(s.junk) + len(s.extra) for s in self.complete)
+        junk = sum(len(s.junk) for s in self.complete)
         return junk / emitted if emitted else 0.0
 
     @property
     def grounding_rate(self) -> float:
-        total = sum(s.claims for s in self.scores)
-        grounded = sum(s.grounded_claims for s in self.scores)
+        """Share of claims the model produced whose quote was really in the span.
+
+        The denominator must include the claims the extractor *dropped*. Its
+        `claims` list has already survived `_grounded`, so re-checking only
+        those returns 1.000 for any model, however badly it quotes — a metric
+        that cannot fail is worse than no metric, because it reassures.
+        """
+        kept = sum(s.claims for s in self.complete)
+        dropped = sum(s.dropped_claims for s in self.complete)
+        grounded = sum(s.grounded_claims for s in self.complete)
+        total = kept + dropped
         return grounded / total if total else 1.0
 
     @property
@@ -157,6 +214,9 @@ class ExtractionReport:
             "model_id": self.model_id,
             "prompt_version": self.prompt_version,
             "cases": len(self.scores),
+            "scored": len(self.complete),
+            "failed": len(self.failed),
+            "trustworthy": self.trustworthy,
             "recall": round(self.recall, 3),
             "junk_rate": round(self.junk_rate, 3),
             "grounding_rate": round(self.grounding_rate, 3),
@@ -166,10 +226,15 @@ class ExtractionReport:
         }
 
     def summary_line(self) -> str:
+        scope = (
+            f"{len(self.complete)}/{len(self.scores)} cases"
+            if not self.trustworthy
+            else f"{len(self.scores)} cases"
+        )
         return (
             f"{self.model_id}  prompt={self.prompt_version}  "
             f"recall={self.recall:.2f}  junk={self.junk_rate:.2f}  "
-            f"grounded={self.grounding_rate:.2f}  calls={self.llm_calls}"
+            f"grounded={self.grounding_rate:.2f}  calls={self.llm_calls}  {scope}"
         )
 
 
@@ -180,6 +245,9 @@ def score_case(
     *,
     llm_calls: int = 0,
     error: str | None = None,
+    status: str = "succeeded",
+    failures: Sequence[str] = (),
+    dropped_claims: int = 0,
 ) -> CaseScore:
     """Score one case's extracted concepts and claims.
 
@@ -205,8 +273,11 @@ def score_case(
         extra=sorted(extra),
         claims=len(claims),
         grounded_claims=grounded,
+        dropped_claims=dropped_claims,
         llm_calls=llm_calls,
         error=error,
+        status=status,
+        failures=list(failures),
     )
 
 
@@ -255,15 +326,25 @@ def run(
             result = extractor.extract([make_span(case)])
         except Exception as exc:  # a provider failure is a result, not a crash
             report.scores.append(
-                score_case(case, [], error=f"{type(exc).__name__}: {exc}"[:200])
+                score_case(
+                    case, [], error=f"{type(exc).__name__}: {exc}"[:200], status="failed"
+                )
             )
             continue
+        # A timeout does not raise: `extract` catches it per call and returns
+        # a PARTIAL result with fewer concepts. Reading only the exception path
+        # scored a truncated case as a clean one.
         report.scores.append(
             score_case(
                 case,
                 [c.name for c in result.concepts],
                 [(c.statement, c.evidence_quote) for c in result.claims],
                 llm_calls=result.llm_calls,
+                status=result.status.value,
+                failures=sorted({str(f.get("kind", "unknown")) for f in result.failures}),
+                dropped_claims=sum(
+                    1 for f in result.failures if f.get("kind") == "ungrounded_quote"
+                ),
             )
         )
 

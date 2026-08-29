@@ -158,3 +158,116 @@ class TestRunnerUsesTheRealExtractor:
         data = ExtractionDataset.load("tests/fixtures/eval/extraction-v1.yaml")
         report = run(data, _Broken())
         assert all(s.error and "provider exploded" in s.error for s in report.scores)
+
+
+class TestATruncatedRunCannotLookClean:
+    """A timeout does not raise — it returns fewer concepts.
+
+    Found on the first real run, 2026-08-29: four timeouts in a 12-call run
+    reported `junk=0.00`, which was in part the absence of output rather than
+    the absence of junk. Same class as the cached-empty-result bug and the
+    `+nothink` confound — plausible output, no exception thrown.
+    """
+
+    def _case(self, **kw):
+        from forge.evaluation.extraction import ExtractionCase
+
+        defaults = dict(
+            id="c1",
+            text="A span of text about B-tree indexes.",
+            expected=("B-tree index",),
+            forbidden=("VARCHAR(n)",),
+        )
+        defaults.update(kw)
+        return ExtractionCase(**defaults)
+
+    def test_a_partial_case_is_not_scored(self):
+        from forge.evaluation.extraction import ExtractionReport, score_case
+
+        clean = score_case(self._case(), ["B-tree index"])
+        timed_out = score_case(self._case(id="c2"), [], status="partial")
+
+        report = ExtractionReport(model_id="m", prompt_version="p")
+        report.scores = [clean, timed_out]
+
+        assert not report.trustworthy
+        assert [s.case_id for s in report.complete] == ["c1"]
+        assert [s.case_id for s in report.failed] == ["c2"]
+
+    def test_an_empty_case_does_not_dilute_the_junk_rate(self):
+        """The specific bug: nothing emitted cannot be junk, so it reads clean."""
+        from forge.evaluation.extraction import ExtractionReport, score_case
+
+        dirty = score_case(self._case(), ["B-tree index", "VARCHAR(n)"])
+        timed_out = score_case(self._case(id="c2"), [], status="partial")
+
+        honest = ExtractionReport(model_id="m", prompt_version="p")
+        honest.scores = [dirty, timed_out]
+        assert honest.junk_rate == pytest.approx(0.5)
+
+        scored_alone = ExtractionReport(model_id="m", prompt_version="p")
+        scored_alone.scores = [dirty]
+        assert honest.junk_rate == scored_alone.junk_rate
+
+    def test_the_summary_says_how_many_cases_the_numbers_rest_on(self):
+        from forge.evaluation.extraction import ExtractionReport, score_case
+
+        report = ExtractionReport(model_id="m", prompt_version="p")
+        report.scores = [
+            score_case(self._case(), ["B-tree index"]),
+            score_case(self._case(id="c2"), [], status="partial"),
+        ]
+        assert "1/2 cases" in report.summary_line()
+
+    def test_a_clean_run_says_nothing_about_partial_scope(self):
+        from forge.evaluation.extraction import ExtractionReport, score_case
+
+        report = ExtractionReport(model_id="m", prompt_version="p")
+        report.scores = [score_case(self._case(), ["B-tree index"])]
+        assert report.trustworthy
+        assert "/" not in report.summary_line().split("cases")[0].split("calls=")[-1]
+
+
+class TestGroundingRateCanActuallyFail:
+    """`result.claims` has already passed `_grounded`, so survivors score 1.000.
+
+    A metric that cannot fail is worse than no metric: it reassures. The
+    denominator must include the claims the extractor discarded.
+    """
+
+    def _case(self):
+        from forge.evaluation.extraction import ExtractionCase
+
+        return ExtractionCase(
+            id="g1",
+            text="Redis evicts keys when maxmemory is reached.",
+            expected=(),
+            forbidden=(),
+        )
+
+    def test_dropped_claims_count_against_grounding(self):
+        from forge.evaluation.extraction import ExtractionReport, score_case
+
+        score = score_case(
+            self._case(),
+            [],
+            claims=[("Redis evicts keys.", "Redis evicts keys when maxmemory is reached.")],
+            dropped_claims=1,
+        )
+        report = ExtractionReport(model_id="m", prompt_version="p")
+        report.scores = [score]
+        assert report.grounding_rate == pytest.approx(0.5)
+
+    def test_without_drops_the_rate_is_one_by_construction(self):
+        """Pins why the denominator matters: survivors alone always score 1.0."""
+        from forge.evaluation.extraction import ExtractionReport, score_case
+
+        score = score_case(
+            self._case(),
+            [],
+            claims=[("Redis evicts keys.", "Redis evicts keys when maxmemory is reached.")],
+        )
+        report = ExtractionReport(model_id="m", prompt_version="p")
+        report.scores = [score]
+        assert report.grounding_rate == 1.0
+        assert score.dropped_claims == 0

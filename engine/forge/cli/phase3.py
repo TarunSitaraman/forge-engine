@@ -782,7 +782,12 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         `VARCHAR(n)` returned as concepts), and a set that only rewarded recall
         would score a maximally greedy extractor best.
 
-        Exits 1 if any case errored, so it composes in a script.
+        A case whose calls did not all return is **not scored**, and the run is
+        marked untrustworthy. A timeout does not raise — it returns a truncated
+        result — and a case that emitted nothing cannot emit anything
+        forbidden, so folding it in makes a broken run look clean.
+
+        Exits 1 if any case failed, so it composes in a script.
         """
         from ..evaluation.extraction import ExtractionDataset, run
         from ..extraction import CandidateExtractor
@@ -805,18 +810,41 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         report = run(data, CandidateExtractor(provider, max_spans=1))
 
         if _emit(report.to_dict(), json_out):
-            raise typer.Exit(code=1 if any(s.error for s in report.scores) else 0)
+            raise typer.Exit(code=0 if report.trustworthy else 1)
 
         typer.echo(f"dataset: {data.path} (v{data.version}, {len(data)} cases)\n")
         typer.echo(f"  {report.summary_line()}\n")
         typer.echo(f"  recall        {report.recall:.3f}   expected concepts found")
         typer.echo(f"  junk rate     {report.junk_rate:.3f}   emitted concepts that are forbidden")
-        typer.echo(f"  grounding     {report.grounding_rate:.3f}   claim quotes present in the span")
+        typer.echo(
+            f"  grounding     {report.grounding_rate:.3f}   quotes really in the span "
+            f"(of {sum(s.claims + s.dropped_claims for s in report.complete)} claims)"
+        )
+
+        if not report.trustworthy:
+            typer.echo(
+                f"\n  UNTRUSTWORTHY — {len(report.failed)} of {len(report.scores)} case(s) "
+                "did not complete.\n"
+                "  Every rate above is over the "
+                f"{len(report.complete)} case(s) that did, and none of them is a\n"
+                "  property of this model until the run is clean. A case that emitted\n"
+                "  nothing scores zero junk, which is absence of output, not quality.",
+                err=True,
+            )
+            for score in report.failed:
+                why = score.error or ", ".join(score.failures) or score.status
+                typer.echo(f"    [{score.case_id}] {score.status}: {why}", err=True)
+            typer.echo(
+                "\n  Raise FORGE_LLM_TIMEOUT and re-run. There is no cache on this path,\n"
+                "  so a re-run repeats every call.",
+                err=True,
+            )
 
         if detail:
             typer.echo("")
             for score in report.scores:
-                typer.echo(f"  [{score.case_id}] recall={score.recall:.2f}")
+                mark = "" if score.complete else f"  [{score.status}, NOT SCORED]"
+                typer.echo(f"  [{score.case_id}] recall={score.recall:.2f}{mark}")
                 if score.missed:
                     typer.echo(f"      missed : {', '.join(score.missed)}")
                 if score.junk:
