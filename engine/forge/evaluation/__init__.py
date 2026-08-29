@@ -8,11 +8,23 @@ from .assessment import (
     AssessmentReport,
     CaseResult,
 )
+from .extraction import (
+    DEFAULT_EXTRACTION_SET,
+    ExtractionDataset,
+    ExtractionDatasetError,
+    ExtractionReport,
+    score_case,
+)
 from .dataset import DEFAULT_DATASET, DatasetError, EvalDataset, EvalQuery
 from .metrics import MetricSummary, QueryScore, compare, score_query, summarize
 from .runner import DEFAULT_FUSION_WEIGHTS, EvaluationRun, RetrievalEvaluator
 
 __all__ = [
+    "ExtractionDataset",
+    "ExtractionDatasetError",
+    "ExtractionReport",
+    "DEFAULT_EXTRACTION_SET",
+    "score_case",
     "EvalDataset",
     "EvalQuery",
     "DatasetError",

@@ -762,6 +762,73 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
 
     # -- evaluation --------------------------------------------------------
 
+    @app.command(name="extraction-eval")
+    def extraction_eval(
+        vault: Optional[Path] = typer.Option(None),
+        dataset: Optional[Path] = typer.Option(None, help="Labelled extraction set."),
+        detail: bool = typer.Option(False, help="Show per-case hits and misses."),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Measure extraction quality against a labelled set.
+
+        Until this existed, no extraction change could be judged: the `0.2.0` ->
+        `0.3.0` prompt rewrite was assessed by reading fifty proposals by hand,
+        and the reasoning-off experiment had to be run against the *assessment*
+        set instead — which is why its conclusion covered classification and
+        said nothing about extraction.
+
+        The headline metric is **junk rate**, not recall. Over-extraction was
+        the measured failure on this corpus (`RAM`, `Answer`, `maxmemory`,
+        `VARCHAR(n)` returned as concepts), and a set that only rewarded recall
+        would score a maximally greedy extractor best.
+
+        Exits 1 if any case errored, so it composes in a script.
+        """
+        from ..evaluation.extraction import ExtractionDataset, run
+        from ..extraction import CandidateExtractor
+        from ..llm import get_provider
+        from ..llm.base import ProviderUnavailable
+
+        settings = settings_factory(vault)
+        try:
+            data = ExtractionDataset.load(dataset)
+        except Exception as exc:
+            typer.echo(f"error: {exc}", err=True)
+            raise typer.Exit(code=2)
+
+        try:
+            provider = get_provider(settings)
+        except ProviderUnavailable as exc:
+            typer.echo(f"no model available: {exc}", err=True)
+            raise typer.Exit(code=2)
+
+        report = run(data, CandidateExtractor(provider, max_spans=1))
+
+        if _emit(report.to_dict(), json_out):
+            raise typer.Exit(code=1 if any(s.error for s in report.scores) else 0)
+
+        typer.echo(f"dataset: {data.path} (v{data.version}, {len(data)} cases)\n")
+        typer.echo(f"  {report.summary_line()}\n")
+        typer.echo(f"  recall        {report.recall:.3f}   expected concepts found")
+        typer.echo(f"  junk rate     {report.junk_rate:.3f}   emitted concepts that are forbidden")
+        typer.echo(f"  grounding     {report.grounding_rate:.3f}   claim quotes present in the span")
+
+        if detail:
+            typer.echo("")
+            for score in report.scores:
+                typer.echo(f"  [{score.case_id}] recall={score.recall:.2f}")
+                if score.missed:
+                    typer.echo(f"      missed : {', '.join(score.missed)}")
+                if score.junk:
+                    typer.echo(f"      JUNK   : {', '.join(score.junk)}")
+                if score.extra:
+                    typer.echo(f"      extra  : {', '.join(score.extra)}")
+                if score.error:
+                    typer.echo(f"      error  : {score.error}")
+
+        if any(s.error for s in report.scores):
+            raise typer.Exit(code=1)
+
     @app.command(name="retrieval-eval")
     def retrieval_eval(
         vault: Optional[Path] = typer.Option(None),

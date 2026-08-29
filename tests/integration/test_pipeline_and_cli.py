@@ -338,6 +338,99 @@ class TestProposalSampling:
         assert "random sample of 5 from 5" in result.output
 
 
+class TestProposalDuplicatesCommand:
+    """Dedup has to be reachable from the `forge` command, not just importable.
+
+    Recorded rule from 2026-08-19: an operational tool a user runs belongs on
+    the CLI. The engine is installed with pipx, so a module the user cannot
+    invoke is a module the user does not have.
+    """
+
+    def _env(self, settings):
+        return {
+            "FORGE_VAULT_PATH": str(settings.vault_path),
+            "FORGE_STATE_DIR": str(settings.state_dir),
+        }
+
+    def _seed(self, settings, names):
+        from forge.domain import (
+            Derivation,
+            EntityType,
+            Proposal,
+            ProposalType,
+            ProposedOperation,
+            Provenance,
+            ProvenanceTier,
+            SafetyClass,
+        )
+        from forge.storage import SqliteStore
+
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        for i, name in enumerate(names):
+            store.put_proposal(
+                Proposal(
+                    id=f"d{i:04d}",
+                    type=ProposalType.NEW_CONCEPT,
+                    safety=SafetyClass.MODEL_GENERATED,
+                    target_entity_type=EntityType.CONCEPT,
+                    operation=ProposedOperation(action="create_concept", target=name),
+                    reason="test",
+                    evidence_span_ids=(f"sp{i:04d}",),
+                    provenance=Provenance(
+                        tier=ProvenanceTier.EXTRACTED_CLAIM,
+                        derivation=Derivation.MODEL,
+                        confidence=0.5,
+                        agent="test/1",
+                        model_id="test-model",
+                    ),
+                )
+            )
+        store.close()
+
+    def test_an_empty_store_is_not_an_error(self, settings):
+        result = runner.invoke(app, ["proposals", "duplicates"], env=self._env(settings))
+        assert result.exit_code == 0
+        assert "no duplicate clusters" in result.output
+
+    def test_it_reports_an_alias_pair_and_suggests_a_survivor(self, settings):
+        self._seed(settings, ["Reranking", "Reranker", "Binary Search"])
+        result = runner.invoke(app, ["proposals", "duplicates"], env=self._env(settings))
+        assert result.exit_code == 0
+        assert "Reranking" in result.output
+        assert "Binary Search" not in result.output, "a lone concept is not a cluster"
+
+    def test_it_reports_but_never_decides(self, settings):
+        """The command must not change any proposal's status."""
+        from forge.domain import ProposalStatus
+        from forge.storage import SqliteStore
+
+        self._seed(settings, ["Reranking", "Reranker"])
+        runner.invoke(app, ["proposals", "duplicates"], env=self._env(settings))
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        statuses = {p.status for p in store.list_proposals()}
+        store.close()
+        assert statuses == {ProposalStatus.PENDING}
+
+    def test_a_bad_status_filter_exits_two_without_a_traceback(self, settings):
+        result = runner.invoke(
+            app, ["proposals", "duplicates", "--status", "bogus"], env=self._env(settings)
+        )
+        assert result.exit_code == 2
+        assert "Traceback" not in result.output
+
+    def test_json_output_carries_the_dedup_version(self, settings):
+        self._seed(settings, ["Reranking", "Reranker"])
+        result = runner.invoke(
+            app, ["proposals", "duplicates", "--json"], env=self._env(settings)
+        )
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["version"].startswith("dedup/")
+        assert payload["redundant"] == 1
+
+
 class TestStatusReportsModelIdentity:
     """`forge status` must show the identity extraction will actually cache under.
 

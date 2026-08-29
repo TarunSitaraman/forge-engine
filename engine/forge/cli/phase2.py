@@ -23,6 +23,7 @@ from ..extraction import CandidateExtractor
 from ..ingestion import IngestionPipeline, IngestOptions
 from ..llm import CALLS, get_provider
 from ..proposals import ProposalApplier, ProposalService, audit as audit_grounding
+from ..proposals.dedup import CLAIM_SIMILARITY, DEDUP_VERSION, find_duplicates
 from ..retrieval import SearchQuery, SearchService
 from ..storage.sqlite_store import SqliteStore
 
@@ -396,6 +397,80 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
                     "  forge proposals audit-grounding --reject --no-dry-run"
                 )
             raise typer.Exit(code=1)
+
+    @proposals_app.command("duplicates")
+    def proposals_duplicates(
+        vault: Optional[Path] = typer.Option(None),
+        status: Optional[str] = typer.Option(
+            "pending", "--status", help="pending|approved|rejected|activated|all"
+        ),
+        threshold: float = typer.Option(
+            CLAIM_SIMILARITY, help="Claim similarity at which two statements cluster."
+        ),
+        limit: int = typer.Option(20, help="Clusters to print, largest first."),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Report proposals that say the same thing in different words.
+
+        Zero model calls. The extractor sends one span per call, so it cannot
+        know another span already produced the same fact — deduplication is not
+        something a prompt rule can fix, and being deterministic it applies
+        retroactively to an already-extracted corpus for free.
+
+        Nothing is merged. Deciding that two statements are one is a judgement,
+        and judgement routes to a human; this prints clusters and a suggested
+        survivor for review.
+        """
+        settings = settings_factory(vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        try:
+            service = ProposalService(store)
+            found = service.list(
+                status=(
+                    None
+                    if status is None or status.strip().lower() == "all"
+                    else _enum_option(ProposalStatus, status, "--status")
+                ),
+                limit=100_000,
+            )
+            clusters = find_duplicates(found, threshold=threshold)
+        finally:
+            store.close()
+
+        redundant = sum(len(c.proposal_ids) - 1 for c in clusters)
+        if _emit(
+            {
+                "version": DEDUP_VERSION,
+                "threshold": threshold,
+                "examined": len(found),
+                "clusters": [c.to_dict() for c in clusters],
+                "redundant": redundant,
+            },
+            json_out,
+        ):
+            return
+
+        if not clusters:
+            typer.echo(f"{len(found)} proposal(s) examined — no duplicate clusters.")
+            return
+
+        for cluster in clusters[:limit]:
+            typer.echo(f"{cluster.kind:<8} x{len(cluster.proposal_ids)}  keep: {cluster.suggested}")
+            for label in cluster.labels:
+                if label != cluster.suggested:
+                    typer.echo(f"           dup : {label}")
+            typer.echo("")
+
+        shown = min(limit, len(clusters))
+        typer.echo(
+            f"{len(clusters)} cluster(s) over {len(found)} proposal(s), {shown} shown; "
+            f"{redundant} proposal(s) are redundant."
+        )
+        typer.echo(
+            "Review before acting — a cluster is a suggestion, not a decision.\n"
+            "  forge proposals show <id>"
+        )
 
     @proposals_app.command("show")
     def proposals_show(

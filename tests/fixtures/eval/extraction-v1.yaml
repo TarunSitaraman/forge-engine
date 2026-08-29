@@ -1,0 +1,98 @@
+# Extraction quality evaluation set, version 1.
+#
+# WHY THIS EXISTS
+#
+# Every extraction comparison made in August 2026 came out confounded, because
+# there was nothing to measure against. A prompt rewrite could not be judged
+# (`0.2.0` -> `0.3.0` was assessed by reading 50 proposals by hand); a
+# reasoning-off run could not be judged at all, and it turned out to have been
+# governing a 5.66-hour run that nobody knew about. This set exists so the next
+# change to a prompt, a model, or a decoding mode produces a number.
+#
+# WHAT IT MEASURES
+#
+# Concept extraction, against the failure modes actually observed on this
+# corpus rather than against a general notion of quality:
+#
+#   * `expected` — concepts a careful reader would say the span is about. Recall.
+#   * `forbidden` — strings the model has actually returned as "concepts" on
+#     this vault: bare generic words (`RAM`, `Answer`, `Fluency`), commands and
+#     flags (`git commit`), config keys (`maxmemory`), type names
+#     (`VARCHAR(n)`), and file names (`.dockerignore`). Extracting any of these
+#     is a defect, and over-extraction — not under-extraction — was the
+#     measured problem: a 25-concept sample was ~35-40% usable.
+#
+# Claims are scored on grounding, which is deterministic and needs no labels:
+# a quote is either present in the span or it is not.
+#
+# SELECTION METHODOLOGY
+#
+# Six spans drawn from the real vault's own subject matter, each written to
+# contain at least one plausible trap. A span with no forbidden candidate in it
+# cannot distinguish a careful extractor from a lucky one.
+
+version: 1
+unit: extraction
+
+cases:
+  - id: redis-persistence
+    note: "`maxmemory` is a config key and `RDB` a file format; neither is a concept."
+    text: >-
+      Redis offers two persistence mechanisms. RDB takes point-in-time snapshots
+      of the dataset at configured intervals, while AOF logs every write
+      operation and replays it on restart. The maxmemory directive caps how much
+      the server will hold before the configured eviction policy applies.
+    expected: ["Redis", "AOF", "eviction policy"]
+    forbidden: ["maxmemory", "RDB file", "directive", "server"]
+
+  - id: docker-images
+    note: "A cheat-sheet-flavoured span. `.dockerignore` and `docker build` are not concepts."
+    text: >-
+      A Docker image is built in layers, and each instruction in the Dockerfile
+      creates one. Ordering instructions from least to most frequently changed
+      maximises cache reuse across builds. Files listed in .dockerignore never
+      enter the build context, which keeps images small and builds fast.
+    expected: ["Docker image", "layer caching", "build context"]
+    forbidden: [".dockerignore", "docker build", "Dockerfile instruction", "Files"]
+
+  - id: rag-grounding
+    note: "`Answer` and `Vector` were both returned as concepts on the real run."
+    text: >-
+      Retrieval Augmented Generation grounds a model's answer in passages
+      fetched from a corpus at query time, rather than relying on what the model
+      memorised during training. Retrieval quality bounds answer quality: if the
+      relevant passage is never retrieved, no amount of prompting recovers it.
+    expected: ["Retrieval Augmented Generation", "retrieval quality"]
+    forbidden: ["Answer", "Vector", "corpus", "training", "passage"]
+
+  - id: postgres-indexing
+    note: "`VARCHAR(n)` is a type name; `CREATE INDEX` is a statement."
+    text: >-
+      A B-tree index speeds equality and range lookups but costs write
+      throughput, since every insert must maintain it. A partial index covers
+      only the rows matching a predicate, which keeps it small when queries
+      always filter the same way. Declaring a column VARCHAR(n) rather than text
+      buys no performance in PostgreSQL.
+    expected: ["B-tree index", "partial index", "PostgreSQL"]
+    forbidden: ["VARCHAR(n)", "CREATE INDEX", "column", "predicate"]
+
+  - id: sliding-window
+    note: "A DSA span. `Array` alone is too generic for what this text is about."
+    text: >-
+      The sliding window pattern maintains a contiguous range over a sequence
+      and moves its boundaries instead of recomputing each subrange from
+      scratch, turning a quadratic scan into a linear one. It applies when the
+      quantity being tracked can be updated incrementally as elements enter and
+      leave the window.
+    expected: ["sliding window", "amortized analysis"]
+    forbidden: ["Array", "sequence", "boundary", "elements"]
+
+  - id: git-history
+    note: "`git commit` and `git rebase` are commands, not concepts."
+    text: >-
+      Rebasing rewrites commit history by replaying changes onto a new base,
+      which produces a linear history at the cost of changing commit hashes.
+      Never rebase a branch others have pulled, because their history and yours
+      then disagree about the same work.
+    expected: ["rebase", "commit history"]
+    forbidden: ["git commit", "git rebase", "branch", "hashes"]
