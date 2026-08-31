@@ -7,6 +7,8 @@ the real corpus is never written to.
 from __future__ import annotations
 
 import json
+import os
+from unittest import mock
 
 import pytest
 from typer.testing import CliRunner
@@ -533,6 +535,48 @@ class TestStatusReportsModelIdentity:
         assert result.exit_code == 0
         assert "+nothink" in result.stdout
         assert "reasoning is OFF" in result.stdout
+
+    def test_a_cloud_deployment_does_not_report_the_ollama_model(self, settings):
+        """Observed on the Mac, 2026-08-29: cloud running llama-3.3-70b-versatile
+        reported `llama3.1:8b`.
+
+        `settings.llm.models` is the ollama role map and carries its defaults
+        whatever the provider is, so reading it alone names a model that is not
+        running. Extraction itself was correct — it asks the provider — but a
+        status line that confidently names the wrong model is precisely the
+        failure this command was added to prevent.
+        """
+        env = self._env(
+            settings,
+            FORGE_LLM_PROVIDER="cloud",
+            FORGE_CLOUD_PRESET="groq",
+            FORGE_CLOUD_MODEL="llama-3.3-70b-versatile",
+            GROQ_API_KEY="dummy-key-for-shape-only",
+        )
+        result = runner.invoke(app, ["status"], env=env)
+        assert result.exit_code == 0
+        assert "llama-3.3-70b-versatile" in result.stdout
+        assert "llama3.1:8b" not in result.stdout
+
+    def test_status_agrees_with_what_extraction_would_cache_under(self, settings):
+        """The two must never disagree — the identity is part of the derivation key."""
+        from forge.config import Settings
+        from forge.extraction import CandidateExtractor
+        from forge.llm import get_provider
+
+        env = self._env(
+            settings,
+            FORGE_LLM_PROVIDER="cloud",
+            FORGE_CLOUD_PRESET="groq",
+            FORGE_CLOUD_MODEL="llama-3.3-70b-versatile",
+            GROQ_API_KEY="dummy-key-for-shape-only",
+        )
+        result = runner.invoke(app, ["status", "--json"], env=env)
+        reported = json.loads(result.stdout)["llm"]["model_identity"]
+
+        with mock.patch.dict(os.environ, env, clear=False):
+            cached_under = CandidateExtractor(get_provider(Settings.load())).model_id()
+        assert reported == cached_under
 
     def test_identity_is_in_the_json_payload(self, settings):
         env = self._env(settings, FORGE_LLM_PROVIDER="ollama", FORGE_OLLAMA_THINK="0")

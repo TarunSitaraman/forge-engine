@@ -121,6 +121,11 @@ def status(
     previous = {s.locator: s.content_hash for s in store.list_sources()}
 
     provider_ok, provider_detail = False, "not checked"
+    # Only a starting point. `settings.llm.models` is the *ollama* role map and
+    # is populated with its defaults whatever the provider, so reading it alone
+    # made a cloud deployment report `llama3.1:8b` while actually running
+    # llama-3.3-70b-versatile (observed on the Mac, 2026-08-29). The provider is
+    # asked below; this stands only when there is no provider to ask.
     model_identity = settings.llm.models.get("extraction") or next(
         iter(settings.llm.models.values()), "?"
     )
@@ -139,6 +144,17 @@ def status(
         # environment silently produces a different cached corpus. Reasoning
         # off was measured and rejected (provider-availability.md §8) yet stayed
         # exported for a whole extraction run because nothing displayed it.
+        # Ask the provider what it would actually run rather than trusting the
+        # role map. This line exists to keep a wrong assumption about the active
+        # model from governing a long run — it did once, and cost 5.66 hours —
+        # so a status line that names the wrong model is the exact failure it
+        # was added to prevent.
+        resolve = getattr(provider, "resolve_model", None)
+        if callable(resolve):
+            try:
+                model_identity = resolve("extraction")
+            except Exception:
+                pass  # keep the configured value rather than blanking the line
         model_identity += str(getattr(provider, "identity_variant", "") or "")
     except ProviderUnavailable as exc:
         provider_detail = str(exc)
