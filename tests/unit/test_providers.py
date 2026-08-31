@@ -14,6 +14,7 @@ documented as intent:
 from __future__ import annotations
 
 import json
+from unittest import mock
 
 import httpx
 import pytest
@@ -799,3 +800,50 @@ class TestCloudHealthActuallyChecks:
         ok, _ = provider.health()
         assert ok is False
         assert calls == []
+
+
+class TestModelTestReportsWhyItFailed:
+    """`0/3 median None` four times over is a score, not a diagnosis.
+
+    Observed 2026-08-29: a confirmed-offered model scored 0% on every task and
+    the command printed no reason, though the spike had recorded one per
+    attempt. A reachable provider scoring 0% is a configuration problem far
+    more often than a model one, and the output has to be able to say so.
+    """
+
+    def _report(self, failures):
+        from forge.spike.capability import SpikeReport, TaskResult
+
+        tasks = []
+        for name in ("structured_concept_extraction", "simple_claim_extraction"):
+            task = TaskResult(task=name, schema="S", attempts=3, successes=0)
+            task.failures = list(failures)
+            tasks.append(task)
+        return SpikeReport(
+            provider="cloud:openai",
+            model="openai/gpt-oss-120b",
+            reachable=True,
+            detail="ok",
+            tasks=tasks,
+        )
+
+    def test_the_recorded_error_reaches_the_output(self, capsys):
+        from typer.testing import CliRunner
+
+        from forge.cli.main import app
+
+        report = self._report([{"kind": "llm_error", "error": "400 response_format unsupported"}])
+        with mock.patch("forge.cli.main.run_spike", return_value=report):
+            result = CliRunner().invoke(app, ["model-test", "--no-write"])
+        assert "response_format unsupported" in result.output
+
+    def test_identical_failures_across_tasks_are_called_configuration(self):
+        from typer.testing import CliRunner
+
+        from forge.cli.main import app
+
+        report = self._report([{"kind": "llm_error", "error": "400 bad request"}])
+        with mock.patch("forge.cli.main.run_spike", return_value=report):
+            result = CliRunner().invoke(app, ["model-test", "--no-write"])
+        assert "provider or the request" in result.output
+        assert result.exit_code == 1

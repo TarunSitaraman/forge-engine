@@ -456,6 +456,30 @@ def model_test(
         )
     typer.echo(f"overall structured-output success: {report.overall_success_rate:.0%}")
 
+    # The spike has always recorded why each attempt failed; until 2026-08-29
+    # this command printed only the score. A run reading `0/3 median None` four
+    # times over told you nothing about whether the model was rejected, the
+    # request malformed, or the JSON unparseable — and a reachable provider
+    # scoring 0% is a configuration problem far more often than a model one.
+    failures: dict[str, list[str]] = {}
+    for t in report.tasks:
+        for f in t.failures:
+            line = f"{f.get('kind', 'unknown')}: {str(f.get('error', '')).strip()}"
+            failures.setdefault(line, []).append(t.task)
+
+    if failures:
+        typer.echo("\nfailures:", err=True)
+        for line, tasks in failures.items():
+            typer.echo(f"  x{len(tasks)}  {line[:400]}", err=True)
+        if report.overall_success_rate == 0 and len(failures) == 1:
+            typer.echo(
+                "\nEvery task failed the same way. That is the provider or the request\n"
+                "shape, not the model's capability — nothing here is a measurement of\n"
+                "how good the model is.",
+                err=True,
+            )
+        raise typer.Exit(code=1)
+
 
 # Phase 2 commands (ingest, search, concepts, documents, proposals) are
 # registered here so Phase 1's commands stay exactly as they were.
