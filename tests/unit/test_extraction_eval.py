@@ -271,3 +271,54 @@ class TestGroundingRateCanActuallyFail:
         report.scores = [score]
         assert report.grounding_rate == 1.0
         assert score.dropped_claims == 0
+
+
+class TestFailuresAreDiagnosable:
+    """`failed: llm_error` names the layer that caught the error, not the error.
+
+    Observed 2026-08-29 on the Mac: all six cases failed identically against a
+    hosted endpoint and the report gave no way to tell a rejected model name
+    from a bad credential from a timeout.
+    """
+
+    def _case(self):
+        from forge.evaluation.extraction import ExtractionCase
+
+        return ExtractionCase(id="c1", text="Some text.", expected=(), forbidden=())
+
+    def test_the_provider_message_survives_into_the_score(self):
+        from forge.evaluation.extraction import _failure_lines, score_case
+
+        lines = _failure_lines(
+            [{"kind": "llm_error", "span_id": "s1", "error": "400 model_decommissioned"}]
+        )
+        score = score_case(self._case(), [], status="failed", failures=lines)
+        assert score.failures == ["llm_error: 400 model_decommissioned"]
+
+    def test_identical_failures_across_spans_collapse_to_one_line(self):
+        """Six spans rejected for one reason is one fact, not six."""
+        from forge.evaluation.extraction import _failure_lines
+
+        lines = _failure_lines(
+            [
+                {"kind": "llm_error", "span_id": f"s{i}", "error": "401 invalid_api_key"}
+                for i in range(6)
+            ]
+        )
+        assert lines == ["llm_error: 401 invalid_api_key"]
+
+    def test_distinct_failures_are_all_kept(self):
+        from forge.evaluation.extraction import _failure_lines
+
+        lines = _failure_lines(
+            [
+                {"kind": "llm_error", "error": "timed out"},
+                {"kind": "llm_error", "error": "401 invalid_api_key"},
+            ]
+        )
+        assert len(lines) == 2
+
+    def test_a_failure_without_a_message_still_reports_its_kind(self):
+        from forge.evaluation.extraction import _failure_lines
+
+        assert _failure_lines([{"kind": "llm_error"}]) == ["llm_error"]

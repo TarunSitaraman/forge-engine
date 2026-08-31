@@ -832,8 +832,20 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
                 err=True,
             )
             for score in report.failed:
-                why = score.error or ", ".join(score.failures) or score.status
-                typer.echo(f"    [{score.case_id}] {score.status}: {why}", err=True)
+                typer.echo(f"    [{score.case_id}] {score.status}", err=True)
+                for line in score.failures or ([score.error] if score.error else []):
+                    typer.echo(f"        {line}", err=True)
+
+            # Every case failing the same way is one misconfiguration, not six
+            # bad cases, and saying so stops the reader debugging the dataset.
+            shapes = {line for s_ in report.failed for line in s_.failures}
+            if len(report.failed) == len(report.scores) and len(shapes) <= 1:
+                typer.echo(
+                    "\n  Every case failed identically — that is the provider or the\n"
+                    "  configuration, not the model's extraction quality. Check\n"
+                    "  `forge model-test` and the model name your endpoint accepts.",
+                    err=True,
+                )
             typer.echo(
                 "\n  Raise FORGE_LLM_TIMEOUT and re-run. There is no cache on this path,\n"
                 "  so a re-run repeats every call.",

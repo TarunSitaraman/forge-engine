@@ -285,6 +285,21 @@ def _mean(values: Sequence[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
+def _failure_lines(failures: Sequence[dict]) -> list[str]:
+    """Deduplicate failures to `kind: message`, keeping the message.
+
+    Six spans failing on one rejected model name is one fact, not six, but
+    dropping the message leaves `llm_error` — which names the layer that
+    caught the error and nothing about the error.
+    """
+    seen: dict[str, None] = {}
+    for failure in failures:
+        kind = str(failure.get("kind", "unknown"))
+        message = str(failure.get("error", "")).strip()
+        seen.setdefault(f"{kind}: {message}" if message else kind, None)
+    return list(seen)
+
+
 def run(
     dataset: ExtractionDataset,
     extractor: Any,
@@ -341,7 +356,7 @@ def run(
                 [(c.statement, c.evidence_quote) for c in result.claims],
                 llm_calls=result.llm_calls,
                 status=result.status.value,
-                failures=sorted({str(f.get("kind", "unknown")) for f in result.failures}),
+                failures=_failure_lines(result.failures),
                 dropped_claims=sum(
                     1 for f in result.failures if f.get("kind") == "ungrounded_quote"
                 ),
