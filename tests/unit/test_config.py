@@ -314,7 +314,7 @@ def test_a_preset_fills_the_endpoint_and_credential_variable(
     assert cloud.vendor == "openai"
     assert cloud.base_url == "https://api.groq.com/openai"
     assert cloud.api_key_env == "GROQ_API_KEY"
-    assert cloud.max_tokens == 8192
+    assert cloud.max_tokens == 4096
 
 
 def test_explicit_values_override_a_preset(fixture_vault: Path, monkeypatch) -> None:
@@ -390,3 +390,31 @@ def test_the_shipped_example_settings_file_parses(monkeypatch) -> None:
     # Its active profile is the GPU box; the rest are commented alternatives.
     assert values["FORGE_MODEL_DEFAULT"]
     assert all(k.isupper() for k in values), values
+
+
+class TestPresetCeilingsFitTheirFreeTier:
+    """A preset's max_tokens must fit the host's budget, not the model's capacity.
+
+    Groq counts reserved output against a per-minute limit, so an 8192 ceiling
+    on a free tier capped at 8,000 TPM rejected every request before a single
+    prompt token was added — measured 2026-08-29, a ~400-token prompt reported
+    as 8,595 requested. Cerebras has the same trap through context rather than
+    rate, and that one was already reasoned about in the table.
+
+    Only the two hosts whose limits have actually been observed are asserted
+    here. The others may well have the same problem, but this repo does not put
+    a number on a budget nobody measured — a sweeping assertion over all
+    presets would be inventing free-tier limits for hosts never tested.
+    """
+
+    def test_groq_stays_under_its_measured_tpm_limit(self):
+        """8,000 TPM observed, and Groq counts reserved output against it."""
+        from forge.config import CLOUD_PRESETS
+
+        assert CLOUD_PRESETS["groq"]["max_tokens"] <= 4096
+
+    def test_cerebras_stays_under_its_documented_context_cap(self):
+        """8K context covering input and output together, per the table's note."""
+        from forge.config import CLOUD_PRESETS
+
+        assert CLOUD_PRESETS["cerebras"]["max_tokens"] <= 4096

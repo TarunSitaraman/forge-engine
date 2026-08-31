@@ -104,11 +104,26 @@ def env_value(name: str, default: str | None = None) -> str | None:
 #: change, and the explicit variables are always authoritative.
 #:
 #: `base_url` is the root that has `/v1/chat/completions` beneath it.
+#:
+#: **`max_tokens` here is a ceiling that must fit the host's free-tier budget,
+#: not the model's capability.** Several hosts count reserved output against a
+#: per-minute or per-context limit, so a value the model would happily accept
+#: can still reject every request. Both failures below were found that way.
 CLOUD_PRESETS: dict[str, dict[str, object]] = {
+    # Groq counts **reserved output** against the tokens-per-minute budget, not
+    # just the prompt. The free tier's TPM limit is 8,000, so an 8192 ceiling
+    # exceeds the whole per-minute allowance on its own: every request 413s
+    # with "Request too large", before any prompt is added. Measured
+    # 2026-08-29 — a ~400-token prompt was rejected as 8,595 requested.
+    #
+    # 4096 rather than 2048 because the gpt-oss models reason by default and
+    # max_tokens caps thinking *plus* response; too low a ceiling truncates the
+    # JSON and surfaces as a structured-output failure rather than the budget
+    # problem it is.
     "groq": {
         "base_url": "https://api.groq.com/openai",
         "api_key_env": "GROQ_API_KEY",
-        "max_tokens": 8192,
+        "max_tokens": 4096,
     },
     "openrouter": {
         "base_url": "https://openrouter.ai/api",
