@@ -100,6 +100,11 @@ class CloudProvider:
         #: usually wants one model for everything.
         self.models = models or {}
         self._client: httpx.Client | None = None
+        #: Cached health verdict. The probe is one HTTP GET, and `extract()`
+        #: calls health() once per source — 642 of them on a full vault run.
+        #: Caching also matches the rule that a run never switches provider
+        #: mid-flight: the answer must not change under a run's feet.
+        self._health_cache: tuple[bool, str] | None = None
 
     # -- credentials -------------------------------------------------------
 
@@ -141,14 +146,72 @@ class CloudProvider:
         )
 
     def health(self) -> tuple[bool, str]:
-        """Never raises, and never prints the key."""
+        """Never raises, and never prints the key.
+
+        This used to check only that a credential was *present*, which made it
+        report OK against a dead endpoint, a rejected key, or — as happened on
+        2026-08-29 — a model the host had decommissioned. `forge status` said
+        OK, `model-test` said reachable, and then every one of twelve calls
+        failed. A health check that cannot fail is the same defect as a metric
+        that cannot fail.
+
+        So for OpenAI-compatible hosts it asks `GET /v1/models`, which costs no
+        generation and answers both real questions: is the credential accepted,
+        and is the configured model actually offered. A host that does not
+        implement the endpoint is reported as unverified rather than failed —
+        the check is best-effort, and refusing to run against a gateway with no
+        model list would be worse than not checking.
+        """
         if not self.api_key:
             return False, (
                 f"cloud provider {self.vendor!r} unavailable: {self.api_key_env} is not set"
             )
-        return True, (
+        configured = (
             f"cloud provider {self.vendor!r} configured with model {self.model!r} "
             f"(credential present in {self.api_key_env})"
+        )
+        if self.vendor != "openai":
+            return True, configured
+        if self._health_cache is None:
+            self._health_cache = self._probe_models(configured)
+        return self._health_cache
+
+    def _probe_models(self, configured: str) -> tuple[bool, str]:
+        """Verify credential and model against the host's own model list."""
+        try:
+            resp = self._http().get(
+                "/v1/models", headers={"Authorization": f"Bearer {self._require_key()}"}
+            )
+        except Exception as exc:  # never raises: a probe failure is a report
+            return True, f"{configured}; model list unreachable ({type(exc).__name__}), unverified"
+
+        if resp.status_code in (401, 403):
+            return False, (
+                f"cloud provider {self.vendor!r} rejected the credential in "
+                f"{self.api_key_env} (HTTP {resp.status_code}). The key is set but not "
+                f"accepted — check it is current and has not been revoked."
+            )
+        if resp.status_code != 200:
+            return True, f"{configured}; model list returned HTTP {resp.status_code}, unverified"
+
+        try:
+            offered = [str(m["id"]) for m in resp.json().get("data", []) if "id" in m]
+        except Exception:
+            return True, f"{configured}; model list unparseable, unverified"
+        if not offered:
+            return True, f"{configured}; model list empty, unverified"
+        if self.model in offered:
+            return True, f"{configured}; model confirmed offered by the host"
+
+        # The failure that motivated this. Naming near-matches beats a bare
+        # rejection: model ids rotate, and the replacement is usually adjacent.
+        stem = self.model.split("/")[-1].split("-")[0].lower()
+        near = [m for m in offered if stem and stem in m.lower()][:5]
+        suggestion = ", ".join(near or sorted(offered)[:5])
+        return False, (
+            f"cloud provider {self.vendor!r} does not offer model {self.model!r} — the host "
+            f"lists {len(offered)} models and this is not one of them, so every call would "
+            f"fail. Set FORGE_CLOUD_MODEL to one it does offer, e.g. {suggestion}"
         )
 
     # -- inference ---------------------------------------------------------

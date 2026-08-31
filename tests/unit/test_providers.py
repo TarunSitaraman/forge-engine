@@ -693,3 +693,109 @@ class TestProviderFallback:
         monkeypatch.setenv("FORGE_LLM_PROVIDER", "ollama")
         monkeypatch.setenv("FORGE_LLM_FALLBACK", "cloud")
         assert Settings.load(vault_path=tmp_path).llm.fallback == "cloud"
+
+
+class TestCloudHealthActuallyChecks:
+    """A health check that cannot fail is as bad as a metric that cannot fail.
+
+    Observed 2026-08-29: Groq had decommissioned `llama-3.3-70b-versatile`.
+    `forge status` said OK, `forge model-test` said reachable, and then all
+    twelve extraction-eval calls failed. health() had only ever confirmed that
+    a credential string was present.
+    """
+
+    def _models_handler(self, ids, status=200):
+        def handler(request):
+            if request.url.path.endswith("/models"):
+                return httpx.Response(
+                    status, json={"data": [{"id": i} for i in ids]}
+                )
+            return httpx.Response(200, json={})
+
+        return handler
+
+    def test_a_decommissioned_model_is_unavailable(self, monkeypatch):
+        provider = cloud(
+            monkeypatch,
+            self._models_handler(["openai/gpt-oss-120b", "qwen/qwen3.6-27b"]),
+            vendor="openai",
+            model="llama-3.3-70b-versatile",
+        )
+        ok, detail = provider.health()
+        assert ok is False
+        assert "does not offer" in detail
+
+    def test_it_suggests_a_model_the_host_does_offer(self, monkeypatch):
+        provider = cloud(
+            monkeypatch,
+            self._models_handler(["openai/gpt-oss-120b", "openai/gpt-oss-20b"]),
+            vendor="openai",
+            model="llama-3.3-70b-versatile",
+        )
+        _, detail = provider.health()
+        assert "gpt-oss" in detail, "a bare rejection leaves the user guessing"
+
+    def test_an_offered_model_is_confirmed(self, monkeypatch):
+        provider = cloud(
+            monkeypatch,
+            self._models_handler(["openai/gpt-oss-120b"]),
+            vendor="openai",
+            model="openai/gpt-oss-120b",
+        )
+        ok, detail = provider.health()
+        assert ok is True
+        assert "confirmed" in detail
+
+    def test_a_rejected_credential_is_reported_as_such(self, monkeypatch):
+        def handler(request):
+            return httpx.Response(401, json={"error": "invalid_api_key"})
+
+        provider = cloud(monkeypatch, handler, vendor="openai", model="m")
+        ok, detail = provider.health()
+        assert ok is False
+        assert "rejected the credential" in detail
+        assert "sk-test-value" not in detail, "a health message must never print the key"
+
+    def test_a_host_without_a_model_list_is_unverified_not_failed(self, monkeypatch):
+        """Refusing to run against a gateway with no /models would be worse."""
+        provider = cloud(
+            monkeypatch, self._models_handler([], status=404), vendor="openai", model="m"
+        )
+        ok, detail = provider.health()
+        assert ok is True
+        assert "unverified" in detail
+
+    def test_a_network_failure_does_not_raise(self, monkeypatch):
+        def handler(request):
+            raise httpx.ConnectError("no route to host")
+
+        provider = cloud(monkeypatch, handler, vendor="openai", model="m")
+        ok, detail = provider.health()
+        assert ok is True
+        assert "unverified" in detail
+
+    def test_the_probe_runs_once_however_often_health_is_called(self, monkeypatch):
+        """extract() calls health() per source — 642 times on a full vault run."""
+        calls = []
+
+        def handler(request):
+            calls.append(request.url.path)
+            return httpx.Response(200, json={"data": [{"id": "m"}]})
+
+        provider = cloud(monkeypatch, handler, vendor="openai", model="m")
+        for _ in range(5):
+            provider.health()
+        assert len(calls) == 1
+
+    def test_a_missing_credential_still_short_circuits_before_any_request(self, monkeypatch):
+        calls = []
+
+        def handler(request):
+            calls.append(request.url.path)
+            return httpx.Response(200, json={"data": []})
+
+        provider = cloud(monkeypatch, handler, vendor="openai", model="m")
+        monkeypatch.delenv("FORGE_TEST_KEY", raising=False)
+        ok, _ = provider.health()
+        assert ok is False
+        assert calls == []
