@@ -253,12 +253,22 @@ class TestDiagnosticsOnRealData:
         """
         with_related = [f for f in real_index.files if f.related]
         assert with_related, "the related: graph must not be empty"
-        # 745, not the 746 measured immediately after the repair: one entry
-        # pointed at `Dynamic Array`, a concept with no page and no business
-        # having one — it belongs inside `Array.md`. A `related:` list holds
-        # links or nothing, so the dangling entry was removed rather than left
-        # as a bare string among real links.
-        assert sum(len(f.related) for f in with_related) == 745
+
+        # A floor, not an equality. The bug this guards against zeroed the
+        # graph — 746 edges to 0 — so any assertion that catches a collapse
+        # does the job. Pinning the exact count instead made the test fail
+        # every time real content was added, which is not a regression and
+        # trains people to edit the number without reading the reason.
+        #
+        # 745 was the count on 2026-08-27, after the repair and after removing
+        # one dangling entry pointing at `Dynamic Array` — a concept with no
+        # page and no business having one, since it belongs inside `Array.md`.
+        # Writing 12 new DSA problem pages on 2026-08-31 took it to 780.
+        edges = sum(len(f.related) for f in with_related)
+        assert edges >= 745, (
+            f"related: graph has {edges} edges, below the 745 measured on "
+            "2026-08-27 — frontmatter handling has dropped links"
+        )
 
     def test_unresolved_links_are_reported(self, real_index):
         """Exit criterion 3."""
