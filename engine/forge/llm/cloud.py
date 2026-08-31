@@ -25,6 +25,7 @@ interchangeable and must never be silently compared.
 from __future__ import annotations
 
 import json
+import time
 from typing import Any, TypeVar
 
 import httpx
@@ -82,6 +83,12 @@ class CloudProvider:
         max_tokens: int = 16000,
         supports_structured_output: bool = True,
         models: dict[str, str] | None = None,
+        #: Base for exponential backoff between retries, in seconds. Tests pass
+        #: 0.0 so the suite never sleeps; nothing else should.
+        retry_backoff: float = 1.0,
+        #: Ceiling on any single wait, so one absurd Retry-After cannot park a
+        #: run for an hour.
+        retry_max_wait: float = 60.0,
     ) -> None:
         if vendor not in SUPPORTED_VENDORS:
             raise LLMError(
@@ -94,6 +101,8 @@ class CloudProvider:
         self.timeout = timeout
         self.max_retries = max_retries
         self.max_tokens = max_tokens
+        self.retry_backoff = retry_backoff
+        self.retry_max_wait = retry_max_wait
         self._structured = supports_structured_output
         #: Role -> model. Roles may bind different models; unbound roles use
         #: the default model rather than failing, because a cloud deployment
@@ -258,14 +267,31 @@ class CloudProvider:
                         f"{exc.response.text[:200]}"
                     ) from exc
                 last_error = exc
-                log.warning("cloud_retry", attempt=attempt, status=status, vendor=self.vendor)
+                delay = self._retry_delay(attempt, exc.response)
+                log.warning(
+                    "cloud_retry",
+                    attempt=attempt,
+                    status=status,
+                    vendor=self.vendor,
+                    sleeping_seconds=round(delay, 2),
+                )
+                if delay and attempt < self.max_retries:
+                    time.sleep(delay)
             except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
                 raise ProviderUnavailable(
                     f"cannot reach cloud provider at {self.base_url}: {exc}"
                 ) from exc
             except httpx.HTTPError as exc:
                 last_error = exc
-                log.warning("cloud_retry", attempt=attempt, error=str(exc)[:120])
+                delay = self._retry_delay(attempt, None)
+                log.warning(
+                    "cloud_retry",
+                    attempt=attempt,
+                    error=str(exc)[:120],
+                    sleeping_seconds=round(delay, 2),
+                )
+                if delay and attempt < self.max_retries:
+                    time.sleep(delay)
 
         raise LLMError(
             f"cloud call failed after {self.max_retries + 1} attempts: {last_error}"
@@ -327,6 +353,28 @@ class CloudProvider:
             self._client = None
 
     # -- wire formats ------------------------------------------------------
+
+    def _retry_delay(self, attempt: int, response: httpx.Response | None) -> float:
+        """How long to wait before retrying — never zero for a rate limit.
+
+        Retrying a 429 immediately cannot succeed: the limit is per *minute*,
+        and the retry budget is spent before the window has moved. Observed
+        2026-08-31 on Groq's free tier, where three attempts landed inside 120
+        milliseconds and every one of them failed identically, turning a
+        capability measurement into a rate-limit measurement.
+
+        A host that says how long to wait is believed, within a ceiling — it
+        knows its own window and guessing over the top of it just wastes the
+        quota. Otherwise the wait doubles per attempt.
+        """
+        if response is not None:
+            header = response.headers.get("retry-after")
+            if header:
+                try:
+                    return min(float(header), self.retry_max_wait)
+                except ValueError:
+                    pass  # a date-form Retry-After: fall through to backoff
+        return min(self.retry_backoff * (2**attempt), self.retry_max_wait)
 
     def _build(
         self, request: CompletionRequest, model: str, key: str

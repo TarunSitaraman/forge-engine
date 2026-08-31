@@ -172,6 +172,7 @@ class TestNoSilentDowngrade:
 
 def cloud(monkeypatch, handler, **kw) -> CloudProvider:
     """A CloudProvider whose transport is a stub, so no network is touched."""
+    kw.setdefault("retry_backoff", 0.0)  # the suite must never sleep
     provider = CloudProvider(api_key_env="FORGE_TEST_KEY", **kw)
     monkeypatch.setenv("FORGE_TEST_KEY", "sk-test-value")
     provider._client = httpx.Client(
@@ -847,3 +848,68 @@ class TestModelTestReportsWhyItFailed:
             result = CliRunner().invoke(app, ["model-test", "--no-write"])
         assert "provider or the request" in result.output
         assert result.exit_code == 1
+
+
+class TestRateLimitBackoff:
+    """Retrying a 429 immediately cannot work — the limit is per minute.
+
+    Observed 2026-08-31 on Groq's free tier: three attempts landed inside 120
+    milliseconds, all failed identically, and the retry budget was spent before
+    the rate window had moved at all. Every task the spike reported as 0/3 was
+    a rate limit, not a capability — the run measured the free tier, not the
+    model.
+    """
+
+    def test_a_429_waits_before_retrying(self, monkeypatch):
+        provider = cloud(monkeypatch, lambda r: httpx.Response(200, json={}), retry_backoff=2.0)
+        assert provider._retry_delay(0, httpx.Response(429)) == 2.0
+        assert provider._retry_delay(1, httpx.Response(429)) == 4.0
+        assert provider._retry_delay(2, httpx.Response(429)) == 8.0
+
+    def test_the_hosts_retry_after_wins_over_the_guess(self, monkeypatch):
+        """The host knows its own window; guessing over it wastes the quota."""
+        provider = cloud(monkeypatch, lambda r: httpx.Response(200, json={}), retry_backoff=1.0)
+        response = httpx.Response(429, headers={"retry-after": "7.5"})
+        assert provider._retry_delay(0, response) == 7.5
+
+    def test_an_absurd_retry_after_is_capped(self, monkeypatch):
+        """One bad header must not park a run for an hour."""
+        provider = cloud(
+            monkeypatch,
+            lambda r: httpx.Response(200, json={}),
+            retry_backoff=1.0,
+            retry_max_wait=30.0,
+        )
+        response = httpx.Response(429, headers={"retry-after": "3600"})
+        assert provider._retry_delay(0, response) == 30.0
+
+    def test_a_date_form_retry_after_falls_back_to_backoff(self, monkeypatch):
+        """HTTP allows a date there; an unparseable value must not raise."""
+        provider = cloud(monkeypatch, lambda r: httpx.Response(200, json={}), retry_backoff=1.0)
+        response = httpx.Response(429, headers={"retry-after": "Wed, 21 Oct 2026 07:28:00 GMT"})
+        assert provider._retry_delay(0, response) == 1.0
+
+    def test_backoff_never_exceeds_the_ceiling(self, monkeypatch):
+        provider = cloud(
+            monkeypatch,
+            lambda r: httpx.Response(200, json={}),
+            retry_backoff=10.0,
+            retry_max_wait=15.0,
+        )
+        assert provider._retry_delay(5, None) == 15.0
+
+    def test_a_retried_call_actually_sleeps(self, monkeypatch):
+        """Pins the wiring, not just the arithmetic — the bug was a missing sleep."""
+        slept: list[float] = []
+        monkeypatch.setattr("forge.llm.cloud.time.sleep", lambda s: slept.append(s))
+
+        def handler(request):
+            return httpx.Response(429, json={"error": "slow down"})
+
+        provider = cloud(monkeypatch, handler, vendor="openai", retry_backoff=1.0, max_retries=2)
+        with pytest.raises(LLMError):
+            provider.complete(
+                CompletionRequest(messages=[Message(role="user", content="hi")])
+            )
+        assert slept, "a 429 was retried without waiting, which cannot succeed"
+        assert slept == sorted(slept), "backoff must not shrink between attempts"

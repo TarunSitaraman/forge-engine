@@ -101,6 +101,7 @@ def _build(settings: Settings, provider: str) -> LLMProvider:
             max_retries=cloud.max_retries,
             max_tokens=cloud.max_tokens,
             supports_structured_output=cloud.supports_structured_output,
+            retry_backoff=cloud.retry_backoff,
         )
     raise LLMError(f"unknown provider {settings.llm.provider!r}")
 

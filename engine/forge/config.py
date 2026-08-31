@@ -212,6 +212,11 @@ class CloudSettings(BaseModel):
     #: 4096-8192, and gateways reject a request that asks for more rather than
     #: clamping it. `FORGE_CLOUD_MAX_TOKENS` exists for exactly this.
     max_tokens: int = Field(default=16000, gt=0)
+    #: Seconds before the first retry, doubling thereafter. A rate limit is
+    #: per-minute, so retrying immediately cannot succeed — it just spends the
+    #: budget inside one window. `Retry-After` wins over this when the host
+    #: sends it.
+    retry_backoff: float = Field(default=1.0, ge=0)
     #: Whether the vendor can be *asked* for schema-conforming JSON. Forge
     #: validates the result regardless; this only selects the request shape.
     supports_structured_output: bool = True
@@ -389,6 +394,7 @@ class Settings(BaseModel):
                     model=env.get("FORGE_CLOUD_MODEL", cloud_defaults["model"]),
                     api_key_env=env.get("FORGE_CLOUD_API_KEY_ENV", cloud_defaults["api_key_env"]),
                     base_url=env.get("FORGE_CLOUD_BASE_URL", cloud_defaults["base_url"]),
+                    retry_backoff=float(env.get("FORGE_CLOUD_RETRY_BACKOFF", 1.0)),
                     max_tokens=int(
                         env.get("FORGE_CLOUD_MAX_TOKENS", cloud_defaults["max_tokens"])
                     ),
