@@ -380,6 +380,75 @@ to proposals already extracted. **It is not a reason to delay a run.**
 
 ---
 
+## 2c. First trustworthy extraction-quality measurement (2026-08-31)
+
+`openai/gpt-oss-120b` via Groq, `extract-prompts/0.3.0`, `extraction-v1` (6
+cases), **all 6 completed** — so the run is scored, not marked UNTRUSTWORTHY.
+
+| metric | value | notes |
+|---|---|---|
+| **junk rate** | **0.000** | 0 of the 25 forbidden strings emitted |
+| recall | 0.472 | see the caveat below — this understates |
+| grounding | 1.000 | over 23 claims, drops included in the denominator |
+| calls | 12 | ~1.0-1.6 s each |
+
+**Every number here needed four separate defects fixed before it existed.** A
+decommissioned model id, a health check that only verified a credential was
+present, a preset ceiling larger than the host's whole per-minute budget, and a
+retry loop with no sleep. Three of the four produced *plausible output with
+nothing raised* — the house failure mode.
+
+### What the junk rate does and does not say
+
+**It says the `0.3.0` prompt's exclusion rules work on the failures they were
+written for.** The strings on that list are real observed output from the
+2026-08-19 qwen3:8b run — `maxmemory`, `VARCHAR(n)`, `.dockerignore`, `Answer`,
+`git commit`. None came back. That is the single most useful thing measured
+about extraction so far, because those are what would have entered the graph
+permanently.
+
+**It does not say the output contains no junk.** The denominator is 25
+specific strings, not the space of bad concepts. The run emitted `Dockerfile`,
+`layers` and `cache reuse` as extras; `Dockerfile` is a file name, which the
+prompt forbids in general but which is not on this list. **A junk rate of 0.000
+means "none of the known failures recurred", not "nothing bad was produced."**
+
+### Why recall=0.472 understates, and why it has not been "fixed"
+
+Reading the per-case detail, most misses are the same concept under a different
+surface form:
+
+| case | expected (missed) | actually emitted |
+|---|---|---|
+| sliding-window | `sliding window` | `sliding window pattern` |
+| git-history | `rebase` | `rebasing` |
+| docker-images | `layer caching` | `layers`, `cache reuse` |
+
+`score_case` matches through `normalize()`, which folds case and punctuation
+but not morphology or modifier suffixes. `proposals/dedup.py` already has a
+`_stem()` that would collapse `rebase`/`rebasing` — the eval does not use it.
+
+**That change has deliberately not been made in the same breath as reading the
+result.** Loosening the matcher can only move recall up, never down, and
+deciding it is "the right matcher" immediately after seeing that it improves
+the score is motivated reasoning — the same defect as picking a threshold to
+suit an outcome. If alias matching is added it should be argued on its own
+terms, applied to the forbidden list as well as the expected list, and the
+before/after both recorded.
+
+**Treat 0.472 as a floor on recall under exact normalized matching**, not as a
+statement about how much the model found.
+
+### What this does not establish
+
+Six cases cannot produce a precision figure, and one run cannot produce a rate.
+The comparison this enables is *relative* — prompt A against prompt B, model X
+against model Y, on the same set — which is exactly what was missing when the
+`0.3.0` rewrite and the `+nothink` experiment had to be recorded as
+unjudgeable.
+
+---
+
 ## 3. Why this is resumable
 
 Extraction results are cached under a derivation key covering content hash,
