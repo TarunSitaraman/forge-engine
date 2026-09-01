@@ -16,17 +16,32 @@ They were separate as of 2026-09-01, so the engine no longer sits inside your
 vault and cannot infer where it is.
 
 ```bash
-pip install -e ".[dev]"     # from this repository's root
-export FORGE_VAULT_PATH=~/forge     # your vault checkout — see below
+pip install -e ".[dev]"
+export FORGE_VAULT_PATH="$HOME/forge"
 forge --help
 ```
+
+Run that from this repository's root; `FORGE_VAULT_PATH` is your vault
+checkout, for the reason in **How the vault is located** below.
+
+> **Pasting into zsh (the macOS default):** `INTERACTIVE_COMMENTS` is **off** by
+> default, so a `#` typed at an interactive prompt is *not* a comment — zsh
+> reports `command not found: #`, or silently passes it and everything after it
+> as arguments to the command before it. The **setup** blocks in this document
+> are therefore written without trailing comments. The command-reference blocks
+> further down *are* annotated: they list options to read, not to paste. Before
+> pasting any annotated command, run `setopt interactivecomments`.
+>
+> The same applies to `exec $SHELL -l`: it replaces the shell process and
+> discards whatever was pasted after it, so give it a line of its own.
 
 Python 3.10+. No model, no database server, and no API key is required for
 anything below except `forge model-test`.
 
 ### macOS — `forge` as a global command
 
-macOS ships Python 3.9.6, which is **below Forge's floor** and cannot load the
+macOS ships a `python3` below Forge's floor — 3.8.2 on 10.15 Catalina,
+3.9.x on later versions — which cannot load the
 domain models (they use PEP 604 unions that pydantic evaluates at runtime). You
 need a newer interpreter, and you want `forge` on your `PATH` without activating
 a virtualenv first.
@@ -46,7 +61,7 @@ VER=$(for V in $(curl -s $BASE/ | grep -oE "${MINOR}\.[0-9]+" | sort -u -t. -k3 
   curl -sfI "$BASE/$V/python-$V-macos11.pkg" >/dev/null 2>&1 && echo "$V" && break
 done)
 cd ~ && curl -fLO "$BASE/$VER/python-$VER-macos11.pkg"
-open ~/"python-$VER-macos11.pkg"          # NOT `sudo installer` — see below
+open ~/"python-$VER-macos11.pkg"
 ```
 
 Then, from a directory that is **not** `~/Downloads`, `~/Desktop`, or
@@ -66,8 +81,10 @@ errors later: python.org builds ship without CA certificates wired up.
 
 ```bash
 python3.12 -m pip install --user pipx
-python3.12 -m pipx ensurepath      # puts ~/.local/bin on PATH
+python3.12 -m pipx ensurepath
 ```
+
+`ensurepath` puts `~/.local/bin` on `PATH`.
 
 Reload the shell so that `PATH` takes effect. Run this **on its own** — `exec`
 replaces the shell process and silently discards anything pasted after it:
@@ -77,19 +94,23 @@ exec $SHELL -l
 ```
 
 ```bash
-cd ~/forge-engine                  # this repository, NOT the vault
+cd ~/forge-engine
 pipx install --editable ".[dev]"
 forge --help
 ```
+
+That path is **this repository, not the vault** — the vault has no
+`pyproject.toml` since the split, so installing from it fails.
 
 The vault is a separate checkout. Clone it too, and tell the engine where it is
 — this export is not optional, for the reason under **Why `--editable`** below:
 
 ```bash
 git clone https://github.com/TarunSitaraman/forge.git ~/forge
-echo 'export FORGE_VAULT_PATH=~/forge' >> ~/.zshrc
-exec $SHELL -l
+echo 'export FORGE_VAULT_PATH="$HOME/forge"' >> ~/.zshrc
 ```
+
+Then, on its own line, `exec $SHELL -l`.
 
 **Why not Homebrew.** It is fine on a current machine, and if you already run it
 `brew install python@3.12 pipx` works. But on an older Intel Mac there is often
@@ -119,8 +140,10 @@ line. Forge now looks only upward from your working directory, so set
 Confirm the engine is pointed at the vault and not at itself:
 
 ```bash
-cd ~ && forge status | head -1      # -> vault : /Users/you/forge
+cd ~ && forge status | head -1
 ```
+
+It must print `vault : /Users/you/forge`.
 
 If that prints a path ending in `forge-engine`, the export did not take.
 
