@@ -221,11 +221,17 @@ class TestEvalDataset:
         assert len(categories) >= 4
         assert sum(categories.values()) == len(EvalDataset.load(DATASET_PATH))
 
-    def test_every_label_points_at_a_real_file(self):
-        """Ground truth that has rotted looks like a recall drop. Catch it here."""
+    def test_every_label_points_at_a_real_file(self, real_vault):
+        """Ground truth that has rotted looks like a recall drop. Catch it here.
+
+        The labels name paths in the Markdown vault, so this can only run where
+        that corpus is checked out. ``real_vault`` skips when it is not — in the
+        standalone engine repository there is no corpus to verify against, and a
+        check with nothing to check is not a failure.
+        """
         data = EvalDataset.load(DATASET_PATH)
 
-        assert data.verify_labels(REPO_ROOT) == []
+        assert data.verify_labels(real_vault) == []
 
     def test_rotted_labels_are_reported_not_ignored(self, tmp_path):
         data = EvalDataset.load(DATASET_PATH)
