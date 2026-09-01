@@ -27,7 +27,11 @@ vault. It only reaches commands that already exist.
 from __future__ import annotations
 
 import atexit
+import os
+import re
 import shlex
+import sys
+import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -136,32 +140,172 @@ def visible_names(names: Sequence[str]) -> list[str]:
     return [n for n in names if n not in REFUSED]
 
 
+#: The wordmark, one string per row so it can be revealed a row at a time.
+BANNER = (
+    "███████╗ ██████╗ ██████╗  ██████╗ ███████╗",
+    "██╔════╝██╔═══██╗██╔══██╗██╔════╝ ██╔════╝",
+    "█████╗  ██║   ██║██████╔╝██║  ███╗█████╗  ",
+    "██╔══╝  ██║   ██║██╔══██╗██║   ██║██╔══╝  ",
+    "██║     ╚██████╔╝██║  ██║╚██████╔╝███████╗",
+    "╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝",
+)
+
+#: Top-to-bottom gradient over the wordmark. Six rows, six shades.
+BANNER_COLOURS = ("38;5;39", "38;5;38", "38;5;44", "38;5;43", "38;5;37", "38;5;30")
+
+#: Per-row delay for the reveal. Six rows plus the panel is under a fifth of a
+#: second in total — enough to read as motion, short enough that nobody waits.
+FRAME_SECONDS = 0.028
+
+#: Commands that print nothing until they finish, so a spinner cannot collide
+#: with their output. `ask` is the whole reason the shell exists; the others
+#: print progress as they go and are deliberately left alone.
+QUIET_COMMANDS = frozenset({"ask"})
+
+_ANSI_RE = re.compile(r"\033\[[0-9;]*m")
+
+
 def _ansi(text: str, code: str) -> str:
     return f"\033[{code}m{text}\033[0m"
 
 
-def render_header(settings: Settings, files: int, indexed: int, width: int = 78) -> str:
-    """The coloured bar. Plain ANSI rather than rich, so it composes with the
-    readline prompt below it without either of them miscounting the other."""
+def _visible_width(text: str) -> int:
+    """Printable width, ignoring colour escapes.
+
+    Box drawing needs the width the terminal will show, not `len`. Getting this
+    wrong is invisible until a coloured value lands in a padded cell and the
+    right-hand border walks off by the length of the escape sequence.
+    """
+    return len(_ANSI_RE.sub("", text))
+
+
+def wants_colour(stream=None) -> bool:
+    """Colour only when it can be seen and has not been refused.
+
+    `NO_COLOR` is honoured because it is the convention, and a pipe gets plain
+    text because escape codes in a log file are noise. This is the first place
+    in the engine to emit colour, so the rule is set here.
+    """
+    if os.environ.get("NO_COLOR"):
+        return False
+    stream = stream or sys.stdout
+    try:
+        return bool(stream.isatty())
+    except Exception:  # pragma: no cover - exotic stream
+        return False
+
+
+def wants_animation(stream=None) -> bool:
+    """Motion needs a terminal, and never runs when colour is refused."""
+    return wants_colour(stream)
+
+
+def render_banner(colour: bool = True) -> str:
+    rows = [
+        _ansi(row, BANNER_COLOURS[i]) if colour else row
+        for i, row in enumerate(BANNER)
+    ]
+    return "\n".join("  " + r for r in rows)
+
+
+#: `  ` + a 9-column label + `  ` + the two borders and their inner padding.
+_ROW_OVERHEAD = 15
+
+
+def _fit(value: str, room: int) -> str:
+    """Trim a value to the space available, keeping the informative end.
+
+    Paths are the reason this exists: a vault under a long home directory is
+    wider than the panel, and without trimming the row simply grows past the
+    border it is supposed to sit inside. The tail is kept because the last
+    segments identify the vault; the head is a prefix every row would share.
+    """
+    if room <= 1 or len(value) <= room:
+        return value
+    return "…" + value[-(room - 1) :]
+
+
+def _row(label: str, value: str, colour: bool, value_code: str, width: int) -> str:
+    """One line inside the panel, padded to exactly `width` visible columns."""
+    value = _fit(value, width - _ROW_OVERHEAD)
+    lab = _ansi(f"{label:<9}", "38;5;245") if colour else f"{label:<9}"
+    val = _ansi(value, value_code) if colour else value
+    body = f"  {lab} {val}"
+    pad = " " * max(0, width - _visible_width(body) - 3)
+    edge = _ansi("│", "38;5;30") if colour else "│"
+    return f"{edge}{body}{pad} {edge}"
+
+
+def render_header(
+    settings: Settings, files: int, indexed: int, width: int = 62, colour: bool | None = None
+) -> str:
+    """The panel under the wordmark.
+
+    Drawn by hand rather than with rich: the widths here are computed against
+    `_visible_width`, and hand-drawing keeps the panel and the readline prompt
+    below it from disagreeing about how wide anything is.
+    """
+    if colour is None:
+        colour = wants_colour()
+
     provider = settings.llm.provider
     model = settings.llm.models.get("extraction") or "?"
     if provider == "cloud":
         model = settings.llm.cloud.model or model
 
-    bar = "─" * width
-    name = _ansi(" FORGE ", "1;97;44")
-    stale = "" if indexed == files else _ansi(f"  (indexed {indexed})", "33")
-    lines = [
-        _ansi(bar, "36"),
-        f"{name} {_ansi(str(settings.vault_path), '96')}",
-        f"  {_ansi(f'{files} files', '92')}{stale}"
-        f"   {_ansi(f'{provider}:{model}', '95')}",
-        _ansi(bar, "36"),
-        f"  {_ansi('/help', '93')} for commands · "
-        f"{_ansi('/quit', '93')} to leave · plain text asks a question",
-        "",
+    corpus = f"{files} files"
+    if indexed != files:
+        corpus += f"  · indexed {indexed}"
+
+    def edge(left: str, right: str) -> str:
+        line = left + "─" * (width - 2) + right
+        return _ansi(line, "38;5;30") if colour else line
+
+    rows = [
+        edge("╭", "╮"),
+        _row("vault", str(settings.vault_path), colour, "38;5;51", width),
+        _row("corpus", corpus, colour, "38;5;84" if indexed == files else "38;5;214", width),
+        _row("model", f"{provider} · {model}", colour, "38;5;177", width),
+        edge("╰", "╯"),
     ]
-    return "\n".join(lines)
+    hint_keys = ("/help", "/quit")
+    if colour:
+        hint = (
+            f"  {_ansi(hint_keys[0], '38;5;220')} for commands · "
+            f"{_ansi(hint_keys[1], '38;5;220')} to leave · "
+            f"{_ansi('plain text asks a question', '38;5;245')}"
+        )
+    else:
+        hint = f"  {hint_keys[0]} for commands · {hint_keys[1]} to leave · plain text asks a question"
+    rows += ["", hint, ""]
+    return "\n".join(rows)
+
+
+def show_intro(
+    settings: Settings,
+    files: int,
+    indexed: int,
+    writer: Callable[[str], None] = print,
+    animate: bool | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+) -> None:
+    """Wordmark then panel, revealed a row at a time when there is a terminal.
+
+    `animate` and `sleep` are injected so the timing can be tested without
+    actually waiting, and so a pipe gets the same text with no delay at all.
+    """
+    if animate is None:
+        animate = wants_animation()
+    colour = wants_colour()
+
+    if animate:
+        for i, row in enumerate(BANNER):
+            writer("  " + _ansi(row, BANNER_COLOURS[i]))
+            sleep(FRAME_SECONDS)
+    else:
+        writer(render_banner(colour))
+    writer("")
+    writer(render_header(settings, files, indexed, colour=colour))
 
 
 def render_help(names: Sequence[str], width: int = 78) -> str:
@@ -233,6 +377,30 @@ def _save_history(path: str) -> None:  # pragma: no cover - atexit
 PROMPT = "\001\033[1;36m\002forge\001\033[0m\002 › "
 
 
+def _nullctx():
+    from contextlib import nullcontext
+
+    return nullcontext()
+
+
+def _spinner(label: str):
+    """A rich status for commands that print nothing until they finish.
+
+    Returned as a context manager so the caller does not care whether one is
+    actually running. rich ships with typer, so this costs no new dependency.
+    """
+    from contextlib import nullcontext
+
+    if not wants_animation():
+        return nullcontext()
+    try:
+        from rich.console import Console
+
+        return Console().status(f"[dim]{label}[/dim]", spinner="dots")
+    except Exception:  # pragma: no cover - rich absent or non-capable terminal
+        return nullcontext()
+
+
 def dispatch(app: typer.Typer, argv: Sequence[str]) -> int:
     """Run one CLI command in-process and return its exit code.
 
@@ -241,8 +409,10 @@ def dispatch(app: typer.Typer, argv: Sequence[str]) -> int:
     must end the command, not the session.
     """
     group = typer.main.get_command(app)
+    quiet = bool(argv) and argv[0] in QUIET_COMMANDS
     try:
-        group.main(list(argv), prog_name="forge", standalone_mode=False)
+        with _spinner("thinking") if quiet else _nullctx():
+            group.main(list(argv), prog_name="forge", standalone_mode=False)
         return 0
     except SystemExit as exc:  # typer.Exit and friends still raise this
         return int(exc.code or 0)
@@ -267,11 +437,12 @@ def run(
     indexed: int,
     reader: Callable[[str], str] = input,
     writer: Callable[[str], None] = print,
+    animate: bool | None = None,
 ) -> int:
     """The loop. `reader`/`writer` are injected so this is testable headlessly."""
     names = command_names(app)
     _install_readline(names)
-    writer(render_header(settings, files, indexed))
+    show_intro(settings, files, indexed, writer=writer, animate=animate)
 
     while True:
         try:
@@ -286,7 +457,8 @@ def run(
         if action.kind is Kind.QUIT:
             return 0
         if action.kind is Kind.CLEAR:
-            writer("\033[2J\033[H" + render_header(settings, files, indexed))
+            writer("\033[2J\033[H")
+            show_intro(settings, files, indexed, writer=writer, animate=False)
             continue
         if action.kind is Kind.HELP:
             if action.message:
