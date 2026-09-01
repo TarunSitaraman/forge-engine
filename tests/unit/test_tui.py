@@ -208,3 +208,84 @@ class TestDrivingTheInterface:
         _, plain = self._drive(settings, [])
         _, helped = self._drive(settings, ["/help", "\n"])
         assert helped > plain
+
+
+class TestTheQuickBar:
+    """Typing `/` offers commands with what each one does.
+
+    Driven through the pilot rather than asserted on state alone: the bindings
+    are `priority` because the focused Input would otherwise swallow them, and
+    that is exactly the kind of thing a unit test of the handler would miss.
+    """
+
+    def _open(self, settings, keys):
+        from textual.widgets import Input, Static
+
+        from forge.cli.tui import build_app
+
+        async def go():
+            app = build_app(cli, settings, Stats(10, 10, 100, 0))
+            async with app.run_test(size=(110, 34)) as pilot:
+                for key in keys:
+                    await pilot.press(key)
+                await pilot.pause()
+                bar = app.query_one("#palette", Static)
+                box = app.query_one("#prompt", Input)
+                return app, bar.has_class("open"), box.value
+
+        return asyncio.run(go())
+
+    def test_a_bare_slash_offers_the_favourites(self, settings):
+        from forge.cli.shell import FAVOURITES
+
+        app, is_open, _ = self._open(settings, ["/"])
+
+        assert is_open
+        assert app._suggested[0] == FAVOURITES[0]
+
+    def test_arrows_move_the_selection(self, settings):
+        app, _, _ = self._open(settings, ["/", "down", "down"])
+        assert app._cursor == 2
+
+    def test_the_selection_wraps(self, settings):
+        app, _, _ = self._open(settings, ["/", "up"])
+        assert app._cursor == len(app._suggested) - 1
+
+    def test_tab_completes_and_closes(self, settings):
+        app, is_open, value = self._open(settings, ["/", "down", "tab"])
+        assert value.startswith("/")
+        assert value.endswith(" "), "a trailing space so arguments can follow"
+        assert is_open is False
+
+    def test_typing_filters(self, settings):
+        app, is_open, _ = self._open(settings, ["/", "e", "v", "a", "l"])
+        assert is_open
+        assert set(app._suggested) == {"extraction-eval", "retrieval-eval"}
+
+    def test_it_closes_once_arguments_start(self, settings):
+        """After the first space the command is chosen, and a list of other
+        commands is in the way."""
+        _, is_open, _ = self._open(settings, ["/", "i", "n", "d", "e", "x", "space"])
+        assert is_open is False
+
+    def test_plain_text_never_opens_it(self, settings):
+        _, is_open, _ = self._open(settings, ["h", "o", "w"])
+        assert is_open is False
+
+    def test_nothing_matching_closes_it(self, settings):
+        _, is_open, _ = self._open(settings, ["/", "z", "z", "z", "z"])
+        assert is_open is False
+
+
+class TestDescriptions:
+    def test_every_command_has_one(self):
+        from forge.cli.shell import command_help, visible_names
+
+        helps = command_help(cli)
+        missing = [n for n in visible_names(sorted(helps)) if not helps.get(n)]
+        assert missing == [], f"commands with no description: {missing}"
+
+    def test_they_come_from_the_docstrings(self):
+        from forge.cli.shell import command_help
+
+        assert "citing" in command_help(cli)["ask"]

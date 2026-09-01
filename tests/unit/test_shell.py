@@ -25,6 +25,7 @@ from forge.cli.shell import (
     render_header,
     render_help,
     run,
+    suggestions,
     show_intro,
     visible_names,
     wants_animation,
@@ -326,3 +327,55 @@ class TestPresentation:
         settings = self._settings(tmp_path)
         assert "indexed 600" in render_header(settings, 634, 600, colour=False)
         assert "indexed" not in render_header(settings, 634, 634, colour=False)
+
+
+class TestSuggestions:
+    """What a partially typed slash command should offer."""
+
+    def test_a_bare_slash_offers_the_favourites_in_order(self):
+        from forge.cli.shell import FAVOURITES
+
+        got = suggestions("", NAMES)
+
+        assert got == [n for n in FAVOURITES if n in visible_names(NAMES)]
+
+    def test_favourites_are_not_alphabetical(self):
+        """Sorted A-Z puts `activate` first, which nobody reaches for."""
+        assert suggestions("", NAMES)[0] == "ask"
+
+    def test_a_prefix_filters(self):
+        assert set(suggestions("ind", NAMES)) == {"index"}
+
+    def test_a_substring_matches_too(self):
+        """Prefix-only would hide `retrieval-eval` from someone typing `eval`."""
+        assert set(suggestions("eval", NAMES)) == {"extraction-eval", "retrieval-eval"}
+
+    def test_prefix_matches_come_before_substring_matches(self):
+        got = suggestions("in", NAMES)
+        assert got[0].startswith("in")
+        assert "embeddings" in got and got.index("embeddings") > 0
+
+    def test_nothing_matches_gives_nothing(self):
+        assert suggestions("zzzz", NAMES) == []
+
+    def test_the_refused_command_is_never_suggested(self):
+        assert "shell" not in suggestions("she", NAMES)
+
+    def test_the_list_is_capped(self):
+        from forge.cli.shell import SUGGESTION_LIMIT
+
+        assert len(suggestions("", NAMES)) <= SUGGESTION_LIMIT
+        assert len(suggestions("e", NAMES)) <= SUGGESTION_LIMIT
+
+
+class TestHelpShowsWhatCommandsDo:
+    def test_descriptions_are_rendered_beside_the_names(self):
+        from forge.cli.shell import command_help
+
+        got = render_help(NAMES, helps=command_help(app))
+
+        assert "/index" in got
+        assert "Index the vault" in got
+
+    def test_without_descriptions_it_still_lists_names(self):
+        assert "/index" in render_help(NAMES)

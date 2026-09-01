@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, Callable, Iterable
 import typer
 
 from ..config import Settings
-from .shell import Kind, command_names, parse, visible_names
+from .shell import Kind, command_help, command_names, parse, suggestions, visible_names
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     pass
@@ -157,11 +157,13 @@ def build_app(app_typer: typer.Typer, settings: Settings, stats: Stats):
     """
     from textual import work
     from textual.app import App, ComposeResult
+    from textual.binding import Binding
     from textual.containers import Vertical
     from textual.widgets import Input, RichLog, Static
 
     names = command_names(app_typer)
     shown = visible_names(names)
+    helps = command_help(app_typer)
 
     class ForgeTUI(App):
         CSS = """
@@ -181,6 +183,16 @@ def build_app(app_typer: typer.Typer, settings: Settings, stats: Stats):
             background: #0b0e14;
             scrollbar-size-vertical: 1;
         }
+
+        #palette {
+            height: auto;
+            max-height: 10;
+            background: #11151c;
+            color: #8f9aae;
+            padding: 0 1;
+            display: none;
+        }
+        #palette.open { display: block; }
 
         #promptwrap {
             height: auto;
@@ -214,12 +226,20 @@ def build_app(app_typer: typer.Typer, settings: Settings, stats: Stats):
             ("ctrl+c", "quit", "quit"),
             ("ctrl+l", "clear", "clear"),
             ("escape", "interrupt", "interrupt"),
+            # priority, because the Input below has focus and would otherwise
+            # swallow these before the quick bar ever sees them. Each action
+            # falls through to normal behaviour when the bar is closed.
+            Binding("down", "suggest_next", "", show=False, priority=True),
+            Binding("up", "suggest_prev", "", show=False, priority=True),
+            Binding("tab", "suggest_accept", "", show=False, priority=True),
         ]
 
         def __init__(self) -> None:
             super().__init__()
             self._stats = stats
             self._busy = False
+            self._suggested: list[str] = []
+            self._cursor = 0
 
         # -- layout --------------------------------------------------------
 
@@ -227,6 +247,7 @@ def build_app(app_typer: typer.Typer, settings: Settings, stats: Stats):
             yield Static(self._titlebar(), id="titlebar")
             yield Static("─" * 200, id="rule")
             yield RichLog(id="transcript", markup=True, wrap=True, auto_scroll=True)
+            yield Static("", id="palette")
             with Vertical(id="promptwrap"):
                 yield Input(placeholder="ask a question, or /command", id="prompt")
             yield Static(self._statusline(), id="statusline")
@@ -268,6 +289,67 @@ def build_app(app_typer: typer.Typer, settings: Settings, stats: Stats):
         def refresh_titlebar(self) -> None:
             self.query_one("#titlebar", Static).update(self._titlebar())
 
+        # -- the quick bar --------------------------------------------------
+
+        def on_input_changed(self, event: Input.Submitted | object) -> None:
+            """Offer commands while a slash command is still being typed.
+
+            Only before the first space: once there are arguments, the user has
+            chosen the command and a list of other commands is in the way.
+            """
+            value = self.query_one("#prompt", Input).value
+            if value.startswith("/") and " " not in value:
+                self._suggested = suggestions(value[1:], names)
+                self._cursor = 0
+            else:
+                self._suggested = []
+            self._draw_palette()
+
+        def _draw_palette(self) -> None:
+            bar = self.query_one("#palette", Static)
+            if not self._suggested:
+                bar.remove_class("open")
+                bar.update("")
+                return
+            rows = []
+            for i, name in enumerate(self._suggested):
+                desc = helps.get(name, "")
+                if i == self._cursor:
+                    rows.append(
+                        f"[#4d9de0]▸[/] [b #c8d3f5]/{name:<16}[/] [#8f9aae]{desc}[/]"
+                    )
+                else:
+                    rows.append(f"  [#6c7889]/{name:<16}[/] [#4d5566]{desc}[/]")
+            bar.update("\n".join(rows))
+            bar.add_class("open")
+
+        def _move(self, delta: int) -> bool:
+            if not self._suggested:
+                return False
+            self._cursor = (self._cursor + delta) % len(self._suggested)
+            self._draw_palette()
+            return True
+
+        def action_suggest_next(self) -> None:
+            self._move(1)
+
+        def action_suggest_prev(self) -> None:
+            self._move(-1)
+
+        def action_suggest_accept(self) -> None:
+            """Tab completes; Enter still submits whatever is typed.
+
+            Keeping them separate means Enter never runs something other than
+            what is on screen, which is the surprise worth avoiding.
+            """
+            if not self._suggested:
+                return
+            box = self.query_one("#prompt", Input)
+            box.value = f"/{self._suggested[self._cursor]} "
+            box.cursor_position = len(box.value)
+            self._suggested = []
+            self._draw_palette()
+
         # -- actions -------------------------------------------------------
 
         def action_clear(self) -> None:
@@ -284,6 +366,8 @@ def build_app(app_typer: typer.Typer, settings: Settings, stats: Stats):
         def on_input_submitted(self, event: Input.Submitted) -> None:
             line = event.value
             event.input.value = ""
+            self._suggested = []
+            self._draw_palette()
             if not line.strip():
                 return
 
@@ -312,13 +396,16 @@ def build_app(app_typer: typer.Typer, settings: Settings, stats: Stats):
             self._run(list(action.argv))
 
         def _show_help(self) -> None:
-            per_row = 4
+            """Names alone answer "what exists"; the question being asked is
+            "which one do I want"."""
             self.say("")
-            for i in range(0, len(shown), per_row):
-                row = shown[i : i + per_row]
-                self.say("  " + "".join(f"[#8f9aae]/{n:<17}[/]" for n in row).rstrip())
+            for name in shown:
+                self.say(f"[#6c7889]/{name:<16}[/] [#4d5566]{helps.get(name, '')}[/]")
             self.say("")
-            self.say("[#4d5566]Text without a slash is a question. /quit to leave.[/]")
+            self.say(
+                "[#4d5566]Text without a slash is a question. "
+                "Type / for suggestions, tab to complete. /quit to leave.[/]"
+            )
             self.say("")
 
         # -- running a command ---------------------------------------------

@@ -531,10 +531,28 @@ line and exits 2 — never a traceback.
 
 | | |
 |---|---|
+| `/` | open the quick bar |
+| `↑` `↓` | move through suggestions |
+| `tab` | complete the highlighted command |
 | Enter | run a slash command, or ask a question |
 | `esc` | interrupt a running command; empty the box when idle |
 | `ctrl+l` | clear the transcript |
 | `ctrl+c` | quit |
+
+**The quick bar.** Typing `/` offers commands with a one-line description of
+each. A bare `/` shows the ones a session actually reaches for rather than an
+alphabetical list of everything — sorted A–Z, `activate` comes first, which is
+nobody's common case. Typing filters: prefix matches lead, substring matches
+follow, so `eval` finds `retrieval-eval` which a prefix-only match would hide.
+The bar closes at the first space, because by then the command is chosen and a
+list of other commands is in the way.
+
+`tab` completes and `Enter` submits, deliberately kept apart: Enter never runs
+something other than what is on screen.
+
+Descriptions are read off each command's own docstring through the same typer
+group the names come from. There is no table to keep in sync, and a reworded
+docstring is a reworded description.
 
 The title bar's right side carries `files · spans · llm calls`. The call counter
 is this engine's analogue of the token meter these interfaces usually show, and

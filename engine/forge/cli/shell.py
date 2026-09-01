@@ -130,6 +130,62 @@ def command_names(app: typer.Typer) -> list[str]:
     return sorted(getattr(group, "commands", {}).keys())
 
 
+#: What a bare `/` offers before anything is typed. Ordered by how often a
+#: session actually reaches for them, not alphabetically — a quick bar sorted
+#: A-Z puts `activate` first, which nobody wants and nobody needs.
+FAVOURITES = (
+    "ask",
+    "index",
+    "status",
+    "diagnostics",
+    "search",
+    "concept",
+    "graph",
+    "corpus-stats",
+)
+
+#: How many suggestions to show. Enough to be useful, few enough to scan.
+SUGGESTION_LIMIT = 8
+
+
+def command_help(app: typer.Typer) -> dict[str, str]:
+    """Command name -> its one-line description.
+
+    Read off the typer group like the names are, so a command's description is
+    its own docstring and there is nothing to keep in sync. A hand-written table
+    here would be wrong the first time somebody rewords a docstring.
+    """
+    group = typer.main.get_command(app)
+    out: dict[str, str] = {}
+    for name, cmd in getattr(group, "commands", {}).items():
+        text = (getattr(cmd, "help", None) or getattr(cmd, "short_help", None) or "").strip()
+        out[name] = text.splitlines()[0].strip() if text else ""
+    return out
+
+
+def suggestions(
+    prefix: str,
+    names: Sequence[str],
+    limit: int = SUGGESTION_LIMIT,
+) -> list[str]:
+    """Commands to offer for a partially typed slash command.
+
+    A bare `/` gets the favourites, because an alphabetical list of everything
+    is a worse answer to "what can I do" than a short list of what is actually
+    used. Once something is typed, prefix matches come first and substring
+    matches follow — typing `eval` should find `retrieval-eval`, which a
+    prefix-only match would hide.
+    """
+    available = visible_names(names)
+    prefix = prefix.strip().lower()
+    if not prefix:
+        return [n for n in FAVOURITES if n in available][:limit]
+
+    starts = [n for n in available if n.startswith(prefix)]
+    contains = [n for n in available if prefix in n and n not in starts]
+    return (starts + contains)[:limit]
+
+
 def visible_names(names: Sequence[str]) -> list[str]:
     """What to offer in help and completion.
 
@@ -308,14 +364,28 @@ def show_intro(
     writer(render_header(settings, files, indexed, colour=colour))
 
 
-def render_help(names: Sequence[str], width: int = 78) -> str:
-    """Commands in columns, plus the shell's own verbs."""
+def render_help(
+    names: Sequence[str], width: int = 78, helps: dict[str, str] | None = None
+) -> str:
+    """Commands with what each one does.
+
+    A bare list of names answers "what exists" but not "which one do I want",
+    which is the question anyone opening help is actually asking.
+    """
     shown = visible_names(names)
     out = [_ansi("Commands", "1;97"), ""]
-    per_row = max(1, width // 18)
-    for i in range(0, len(shown), per_row):
-        row = shown[i : i + per_row]
-        out.append("  " + "".join(f"/{n:<17}" for n in row).rstrip())
+    if helps:
+        room = width - 20
+        for n in shown:
+            desc = helps.get(n, "")
+            if len(desc) > room:
+                desc = desc[: room - 1].rstrip() + "…"
+            out.append(f"  {_ansi(f'/{n:<16}', '38;5;110')} {_ansi(desc, '38;5;245')}")
+    else:
+        per_row = max(1, width // 18)
+        for i in range(0, len(shown), per_row):
+            row = shown[i : i + per_row]
+            out.append("  " + "".join(f"/{n:<17}" for n in row).rstrip())
     out += [
         "",
         _ansi("Shell", "1;97"),
@@ -441,6 +511,7 @@ def run(
 ) -> int:
     """The loop. `reader`/`writer` are injected so this is testable headlessly."""
     names = command_names(app)
+    helps = command_help(app)
     _install_readline(names)
     show_intro(settings, files, indexed, writer=writer, animate=animate)
 
@@ -463,7 +534,7 @@ def run(
         if action.kind is Kind.HELP:
             if action.message:
                 writer(_ansi(action.message, "91"))
-            writer(render_help(names))
+            writer(render_help(names, helps=helps))
             continue
         if action.kind is Kind.REFUSED:
             writer(_ansi(action.message, "91"))
