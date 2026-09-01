@@ -47,11 +47,11 @@ in §"Regression tests" is a mistake made and then locked down.
 
 42 integration tests run against the Markdown vault the engine was built
 against. That vault is a **separate, private repository**, so by default these
-tests **skip** and the suite reports `981 passed, 42 skipped`.
+tests **skip** and the suite reports `1,072 passed, 42 skipped`.
 
 ```bash
-python -m pytest tests                              # 981 passed, 42 skipped
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,023 passed
+python -m pytest tests                              # 1,072 passed, 42 skipped
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,114 passed
 ```
 
 `FORGE_TEST_VAULT` takes a checkout of that vault. It is deliberately **not**

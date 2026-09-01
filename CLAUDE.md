@@ -17,17 +17,19 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them — `981 passed, 42 skipped` becomes `1,023 passed`. See
+   to run them — `1,072 passed, 42 skipped` becomes `1,114 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine* — architecture, ADRs, research,
    measurement records. Durable technology reference belongs in the
    vault's `Technologies/Docs/`, not here.
-3. **Don't assume a vault path.** Vault resolution looks next to the
-   installed module and then upward from the cwd; in this repository
-   that finds *this repo*, not the vault. `FORGE_VAULT_PATH` is how a
-   user points the CLI at their vault, and the engine raises rather
-   than guessing when it cannot find one.
+3. **Don't assume a vault path.** Vault resolution looks **only**
+   upward from the working directory, then raises. It used to check the
+   installed module's location first; after the split that matched this
+   repository every time, so `forge index` with no `FORGE_VAULT_PATH`
+   silently indexed the engine's own `docs/` and printed success. The
+   rule was removed in `042d28c` — `FORGE_VAULT_PATH` is how a user
+   points the CLI at their vault.
 
 **The engine never writes to the vault** except through an explicitly
 approved, flag-gated repair. Everything it derives lives in `.forge/`
@@ -631,7 +633,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine — distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,023 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,114 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -656,12 +658,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 981 passed, 42 skipped — offline, no model
+python -m pytest tests           # 1,072 passed, 42 skipped — offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,023 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,114 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.
