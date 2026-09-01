@@ -12,6 +12,35 @@ justified.**
 
 ---
 
+## 0. Corpus note — the numbers below predate the repository split
+
+**Added 2026-09-01.** Every figure on this page was measured over the vault
+*as it stood before the engine was split out*, which included the engine's own
+top-level `docs/` tree as indexable content. That tree left with the engine, so
+the corpus these numbers describe no longer exists in that form.
+
+Re-running the identical command against the post-split vault (634 files) gives:
+
+| Method | R@5 | R@10 | MRR | Latency |
+|---|---:|---:|---:|---:|
+| lexical, pre-split corpus | 0.406 | 0.608 | 0.471 | 18.7 ms/q |
+| lexical, post-split corpus | 0.510 | 0.685 | 0.529 | 12.5 ms/q |
+
+**This is not a retrieval improvement and must not be quoted as one.** Nothing
+in the retrieval implementation changed between the two rows; the corpus did.
+Removing ~20 engine documents that were competing for the same queries is
+exactly the effect §"docs/ was answering vault questions" predicted, now visible
+as a number. Whether the corpus also grew in ways that helped is unseparated —
+12 DSA problem pages were added over the same period.
+
+The rest of this page is left exactly as measured. The comparisons it draws —
+lexical against embeddings, and the four fusion weights — are all *within* the
+pre-split corpus, so they remain valid against each other, which is what they
+were for. Re-establishing a post-split baseline means re-running the whole sweep,
+and one run of one method is not that.
+
+---
+
 ## 1. Why this document exists
 
 The Phase 3 brief forbids claiming a retrieval improvement without measured

@@ -104,6 +104,12 @@ Embeddings were built, measured, and **rejected**; hybrid fusion was swept
 across four weights and every one regressed. No vector database is justified —
 [the numbers](docs/research/retrieval-baseline.md).
 
+Those figures were measured over the corpus as it stood before the engine was
+split into this repository. The same command over the current vault reports
+`R@5=0.510 R@10=0.685 MRR=0.529` — **a corpus change, not a retrieval
+improvement**, and deliberately not promoted to the table above, since one run
+of one method does not replace a swept baseline. See §0 of that document.
+
 Extraction quality has its own eval, and its headline metric is deliberately
 **junk rate rather than recall**, because the failure mode this corpus actually
 has is over-extraction and recall rewards that. A test pins the choice: an
