@@ -289,3 +289,78 @@ class TestDescriptions:
         from forge.cli.shell import command_help
 
         assert "citing" in command_help(cli)["ask"]
+
+
+class TestABusyCommandIsVisibleAndNotClobbered:
+    """A slow command used to look identical to a dead one, and submitting a
+    second silently cancelled the first: the worker is `exclusive`. Both were
+    reported from a real session where `/status` and a question both showed
+    their echo line and then nothing at all."""
+
+    def _run_while_busy(self, settings):
+        from textual.widgets import Input, RichLog, Static
+
+        from forge.cli.tui import build_app
+
+        async def go():
+            app = build_app(cli, settings, Stats(10, 10, 100, 0))
+            async with app.run_test(size=(110, 34)) as pilot:
+                # Pretend a command is in flight, without needing a slow one.
+                app._set_busy(True, ["index", "--reset"])
+                await pilot.pause()
+                status = app.query_one("#statusline", Static).content
+                box = app.query_one("#prompt", Input)
+                box.value = "/status"
+                await pilot.press("enter")
+                await pilot.pause()
+                log = app.query_one("#transcript", RichLog)
+                text = "\n".join(strip.text for strip in log.lines)
+                app._stop_timer()
+                return str(status), text
+
+        return asyncio.run(go())
+
+    def test_the_status_line_shows_what_is_running(self, settings):
+        status, _ = self._run_while_busy(settings)
+        assert "running" in status
+        assert "index --reset" in status
+        assert "esc to interrupt" in status
+
+    def test_a_second_command_is_refused_rather_than_cancelling_the_first(self, settings):
+        _, transcript = self._run_while_busy(settings)
+        assert "still running" in transcript
+        assert "index --reset" in transcript
+
+    def test_the_indicator_clears_when_the_command_ends(self, settings):
+        from textual.widgets import Static
+
+        from forge.cli.tui import build_app
+
+        async def go():
+            app = build_app(cli, settings, Stats(10, 10, 100, 0))
+            async with app.run_test(size=(110, 34)) as pilot:
+                app._set_busy(True, ["index"])
+                await pilot.pause()
+                app._finish(0, 0, produced=3)
+                await pilot.pause()
+                return str(app.query_one("#statusline", Static).content), app._busy
+
+        status, busy = asyncio.run(go())
+        assert "running" not in status
+        assert busy is False
+
+    def test_a_command_that_prints_nothing_says_so(self, settings):
+        """Silence was indistinguishable from a hang."""
+        from textual.widgets import RichLog
+
+        from forge.cli.tui import build_app
+
+        async def go():
+            app = build_app(cli, settings, Stats(10, 10, 100, 0))
+            async with app.run_test(size=(110, 34)) as pilot:
+                app._finish(0, 0, produced=0)
+                await pilot.pause()
+                log = app.query_one("#transcript", RichLog)
+                return "\n".join(strip.text for strip in log.lines)
+
+        assert "(no output)" in asyncio.run(go())

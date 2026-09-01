@@ -240,6 +240,9 @@ def build_app(app_typer: typer.Typer, settings: Settings, stats: Stats):
             self._busy = False
             self._suggested: list[str] = []
             self._cursor = 0
+            self._running = ""
+            self._elapsed = 0
+            self._timer = None
 
         # -- layout --------------------------------------------------------
 
@@ -358,8 +361,9 @@ def build_app(app_typer: typer.Typer, settings: Settings, stats: Stats):
         def action_interrupt(self) -> None:
             if self._busy:
                 self.workers.cancel_all()
-                self.say("[#d7875f]interrupted[/]")
+                self.say(f"[#d7875f]interrupted {self._running}[/]")
                 self._busy = False
+                self._stop_timer()
             else:
                 self.query_one("#prompt", Input).value = ""
 
@@ -376,6 +380,17 @@ def build_app(app_typer: typer.Typer, settings: Settings, stats: Stats):
                 self.exit()
                 return
             if action.kind is Kind.EMPTY:
+                return
+
+            # The worker is `exclusive`, so starting a second command would
+            # cancel the first — silently, and with nothing on screen to say
+            # either had been running. Refusing is the honest answer: the user
+            # can wait or press esc, and either way knows what is happening.
+            if self._busy:
+                self.say(
+                    f"[#d7875f]still running {self._running} "
+                    f"({self._elapsed}s) — esc to interrupt[/]"
+                )
                 return
 
             # Echo what was asked, so the transcript reads as a conversation.
@@ -422,8 +437,18 @@ def build_app(app_typer: typer.Typer, settings: Settings, stats: Stats):
 
             self.call_from_thread(self._set_busy, True, argv)
 
+            produced = 0
+
             def emit(line: str) -> None:
-                self.call_from_thread(self.say, _escape(line))
+                nonlocal produced
+                produced += 1
+                # `call_from_thread` raises if it is ever reached from the loop
+                # thread. Nothing should redirect stdout there, but a stray
+                # print must not take the worker down with it.
+                try:
+                    self.call_from_thread(self.say, _escape(line))
+                except RuntimeError:
+                    pass
 
             code = run_command(app_typer, argv, emit)
 
@@ -431,17 +456,46 @@ def build_app(app_typer: typer.Typer, settings: Settings, stats: Stats):
                 calls = CALLS.count
             except Exception:
                 calls = self._stats.llm_calls
-            self.call_from_thread(self._finish, code, calls)
+            self.call_from_thread(self._finish, code, calls, produced)
 
         def _set_busy(self, busy: bool, argv: list[str] | None = None) -> None:
+            """Show that something is happening, and for how long.
+
+            A command that reaches a provider can take many seconds — the cloud
+            timeout defaults to minutes — and with no indicator a slow command
+            and a dead one look identical. That ambiguity is the whole problem
+            this solves.
+            """
             self._busy = busy
             if busy and argv:
-                self.say(f"[#4d5566]▸ {' '.join(argv)}[/]")
+                self._running = " ".join(argv)
+                self._elapsed = 0
+                self.say(f"[#4d5566]▸ {self._running}[/]")
+                self._tick()
+                self._timer = self.set_interval(1.0, self._tick)
 
-        def _finish(self, code: int, calls: int) -> None:
+        def _tick(self) -> None:
+            self._elapsed += 1
+            self.query_one("#statusline", Static).update(
+                f"[#d7875f]● running[/] [#8f9aae]{self._running}[/] "
+                f"[#4d5566]· {self._elapsed}s · esc to interrupt[/]"
+            )
+
+        def _stop_timer(self) -> None:
+            if self._timer is not None:
+                self._timer.stop()
+                self._timer = None
+            self._running = ""
+            self.query_one("#statusline", Static).update(self._statusline())
+
+        def _finish(self, code: int, calls: int, produced: int = 0) -> None:
             self._busy = False
+            self._stop_timer()
             if code != 0:
                 self.say(f"[#d75f5f]exit {code}[/]")
+            elif produced == 0:
+                # Silence used to be indistinguishable from a hang. Say so.
+                self.say("[#4d5566](no output)[/]")
             self.say("")
             self._stats = Stats(
                 self._stats.files, self._stats.indexed, self._stats.spans, calls

@@ -560,6 +560,17 @@ the more honest number here: the design asserts that deterministic work makes
 zero model calls, so a counter that stays at `0` through an index is the system
 reporting on itself. It flags a stale index the same way the shell does.
 
+**A running command is always visible.** The status line switches to
+`● running <command> · 12s · esc to interrupt` for as long as it takes, and a
+command that finishes having printed nothing says `(no output)`. Without that,
+a slow command and a hung one look identical — which is exactly what a cloud
+provider and a multi-minute `FORGE_LLM_TIMEOUT` produce.
+
+**A second command while one is running is refused**, not queued and not
+silently substituted. The worker is exclusive, so starting another would cancel
+the first; the transcript says `still running <command> (12s) — esc to
+interrupt` instead. Wait, or interrupt.
+
 **Commands run on a worker thread and stream.** A long index or extraction run
 shows its progress as it happens rather than freezing the interface and dumping
 at the end. Both stdout and stderr are captured — a structlog retry warning
