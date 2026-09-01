@@ -492,6 +492,22 @@ _register_phase3(app, _settings)
 _register_phase4(app, _settings)
 
 
+# Registered last, deliberately: the shell enumerates the commands of the group
+# it is given, so every command above must already be attached when it runs.
+@app.command()
+def shell(
+    vault: Optional[Path] = typer.Option(None),
+) -> None:
+    """Open an interactive Forge shell with slash commands."""
+    from .shell import run as _run_shell
+
+    settings = _settings(vault)
+    store = load_store(settings)
+    on_disk = CorpusIndexer(settings).discover()
+    indexed = len(store.list_sources())
+    raise typer.Exit(code=_run_shell(app, settings, len(on_disk), indexed))
+
+
 def main() -> None:  # pragma: no cover
     try:
         app()

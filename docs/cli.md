@@ -456,6 +456,63 @@ thing instead of reporting that it could not find the right one.
 
 ---
 
+## `forge shell`
+
+An interactive session: a header bar, a prompt, and slash commands.
+
+```bash
+forge shell
+```
+
+```
+──────────────────────────────────────────────────────────────────────────────
+ FORGE  /Users/you/forge
+  634 files   cloud:openai/gpt-oss-120b
+──────────────────────────────────────────────────────────────────────────────
+  /help for commands · /quit to leave · plain text asks a question
+
+forge ›
+```
+
+**A slash command is a Forge command.** The shell keeps no registry of its own —
+it dispatches into the same typer group the CLI uses, so every command above
+has a slash form, including any added later, and every option works unchanged:
+
+```
+forge › /diagnostics links --limit 100
+forge › /inspect "DSA/01_Patterns/Binary Search.md"
+forge › /graph path Heap "Binary Search"
+```
+
+**Text without a leading slash goes to `ask`.** That is the common case and the
+reason to sit in a shell rather than retyping `forge` each time. Prose is passed
+whole rather than split, so apostrophes and question marks survive.
+
+| | |
+|---|---|
+| `/help`, `/?` | commands, in columns |
+| `/quit`, `/exit`, `/q`, Ctrl-D | leave |
+| `/clear`, `/cls` | redraw the header |
+| Tab | complete a slash command |
+| Up / Down | history, kept in `~/.config/forge/shell_history` |
+
+A command that fails ends the command, not the session: usage errors, an
+unreachable provider and unknown commands are all reported and the prompt
+returns. `/shell` is refused rather than nested, and is not offered in `/help`
+or completion — listing a command the shell will not run is a promise it breaks.
+
+**The header does not probe the provider.** It reports what is configured, which
+costs nothing. Reachability is a network round trip, and a header that stalls on
+a timeout every redraw is worse than one that says only what it knows for free —
+run `/status` for the checked version. The header also flags a stale index: when
+the file count on disk and the indexed count differ, it shows both.
+
+History lives beside the settings file, never in the vault. The vault is
+content; a shell history is machine state, and the engine stays read-only with
+respect to the vault.
+
+---
+
 ## `forge index`
 
 Walk the vault, hash every file, parse structure and metadata, resolve links,

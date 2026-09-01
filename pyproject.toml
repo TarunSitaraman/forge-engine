@@ -17,7 +17,7 @@ license = { text = "MIT" }
 
 # Deliberately minimal. Every dependency below is load-bearing:
 #   pydantic  — typed domain models + validation + serialization
-#   typer     — CLI
+#   typer     — CLI (and `forge shell`, which uses its group as the command list)
 #   structlog — structured logging
 #   PyYAML    — frontmatter parsing (the corpus is YAML-frontmattered)
 #   httpx     — Ollama and cloud HTTP transport
