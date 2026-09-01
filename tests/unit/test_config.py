@@ -65,14 +65,16 @@ def test_returns_none_rather_than_a_fallback_when_there_is_no_repo(tmp_path: Pat
 # --------------------------------------------------------------------------
 
 
-def test_prefers_the_vault_next_to_the_installed_module(monkeypatch, tmp_path: Path) -> None:
-    """An editable install pins the CLI to its own checkout from any directory.
+def test_the_engines_own_checkout_is_never_taken_as_the_vault(monkeypatch, tmp_path: Path) -> None:
+    """Resolution ignores the module's location, so the engine cannot index itself.
 
-    The module location is checked first, so `cd` elsewhere does not repoint the
-    vault — which is what makes `pipx install --editable` behave as a
-    single-vault personal CLI.
+    A module-adjacent rule was tried first until 2026-09-01. It made sense while
+    the engine lived inside the vault; once the engine had its own repository it
+    matched that repository every time under an editable install, so `forge index`
+    with no `FORGE_VAULT_PATH` silently indexed the engine's own `docs/` and
+    exited 0. Standing in a real vault must win, and standing nowhere must raise.
     """
-    module_vault = tmp_path / "module-vault"
+    module_vault = tmp_path / "engine-checkout"
     cwd_vault = tmp_path / "cwd-vault"
     for p in (module_vault, cwd_vault):
         (p / ".git").mkdir(parents=True)
@@ -83,7 +85,22 @@ def test_prefers_the_vault_next_to_the_installed_module(monkeypatch, tmp_path: P
         lambda start: module_vault if start == Path(config_module.__file__) else cwd_vault,
     )
 
-    assert _resolve_vault_root() == module_vault
+    assert _resolve_vault_root() == cwd_vault
+
+
+def test_raises_rather_than_falling_back_to_the_module(monkeypatch, tmp_path: Path) -> None:
+    """No vault at the cwd is an error, even when the engine checkout is one."""
+    module_vault = tmp_path / "engine-checkout"
+    (module_vault / ".git").mkdir(parents=True)
+
+    monkeypatch.setattr(
+        config_module,
+        "_find_vault_root",
+        lambda start: module_vault if start == Path(config_module.__file__) else None,
+    )
+
+    with pytest.raises(ConfigError, match="could not locate a Forge vault"):
+        _resolve_vault_root()
 
 
 def test_falls_back_to_the_vault_the_user_is_standing_in(monkeypatch, tmp_path: Path) -> None:

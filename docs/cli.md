@@ -11,8 +11,13 @@ only to `.forge/`, which is derived state and can be deleted at any time —
 
 ## Install
 
+Forge is **two repositories**: this engine, and the Markdown vault it reads.
+They were separate as of 2026-09-01, so the engine no longer sits inside your
+vault and cannot infer where it is.
+
 ```bash
-pip install -e ".[dev]"     # from the repository root
+pip install -e ".[dev]"     # from this repository's root
+export FORGE_VAULT_PATH=~/forge     # your vault checkout — see below
 forge --help
 ```
 
@@ -72,9 +77,18 @@ exec $SHELL -l
 ```
 
 ```bash
-cd ~/forge                         # wherever you cloned it
+cd ~/forge-engine                  # this repository, NOT the vault
 pipx install --editable ".[dev]"
 forge --help
+```
+
+The vault is a separate checkout. Clone it too, and tell the engine where it is
+— this export is not optional, for the reason under **Why `--editable`** below:
+
+```bash
+git clone https://github.com/TarunSitaraman/forge.git ~/forge
+echo 'export FORGE_VAULT_PATH=~/forge' >> ~/.zshrc
+exec $SHELL -l
 ```
 
 **Why not Homebrew.** It is fine on a current machine, and if you already run it
@@ -92,13 +106,23 @@ the way around PEP 668: Homebrew and most Linux distributions mark their Python
 which is why `pip install --user pipx` above works.
 
 **Why `--editable`.** It keeps the installed command pointed at your checkout,
-so edits to `engine/` take effect immediately with no reinstall — and it makes
-Forge resolve the vault to that checkout from *any* working directory, which is
-what you want for a single personal vault. Confirm with:
+so edits to `engine/` take effect immediately with no reinstall.
+
+**It no longer pins the vault, and this reversed with the repository split.**
+An editable install puts `forge/config.py` inside *this* repository. While the
+engine lived in the vault those were the same directory and resolving next to
+the module was a feature; afterwards it resolved to the engine's own checkout
+every time. That rule was removed on 2026-09-01 — it made `forge index` with no
+`FORGE_VAULT_PATH` silently index the engine's own `docs/` and print a success
+line. Forge now looks only upward from your working directory, so set
+`FORGE_VAULT_PATH` once and it works from anywhere.
+Confirm the engine is pointed at the vault and not at itself:
 
 ```bash
 cd ~ && forge status | head -1      # -> vault : /Users/you/forge
 ```
+
+If that prints a path ending in `forge-engine`, the export did not take.
 
 **Tab completion** (macOS defaults to zsh):
 
@@ -334,8 +358,9 @@ either as a rate.
 |---|---|
 | `zsh: command not found: forge` | `~/.local/bin` is not on `PATH`. Run `pipx ensurepath`, then `exec $SHELL -l`. |
 | `error: externally-managed-environment` | You ran `pip install` against Homebrew Python. Use pipx as above, or a venv. |
-| `configuration error: could not locate a Forge vault` | A non-editable install run outside any git repository. Either reinstall with `--editable`, or `export FORGE_VAULT_PATH=~/forge`. |
-| `forge status` reports the wrong vault | A non-editable install resolves the vault from your current directory. Set `FORGE_VAULT_PATH` to pin it. |
+| `configuration error: could not locate a Forge vault` | `FORGE_VAULT_PATH` is unset and you are not standing in a vault. `export FORGE_VAULT_PATH=~/forge`. Reinstalling with `--editable` does **not** fix this since the split — it pins to the engine, not the vault. |
+| `forge status` reports a vault ending in `forge-engine` | Automatic resolution found the engine checkout, which is what it now does. Set `FORGE_VAULT_PATH` to your notes and re-run. |
+| `forge index` reports collisions as AMBIGUOUS that you already decided | Fixed 2026-09-01; update the engine. The identity config was read relative to the working directory rather than the vault, so running from anywhere but the vault root silently ignored `config/concept-identity.yaml`. |
 | `pydantic` / `TypeError` on import | Python 3.9 or older. Check with `python3 -V`; reinstall against a newer one: `pipx install --python "$(python3.12 -c 'import sys; print(sys.executable)')" --editable ".[dev]"`. |
 | `installer: ... NSInvalidArgumentException ... nil string parameter` | macOS privacy (TCC) is blocking access to the folder the `.pkg` is in — `~/Downloads` is protected, and `sudo installer` running as root gets denied. Use `open <pkg>` and click through the GUI installer instead. |
 | `FileNotFoundError` from `os.getcwd()` in *any* Python command | Your shell's working directory is a TCC-protected folder (`~/Downloads`, `~/Desktop`, `~/Documents`) the interpreter has no permission for, so it cannot resolve its own cwd and dies before running anything. `cd ~` and retry. Grant Terminal Full Disk Access only if you actually need to work from those folders. |
@@ -389,12 +414,16 @@ their `llama3.1:8b` default is not a valid cloud model.
 When neither a `--vault` option nor `FORGE_VAULT_PATH` is given, Forge looks for
 a directory containing `.git`, in this order:
 
-1. **Next to the installed engine.** A source checkout or an editable install
-   puts `forge/config.py` inside the vault repository, so the command stays
-   pinned to that vault from any working directory.
-2. **Upward from the current directory.** For a non-editable install the engine
-   lives in `site-packages`, so the only remaining signal is the vault you are
-   standing in.
+1. **Upward from the current directory.** If you are standing in your vault,
+   that is the vault. This is the only automatic rule.
+
+A second rule — *next to the installed engine* — was removed on 2026-09-01. It
+pinned the CLI to its checkout from any directory, which was right while the
+engine lived inside the vault and wrong the moment it did not: under an editable
+install it matched the engine's own repository every time, so the engine indexed
+its own documentation and reported success. There is no structural way to tell
+"the engine repository" from "a vault that contains the engine", the first being
+a subset of the second, so the rule is gone rather than narrowed.
 
 If neither finds one, Forge **fails with exit code 2** and tells you to set
 `FORGE_VAULT_PATH`. It does not fall back to the current directory: doing so

@@ -527,29 +527,35 @@ def _find_vault_root(start: Path) -> Path | None:
 def _resolve_vault_root() -> Path:
     """Locate the vault when it was not passed explicitly or set in the environment.
 
-    Two locations are tried, in this order:
+    Only one location is tried: **upward from the current directory**. If you are
+    standing in a vault, that is the vault; otherwise this raises and tells you to
+    set ``FORGE_VAULT_PATH``.
 
-    1. **Next to the installed module.** A source checkout or an editable install
-       puts ``forge/config.py`` inside the vault repository, so this pins the CLI
-       to that vault from any working directory — the behaviour a personal vault
-       wants, and what ``pipx install --editable`` gives you.
-    2. **Upward from the current directory.** For a non-editable install the
-       module lives in ``site-packages``, so the only signal left is the vault
-       the user is standing in.
+    It must not fall back to the current directory itself: ``forge index`` would
+    then treat an arbitrary directory as a vault, write a ``.forge/`` into it, and
+    report success — silently indexing the wrong thing instead of saying it could
+    not find the right thing.
 
-    If neither finds a repository root, this raises. It must not fall back to the
-    current directory: ``forge index`` would then treat an arbitrary directory as
-    a vault, write a ``.forge/`` into it, and report success — silently indexing
-    the wrong thing instead of saying it could not find the right thing.
+    **A module-adjacent rule used to come first, and was removed on 2026-09-01.**
+    While the engine lived inside the vault repository, ``forge/config.py`` sat
+    under the vault root, so resolving next to the module pinned an editable
+    install to that vault from any directory — genuinely useful. Once the engine
+    moved to its own repository that rule resolved to *the engine's own checkout*,
+    every time, from everywhere. It did not merely stop helping: because the rule
+    was tried first and always matched under an editable install, ``forge index``
+    run anywhere with no ``FORGE_VAULT_PATH`` indexed the engine's own ``docs/``
+    and printed a success line. That is exactly the silent-wrong-vault failure the
+    paragraph above exists to forbid, so the rule is gone rather than reordered:
+    there is no structural way to tell "the engine repository" from "a vault that
+    happens to contain the engine", because the former is a subset of the latter.
     """
-    for start in (Path(__file__), Path.cwd()):
-        found = _find_vault_root(start)
-        if found is not None:
-            return found
+    found = _find_vault_root(Path.cwd())
+    if found is not None:
+        return found
     raise ConfigError(
-        "could not locate a Forge vault. Forge looks for a directory containing "
-        ".git, first next to the installed engine and then upward from the "
-        "current directory, and found neither.\n"
+        "could not locate a Forge vault. Forge looks upward from the current "
+        "directory for one containing .git, and found none. The engine lives in "
+        "its own repository, so it cannot infer where your vault is.\n"
         "Fix this by pointing Forge at the vault explicitly:\n"
         "  export FORGE_VAULT_PATH=/path/to/forge   # persist it in ~/.zshrc\n"
         "  forge index --vault /path/to/forge       # or per-command, where supported"
