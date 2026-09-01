@@ -5,8 +5,14 @@ Two vaults are available:
 * ``fixture_vault`` — a small synthetic vault that deliberately reproduces the
   exact defect shapes found in the real corpus (both malformed ``related:``
   forms, stem collisions, URL-encoded links, duplicate content).
-* ``real_vault`` — the actual Forge repository. Integration tests run against
-  it so the engine is validated on real material, not only on ideal examples.
+* ``real_vault`` — the Markdown vault the engine was built against. Integration
+  tests run against it so the engine is validated on real material, not only on
+  ideal examples. That vault is a **separate, private repository**, so these
+  tests skip unless it is available: set ``FORGE_TEST_VAULT`` to its checkout,
+  or run from a tree that still contains it. They assert against that specific
+  corpus, which is why they take a dedicated variable rather than reusing
+  ``FORGE_VAULT_PATH`` — pointing them at some other vault would fail on
+  content, not on a defect.
 
 No test requires a live LLM. Anything that would is marked ``requires_model``
 and skipped by default.
@@ -14,6 +20,7 @@ and skipped by default.
 
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 
@@ -66,12 +73,40 @@ def store(tmp_path: Path) -> SqliteStore:
     s.close()
 
 
+#: Where to find the Markdown vault when it is not in this tree. It lives in its
+#: own private repository, so after the engine was split out there is no path
+#: that can be assumed — but the corpus tests are the ones that matter most, and
+#: leaving them permanently unrunnable would quietly delete that coverage.
+TEST_VAULT_VAR = "FORGE_TEST_VAULT"
+
+
+def _corpus_root() -> Path | None:
+    """The vault to run corpus tests against, or ``None`` if there isn't one.
+
+    ``FORGE_TEST_VAULT`` wins so a checkout anywhere can be named; otherwise the
+    repository root still works for a tree that contains the vault. A configured
+    path that is not a vault is an error rather than a skip: the caller asked for
+    something specific and silently testing nothing is how coverage disappears.
+    """
+    configured = os.environ.get(TEST_VAULT_VAR)
+    if configured:
+        root = Path(configured).expanduser()
+        if not (root / "DSA").is_dir():
+            raise pytest.UsageError(
+                f"{TEST_VAULT_VAR}={configured!r} is not a Forge vault "
+                "(no DSA/ directory beneath it)"
+            )
+        return root
+    return REPO_ROOT if (REPO_ROOT / "DSA").is_dir() else None
+
+
 @pytest.fixture(scope="session")
 def real_vault() -> Path:
-    """The actual Forge repository."""
-    if not (REPO_ROOT / "DSA").is_dir():  # pragma: no cover
-        pytest.skip("real corpus not present")
-    return REPO_ROOT
+    """The Markdown vault the engine was built against."""
+    root = _corpus_root()
+    if root is None:  # pragma: no cover
+        pytest.skip(f"real corpus not present; set {TEST_VAULT_VAR} to a vault checkout")
+    return root
 
 
 @pytest.fixture(scope="session")

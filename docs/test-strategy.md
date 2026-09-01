@@ -43,6 +43,30 @@ in §"Regression tests" is a mistake made and then locked down.
 
 ---
 
+## Running the corpus tests
+
+42 integration tests run against the Markdown vault the engine was built
+against. That vault is a **separate, private repository**, so by default these
+tests **skip** and the suite reports `981 passed, 42 skipped`.
+
+```bash
+python -m pytest tests                              # 981 passed, 42 skipped
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,023 passed
+```
+
+`FORGE_TEST_VAULT` takes a checkout of that vault. It is deliberately **not**
+`FORGE_VAULT_PATH`: these tests assert against that specific corpus — file
+counts, particular paths, the recorded collision decisions — so aiming them at
+some other vault would fail on content rather than on a defect, and the two
+variables must not be confusable. A path that is set but is not a vault raises
+rather than skipping: the caller asked for something specific, and silently
+testing nothing is how coverage disappears.
+
+Skipping is the honest default, not a weakened suite. What it costs is real
+though — these are the tests that validate the engine on material that actually
+drifted, so run them with the vault before trusting a change to indexing, link
+resolution, or diagnostics.
+
 ## Layout
 
 ```

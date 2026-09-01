@@ -101,9 +101,17 @@ class CorpusIndexer:
         to reporting the ambiguity, which is the pre-existing behaviour.
         """
         try:
-            from ..identity.config import IdentityConfig
+            from ..identity.config import DEFAULT_CONFIG_PATH, IdentityConfig
 
-            config = IdentityConfig.load()
+            # Anchored to the vault, never to the process's working directory.
+            # `DEFAULT_CONFIG_PATH` is relative, so calling `load()` bare read
+            # `./config/concept-identity.yaml` — which silently resolves to
+            # nothing whenever `forge index` runs from anywhere but the vault
+            # root, and every decided collision goes back to reporting as
+            # ambiguous. That is precisely the answer-being-ignored failure this
+            # method exists to prevent. Every other caller already passes an
+            # explicit vault-relative path; this was the one that did not.
+            config = IdentityConfig.load(self.vault / DEFAULT_CONFIG_PATH)
         except Exception as exc:
             log.warning("identity_config_unreadable", error=str(exc))
             return {}

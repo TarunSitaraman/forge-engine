@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import pytest
 
+from forge.corpus.indexer import CorpusIndexer
 from forge.parsing.links import LinkIndex, LinkStatus, normalize, resolve_markdown_link, resolve_wikilink
 from forge.parsing.markdown import MarkdownLink, WikiLink
 
@@ -251,3 +252,67 @@ class TestLinksToNonMarkdownFiles:
         got = resolve_markdown_link(self._md_link("docs/a.md"), "README.md", index)
         assert got.status is LinkStatus.RESOLVED
         assert got.resolved_path == "docs/a.md"
+
+
+class TestDecidedIdentitiesAreReadFromTheVault:
+    """The identity config is found relative to the vault, not to the cwd.
+
+    `DEFAULT_CONFIG_PATH` is a relative path. `CorpusIndexer._decided_targets`
+    used to call `IdentityConfig.load()` with no argument, which resolved it
+    against the *process working directory* — so `forge index` run from
+    anywhere but the vault root read no config, and every collision a human had
+    already decided went back to being reported AMBIGUOUS. Every other caller
+    passed an explicit vault-relative path; this was the one that did not.
+
+    Found when the engine moved to its own repository and the corpus tests
+    started running with a cwd outside the vault for the first time.
+    """
+
+    DECIDED = """version: 1
+collisions:
+- name: Heap
+  identities:
+  - canonical_name: Heap
+    kind: pattern
+    namespace: pattern
+    vault_path: DSA/01_Patterns/Heap.md
+  - canonical_name: Heap
+    kind: data_structure
+    namespace: data-structure
+    vault_path: DSA/03_DataStructures/Heap.md
+  default: pattern/Heap
+  decided_by: test
+  decided_at: '2026-09-01T00:00:00+00:00'
+"""
+
+    def _heap_link(self, index):
+        source = index.by_path()["DSA/01_Patterns/Graph Traversal.md"]
+        return next(link for link in source.links if link.target == "Heap")
+
+    def test_the_decision_is_honoured_from_an_unrelated_cwd(
+        self, settings, fixture_vault, tmp_path, monkeypatch
+    ):
+        config = fixture_vault / "config" / "concept-identity.yaml"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text(self.DECIDED, encoding="utf-8")
+
+        elsewhere = tmp_path / "somewhere-else"
+        elsewhere.mkdir()
+        monkeypatch.chdir(elsewhere)
+
+        got = self._heap_link(CorpusIndexer(settings).build_index())
+
+        assert got.status is LinkStatus.RESOLVED
+        assert got.resolved_path == "DSA/01_Patterns/Heap.md"
+
+    def test_an_undecided_collision_still_stays_ambiguous(
+        self, settings, fixture_vault, tmp_path, monkeypatch
+    ):
+        """The fix must not make the engine start guessing."""
+        elsewhere = tmp_path / "somewhere-else"
+        elsewhere.mkdir()
+        monkeypatch.chdir(elsewhere)
+
+        got = self._heap_link(CorpusIndexer(settings).build_index())
+
+        assert got.status is LinkStatus.AMBIGUOUS
