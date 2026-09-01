@@ -137,7 +137,7 @@ discrimination, not a general collapse.
 
 **So reasoning-off is rejected for assessment, and remains unmeasured for
 extraction.** The experiment could only be run against the assessment set:
-`tests/fixtures/eval/` holds `assessment-v1.yaml` and `retrieval-v1.yaml` and
+`forge/evaluation/data/` holds `assessment-v1.yaml` and `retrieval-v1.yaml` and
 nothing else, so **there is no extraction-quality eval** to grade the task this
 section actually cares about. Extraction asks a different question and reasoning
 may matter less there — but that is a guess, and running the vault with

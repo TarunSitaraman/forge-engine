@@ -1,9 +1,13 @@
 """Retrieval evaluation dataset.
 
-Loads the versioned label set in ``tests/fixtures/eval/``. Kept in the
-repository rather than generated, because a labelled set that regenerates
+Loads the versioned label set shipped in ``forge/evaluation/data/``. Kept in
+the repository rather than generated, because a labelled set that regenerates
 itself measures nothing — the whole value is that it is fixed while the
 retrieval implementation changes underneath it.
+
+The default path is resolved **relative to this module**, not to the vault or
+to the working directory. The label set is engine data that ships with the
+package; the corpus it names is somebody else's repository.
 """
 
 from __future__ import annotations
@@ -14,7 +18,7 @@ from typing import Any, Iterator
 
 import yaml
 
-DEFAULT_DATASET = Path("tests") / "fixtures" / "eval" / "retrieval-v1.yaml"
+DEFAULT_DATASET = Path(__file__).resolve().parent / "data" / "retrieval-v1.yaml"
 
 
 class DatasetError(Exception):

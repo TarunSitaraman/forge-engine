@@ -886,7 +886,10 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         # The default set lives in the repository, so resolve it against the
         # vault rather than the working directory — otherwise the command only
         # works when run from the repository root.
-        target = dataset or (settings.vault_path / DEFAULT_DATASET)
+        # The label set ships with the engine; only the corpus it names lives
+        # in the vault. Resolving it under `vault_path` meant the command could
+        # not find its own dataset once the vault stopped being this repository.
+        target = dataset or DEFAULT_DATASET
         try:
             data = EvalDataset.load(target)
         except Exception as exc:

@@ -38,7 +38,7 @@ import yaml
 from ..extraction.extractor import _grounded
 from ..parsing.links import normalize
 
-DEFAULT_EXTRACTION_SET = Path("tests") / "fixtures" / "eval" / "extraction-v1.yaml"
+DEFAULT_EXTRACTION_SET = Path(__file__).resolve().parent / "data" / "extraction-v1.yaml"
 
 
 class ExtractionDatasetError(Exception):

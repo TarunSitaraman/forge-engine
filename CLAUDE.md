@@ -51,7 +51,7 @@ month came out confounded.** There was an assessment eval and a retrieval eval
 and nothing measuring the thing extraction actually produces, so the `0.3.0`
 prompt rewrite, the `+nothink` question and the "~35-40% concept precision"
 figure all had to be recorded as unjudgeable. The dataset
-(`tests/fixtures/eval/extraction-v1.yaml`, 6 cases, 15 expected concepts, 25
+(`forge/evaluation/data/extraction-v1.yaml`, 6 cases, 15 expected concepts, 25
 forbidden strings) is built from **real observed failures** — `maxmemory`,
 `VARCHAR(n)`, `.dockerignore`, `Answer`, `git commit` — not invented ones.
 

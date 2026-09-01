@@ -844,7 +844,7 @@ forge retrieval-eval --json
 ```
 
 ```
-dataset: tests/fixtures/eval/retrieval-v1.yaml (v1, 24 queries, 48 labels)
+dataset: forge/evaluation/data/retrieval-v1.yaml (v1, 24 queries, 48 labels)
 
   lexical                R@5=0.406  R@10=0.608  P@5=0.158  MRR=0.471  misses=6  18.7ms/q
   semantic               R@5=0.301  R@10=0.581  P@5=0.133  MRR=0.342  misses=6  244.6ms/q

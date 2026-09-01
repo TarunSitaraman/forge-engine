@@ -175,8 +175,8 @@ PY
 head2 "10. A labelled retrieval dataset exists and its labels resolve"
 python3 - <<'PY' && ok "24 queries / 48 labels, every label points at a real file" || bad "dataset invalid"
 import sys, pathlib; sys.path.insert(0,"engine")
-from forge.evaluation import EvalDataset
-d = EvalDataset.load(pathlib.Path("tests/fixtures/eval/retrieval-v1.yaml"))
+from forge.evaluation import DEFAULT_DATASET, EvalDataset
+d = EvalDataset.load(DEFAULT_DATASET)
 rot = d.verify_labels(pathlib.Path("."))
 print(f"  {len(d)} queries, {d.label_count()} labels, categories={d.categories()}")
 print(f"  rotted labels: {len(rot)}")

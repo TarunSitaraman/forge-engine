@@ -30,7 +30,7 @@ from ..logging import get_logger
 
 log = get_logger(__name__)
 
-DEFAULT_ASSESSMENT_SET = Path("tests") / "fixtures" / "eval" / "assessment-v1.yaml"
+DEFAULT_ASSESSMENT_SET = Path(__file__).resolve().parent / "data" / "assessment-v1.yaml"
 
 
 class AssessmentDatasetError(Exception):

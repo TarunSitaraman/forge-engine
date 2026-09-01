@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 
 from forge.evaluation.extraction import (
+    DEFAULT_EXTRACTION_SET,
     ExtractionCase,
     ExtractionDataset,
     ExtractionDatasetError,
@@ -103,21 +104,21 @@ class TestGrounding:
 
 class TestDataset:
     def test_the_shipped_set_loads(self):
-        data = ExtractionDataset.load("tests/fixtures/eval/extraction-v1.yaml")
+        data = ExtractionDataset.load(DEFAULT_EXTRACTION_SET)
         assert len(data) >= 5
         assert all(c.expected and c.forbidden for c in data)
 
     def test_every_case_carries_a_trap(self):
         """A span with no plausible forbidden candidate cannot distinguish a
         careful extractor from a lucky one."""
-        data = ExtractionDataset.load("tests/fixtures/eval/extraction-v1.yaml")
+        data = ExtractionDataset.load(DEFAULT_EXTRACTION_SET)
         for case in data:
             assert case.forbidden, f"{case.id} has no forbidden candidates"
 
     def test_expected_and_forbidden_never_overlap(self):
         from forge.parsing.links import normalize
 
-        data = ExtractionDataset.load("tests/fixtures/eval/extraction-v1.yaml")
+        data = ExtractionDataset.load(DEFAULT_EXTRACTION_SET)
         for case in data:
             overlap = {normalize(e) for e in case.expected} & {
                 normalize(f) for f in case.forbidden
@@ -126,7 +127,7 @@ class TestDataset:
 
     def test_a_missing_file_is_a_clean_error(self):
         with pytest.raises(ExtractionDatasetError):
-            ExtractionDataset.load("tests/fixtures/eval/nope.yaml")
+            ExtractionDataset.load(DEFAULT_EXTRACTION_SET.parent / "nope.yaml")
 
 
 class TestRunnerUsesTheRealExtractor:
@@ -136,7 +137,7 @@ class TestRunnerUsesTheRealExtractor:
         from forge.extraction import CandidateExtractor
         from forge.llm import MockProvider
 
-        data = ExtractionDataset.load("tests/fixtures/eval/extraction-v1.yaml")
+        data = ExtractionDataset.load(DEFAULT_EXTRACTION_SET)
         report = run(data, CandidateExtractor(MockProvider(default_response="{}"), max_spans=1))
         assert len(report.scores) == len(data)
         assert report.prompt_version.startswith("extract-prompts/")
@@ -155,7 +156,7 @@ class TestRunnerUsesTheRealExtractor:
             def extract(self, spans):
                 raise RuntimeError("provider exploded")
 
-        data = ExtractionDataset.load("tests/fixtures/eval/extraction-v1.yaml")
+        data = ExtractionDataset.load(DEFAULT_EXTRACTION_SET)
         report = run(data, _Broken())
         assert all(s.error and "provider exploded" in s.error for s in report.scores)
 

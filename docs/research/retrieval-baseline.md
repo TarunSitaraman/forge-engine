@@ -2,7 +2,7 @@
 
 *Phase 3. Every number on this page was produced by
 `forge retrieval-eval` against the labelled set in
-`tests/fixtures/eval/retrieval-v1.yaml`, run over the real Forge vault. Nothing
+`forge/evaluation/data/retrieval-v1.yaml`, run over the real Forge vault. Nothing
 here is estimated, and nothing was tuned against the labels.*
 
 **Headline: lexical search is the best retrieval method Forge currently has.
@@ -27,7 +27,7 @@ the benchmark says it helped.
 
 ## 2. The evaluation set
 
-`tests/fixtures/eval/retrieval-v1.yaml` — **24 queries, 48 labels**, hand-built
+`forge/evaluation/data/retrieval-v1.yaml` — **24 queries, 48 labels**, hand-built
 and version-pinned.
 
 | Category | Queries | What it probes |

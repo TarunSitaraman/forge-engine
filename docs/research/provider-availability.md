@@ -128,7 +128,7 @@ understood reason: it has never completed a call.
 | Real assessment latency | **MEASURED, high variance** — typical 40-60 s, worst case >300 s, see §6 and §7 |
 | Real classification accuracy | **MEASURED** — 5/5 on two independent runs, see §6 and §7 |
 | False-positive conflict rate | **0 of 2 adversarial cases** with reasoning on; **1 of 2 with reasoning off**, see §8 |
-| Extraction quality | **Unmeasured, and no eval exists** — `tests/fixtures/eval/` covers assessment and retrieval only |
+| Extraction quality | **Unmeasured, and no eval exists** — `forge/evaluation/data/` covers assessment and retrieval only |
 
 The false-positive row was the single largest open risk carried out of Phase 4.
 It is now partially answered — see §6 — but two adversarial cases cannot
@@ -406,7 +406,7 @@ conflict on a 5-case set where only two cases probe that behaviour at all.
 
 **Unmeasured for extraction, and currently unmeasurable.** The experiment was
 motivated by extraction cost but was run on the *assessment* set, because
-`tests/fixtures/eval/` contains only `assessment-v1.yaml` and
+`forge/evaluation/data/` contains only `assessment-v1.yaml` and
 `retrieval-v1.yaml` — there is no extraction-quality eval. Extraction asks a
 different question (pull concepts and claims out of a span, with every quote
 grounded) and reasoning may well matter less there. Nothing here licenses that

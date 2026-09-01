@@ -21,6 +21,7 @@ import yaml
 
 from forge.embeddings import HashingEmbeddingProvider, NullEmbeddingProvider
 from forge.evaluation import (
+    DEFAULT_DATASET,
     DEFAULT_FUSION_WEIGHTS,
     DatasetError,
     EvalDataset,
@@ -31,7 +32,7 @@ from forge.evaluation import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DATASET_PATH = REPO_ROOT / "tests" / "fixtures" / "eval" / "retrieval-v1.yaml"
+DATASET_PATH = DEFAULT_DATASET  # ships with the package, not with the corpus
 
 
 # --------------------------------------------------------------------------
