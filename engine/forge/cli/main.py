@@ -508,6 +508,26 @@ def shell(
     raise typer.Exit(code=_run_shell(app, settings, len(on_disk), indexed))
 
 
+@app.command()
+def tui(
+    vault: Optional[Path] = typer.Option(None),
+) -> None:
+    """Open the full-screen Forge TUI (needs the `tui` extra)."""
+    from .tui import Stats, run_tui
+
+    settings = _settings(vault)
+    store = load_store(settings)
+    on_disk = CorpusIndexer(settings).discover()
+    counts = store.counts()
+    stats = Stats(
+        files=len(on_disk),
+        indexed=len(store.list_sources()),
+        spans=int(counts.get("spans", 0)),
+        llm_calls=0,
+    )
+    raise typer.Exit(code=run_tui(app, settings, stats))
+
+
 def main() -> None:  # pragma: no cover
     try:
         app()

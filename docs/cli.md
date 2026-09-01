@@ -513,6 +513,47 @@ respect to the vault.
 
 ---
 
+## `forge tui`
+
+The full-screen interface: a title bar with live counters, a scrolling
+transcript, a persistent input box and a footer of key hints.
+
+```bash
+pip install "forge-engine[tui]"     # or: pipx inject forge-engine textual
+forge tui
+```
+
+**Textual is an optional extra**, for the same reason LangGraph is: a terminal
+UI is not load-bearing for indexing a vault. The core install stays minimal and
+`forge shell` offers every command with nothing beyond the standard library and
+what typer already brings. Without the extra, `forge tui` prints the install
+line and exits 2 — never a traceback.
+
+| | |
+|---|---|
+| Enter | run a slash command, or ask a question |
+| `esc` | interrupt a running command; empty the box when idle |
+| `ctrl+l` | clear the transcript |
+| `ctrl+c` | quit |
+
+The title bar's right side carries `files · spans · llm calls`. The call counter
+is this engine's analogue of the token meter these interfaces usually show, and
+the more honest number here: the design asserts that deterministic work makes
+zero model calls, so a counter that stays at `0` through an index is the system
+reporting on itself. It flags a stale index the same way the shell does.
+
+**Commands run on a worker thread and stream.** A long index or extraction run
+shows its progress as it happens rather than freezing the interface and dumping
+at the end. Both stdout and stderr are captured — a structlog retry warning
+belongs in the transcript, not scrawled across the alternate screen where it
+corrupts the layout until a redraw.
+
+Parsing is shared with `forge shell`, not reimplemented: the same `/command`
+forms, the same routing of bare text to `ask`, the same command list read off
+the typer group. A second copy would be a second thing to drift.
+
+---
+
 ## `forge index`
 
 Walk the vault, hash every file, parse structure and metadata, resolve links,

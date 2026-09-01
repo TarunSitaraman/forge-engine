@@ -59,6 +59,7 @@ These are enforced in code and asserted in tests, not stated as aspirations:
 ```bash
 pip install -e ".[dev]"          # Python 3.10+
 
+forge tui                       # full-screen UI  (pip install "forge-engine[tui]")
 forge shell                     # interactive: header bar, slash commands, history
 forge index                     # deterministic index; reports "LLM calls: 0"
 forge diagnostics               # every frontmatter and link defect

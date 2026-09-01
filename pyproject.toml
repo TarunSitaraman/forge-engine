@@ -39,9 +39,15 @@ dependencies = [
 # activation, and the graph must keep working without it — `forge index` on a
 # fresh clone must not require an orchestration framework.
 agent = ["langgraph>=1.0", "langgraph-checkpoint-sqlite>=3.0"]
+# `forge tui` — the full-screen interface. An extra for the same reason as
+# `agent`: a terminal UI is not load-bearing for indexing a vault, and
+# `forge shell` offers every command with nothing beyond the standard library
+# and what typer already brings.
+tui = ["textual>=1.0"]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "textual>=1.0",
     "langgraph>=1.0",
     "langgraph-checkpoint-sqlite>=3.0",
 ]
