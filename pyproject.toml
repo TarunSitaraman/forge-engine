@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "forge-engine"
 version = "0.1.0"
 description = "Forge Knowledge OS engine — canonical knowledge model, deterministic corpus indexing, provenance."
-readme = "engine/README.md"
+readme = "README.md"
 # Verified on 3.10, 3.11, 3.12, and 3.13 — the full suite passes on each.
 # The real floor is 3.10: the domain models use PEP 604 unions (`str | None`)
 # which pydantic evaluates at runtime, so 3.9 and below genuinely cannot load

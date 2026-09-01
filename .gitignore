@@ -1,0 +1,18 @@
+# Runtime artifacts - never commit these
+.forge/
+.forge-fresh/
+.forge-old/
+.forge2/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+venv/
+env/
+.env
+
+# OS specific
+.DS_Store
+Thumbs.db

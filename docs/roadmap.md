@@ -2,10 +2,9 @@
 
 *Phased implementation plan for the Forge engine, with an explicit exit gate per phase.*
 
-**Scope note:** this roadmap covers the **engine**. The root
-[`ROADMAP.md`](../ROADMAP.md) covers the Markdown vault's own content
-plans and remains valid — the two are separate tracks and should not be
-merged.
+**Scope note:** this roadmap covers the **engine**. The vault repository
+keeps its own `ROADMAP.md` for the Markdown vault's content plans, which
+remains valid — the two are separate tracks and should not be merged.
 
 ---
 

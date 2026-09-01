@@ -70,8 +70,8 @@ ever true — precisely the drift the audit measured in the vault (§6.4).
 
 - **Relative Markdown links**, not wikilinks — these docs are read on
   GitHub as often as in Obsidian. Permitted by
-  [`CONVENTIONS.md`](../CONVENTIONS.md) for exactly this case.
-- **kebab-case filenames**, per `CONVENTIONS.md`.
+  the vault repository's `CONVENTIONS.md` for exactly this case.
+- **kebab-case filenames**, per that same `CONVENTIONS.md`.
 - **ADRs are immutable once accepted.** Supersede with a new numbered
   ADR; never rewrite history.
 - **Measured claims cite their measurement.** Numbers in the audit were
