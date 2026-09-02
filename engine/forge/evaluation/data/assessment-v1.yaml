@@ -17,11 +17,15 @@
 #
 # SELECTION METHODOLOGY
 #
-# Five cases, one per classification, because the classification vocabulary is
-# the thing under test and an unbalanced set would hide a systematic bias
-# toward the majority label. Each case pairs one existing claim with one new
-# evidence passage, written so that a careful human reader would agree with the
-# expected label without needing the surrounding paper.
+# 21 cases. The original five were one per classification, because the
+# vocabulary was the thing under test. The Phase 5 expansion below deliberately
+# unbalances that: 18 of the 21 have a correct answer other than
+# POTENTIAL_CONFLICT, because the number that decides whether the workflow is
+# usable is the false-positive conflict rate, not overall accuracy.
+#
+# Each case pairs one existing claim with one new evidence passage, written so
+# that a careful human reader would agree with the expected label without
+# needing the surrounding paper.
 #
 # Two cases are deliberately adversarial:
 #   - `insufficient-partial-overlap` shares vocabulary with the claim but says
@@ -95,3 +99,215 @@ cases:
     note: >-
       Touches the topic without settling it. Adversarial: a model that must
       pick a substantive label will reach for SUPPORTS or POTENTIAL_CONFLICT.
+
+  # --------------------------------------------------------------------------
+  # Phase 5 expansion, 2026-09-01. Five cases could not bound anything: 5/5 is
+  # consistent with a model that is right 60% of the time, so the *set* was the
+  # binding constraint on what could be claimed, not the model.
+  #
+  # The distribution is deliberately not balanced. 18 of the 21 cases have a
+  # correct answer that is NOT `POTENTIAL_CONFLICT`, because the number Phase 5
+  # actually needs is the **false-positive conflict rate** — how often a model
+  # escalates to a human when it should not. A balanced set measures accuracy;
+  # this one measures the thing that decides whether the workflow is usable.
+  #
+  # Most of the additions are adversarial by construction: they contain
+  # negation, contrast markers, superficially contradictory numbers, or
+  # different-scope statements about the same subject — the shapes that pull a
+  # model toward CONFLICT when the honest answer is IRRELEVANT, INSUFFICIENT,
+  # or REFINES.
+  # --------------------------------------------------------------------------
+
+  # -- SUPPORTS --------------------------------------------------------------
+
+  - id: supports-restated-differently
+    expected_classification: SUPPORTS
+    expected_proposal: claim_evidence
+    claim: "An index on a foreign key column speeds up joins on that column."
+    evidence: >-
+      Adding a B-tree index to the referencing column reduced the join from a
+      sequential scan to an index scan, cutting the query from 1.2s to 40ms.
+    note: >-
+      Same finding in different vocabulary. A model matching on surface words
+      alone may under-call this.
+
+  - id: supports-narrower-instance
+    expected_classification: SUPPORTS
+    expected_proposal: claim_evidence
+    claim: "Connection pooling reduces database connection overhead."
+    evidence: >-
+      With PgBouncer in transaction mode, the application established 14
+      backend connections instead of one per request, and p99 latency fell.
+    note: >-
+      A specific instance of the general claim. Supports it; does not narrow
+      it, so this must not be read as REFINES.
+
+  - id: supports-with-hedged-language
+    expected_classification: SUPPORTS
+    expected_proposal: claim_evidence
+    claim: "Docker layer caching speeds up repeated builds."
+    evidence: >-
+      Rebuilds that changed only application source appeared to reuse all
+      dependency layers, and completed in roughly a fifth of the time.
+    note: >-
+      Hedged wording ("appeared to", "roughly") describing a real confirmation.
+      Hedging is not insufficiency; the observation settles the claim.
+
+  # -- REFINES ---------------------------------------------------------------
+
+  - id: refines-narrows-scope
+    expected_classification: REFINES
+    expected_proposal: claim_refinement
+    refined_statement: "Redis persistence with AOF survives a crash with at most one second of data loss when appendfsync is everysec."
+    claim: "Redis persistence with AOF survives a crash without data loss."
+    evidence: >-
+      With the default `appendfsync everysec`, a crash loses up to one second
+      of writes. Only `appendfsync always` gives durability per operation, at a
+      substantial throughput cost.
+    note: >-
+      The claim is too strong rather than wrong. Adversarial: "without data
+      loss" versus "loses up to one second" reads as a contradiction, and a
+      model that stops at the surface will call POTENTIAL_CONFLICT.
+
+  - id: refines-adds-version-bound
+    expected_classification: REFINES
+    expected_proposal: claim_refinement
+    refined_statement: "Python dictionaries preserve insertion order as a language guarantee from 3.7 onward."
+    claim: "Python dictionaries preserve insertion order."
+    evidence: >-
+      Ordering was an implementation detail of CPython 3.6 and became a
+      language guarantee in 3.7. On earlier versions and other implementations
+      it does not hold.
+    note: >-
+      Adds the bound that makes the claim safe to rely on. Not a conflict: the
+      claim is true within the stated range.
+
+  # -- POTENTIAL_CONFLICT ----------------------------------------------------
+
+  - id: conflict-opposite-measurement
+    expected_classification: POTENTIAL_CONFLICT
+    expected_proposal: claim_conflict
+    claim: "Hybrid retrieval outperforms lexical retrieval on this corpus."
+    evidence: >-
+      Across the same 24-query labelled set, every fusion weight scored below
+      the lexical baseline on recall@5 and MRR.
+    note: >-
+      Directly contradicts the claim on the same metric and the same set. A
+      real conflict, and the one shape that must always escalate.
+
+  - id: conflict-same-metric-reversed
+    expected_classification: POTENTIAL_CONFLICT
+    expected_proposal: claim_conflict
+    claim: "Embedding search returns more relevant results than keyword search for paraphrased queries."
+    evidence: >-
+      On paraphrased queries the embedding index returned fewer relevant
+      documents in the top five than BM25 did, in a head-to-head on identical
+      inputs.
+    note: >-
+      Same comparison, same condition, opposite result. Must route to a human
+      and must not overwrite either statement.
+
+  # -- IRRELEVANT ------------------------------------------------------------
+
+  - id: irrelevant-shared-proper-noun
+    expected_classification: IRRELEVANT
+    expected_proposal: null
+    claim: "PostgreSQL partial indexes reduce index size for filtered queries."
+    evidence: >-
+      PostgreSQL 16 added parallel execution improvements for certain
+      aggregate queries.
+    note: >-
+      Same product, unrelated feature. Adversarial: the proper noun matches and
+      nothing else does.
+
+  - id: irrelevant-negation-elsewhere
+    expected_classification: IRRELEVANT
+    expected_proposal: null
+    claim: "BFS finds the shortest path in an unweighted graph."
+    evidence: >-
+      Dijkstra's algorithm does not produce correct results on graphs with
+      negative edge weights.
+    note: >-
+      Adversarial: contains a strong negation about a neighbouring algorithm.
+      A model keying on "does not" will reach for CONFLICT; the statement has
+      no bearing on BFS in unweighted graphs.
+
+  - id: irrelevant-adjacent-layer
+    expected_classification: IRRELEVANT
+    expected_proposal: null
+    claim: "A Kubernetes readiness probe stops traffic reaching a pod that is not ready."
+    evidence: >-
+      Setting CPU requests too low causes the scheduler to overcommit a node
+      and can lead to throttling under load.
+    note: >-
+      Same system, different mechanism. Scheduling has nothing to say about
+      readiness gating.
+
+  - id: irrelevant-superficial-number-clash
+    expected_classification: IRRELEVANT
+    expected_proposal: null
+    claim: "The extraction eval reports a junk rate of 0.000 over six cases."
+    evidence: >-
+      Retrieval latency measured 0.011 seconds per query on the lexical path.
+    note: >-
+      Adversarial: two unrelated small numbers about the same engine. Numeric
+      proximity is not evidence of anything.
+
+  # -- INSUFFICIENT_EVIDENCE -------------------------------------------------
+
+  - id: insufficient-anecdote-without-comparison
+    expected_classification: INSUFFICIENT_EVIDENCE
+    expected_proposal: null
+    claim: "Adding a covering index improves read throughput."
+    evidence: >-
+      After the migration the dashboard felt faster to the team, though no
+      before-and-after measurement was captured.
+    note: >-
+      Points the right way and settles nothing. Adversarial: a model rewarding
+      agreement will call SUPPORTS.
+
+  - id: insufficient-future-tense
+    expected_classification: INSUFFICIENT_EVIDENCE
+    expected_proposal: null
+    claim: "The hybrid retrieval path is not worth its latency cost."
+    evidence: >-
+      A follow-up study is planned to compare hybrid and lexical retrieval on a
+      larger labelled set.
+    note: >-
+      Describes an intention, not a result. Nothing here can move the claim in
+      either direction.
+
+  - id: insufficient-different-population
+    expected_classification: INSUFFICIENT_EVIDENCE
+    expected_proposal: null
+    claim: "Chunk sizes near 500 tokens retrieve better than 1000-token chunks."
+    evidence: >-
+      On a corpus of legal contracts, 1000-token chunks outperformed shorter
+      ones, though the documents are far longer and more uniform than typical
+      notes.
+    note: >-
+      A real result from a population the claim does not cover. Adversarial:
+      the numbers appear to oppose each other, so the shape invites CONFLICT
+      when the honest answer is that it does not transfer.
+
+  - id: insufficient-mechanism-without-outcome
+    expected_classification: INSUFFICIENT_EVIDENCE
+    expected_proposal: null
+    claim: "Prompt caching lowers the cost of repeated extraction runs."
+    evidence: >-
+      The provider documents a cache-read price lower than the standard input
+      price for prefixes that match a previous request.
+    note: >-
+      Explains why the claim could be true without showing that it was. A
+      price list is not a measurement.
+
+  - id: insufficient-single-run-no-baseline
+    expected_classification: INSUFFICIENT_EVIDENCE
+    expected_proposal: null
+    claim: "The 120B model classifies evidence more accurately than the 20B model."
+    evidence: >-
+      The 120B model scored 5 out of 5 on the assessment set.
+    note: >-
+      Five of five is consistent with a model that is right 60% of the time,
+      and the smaller model was not run. Adversarial: a perfect score is the
+      most tempting thing in the set to call SUPPORTS.
