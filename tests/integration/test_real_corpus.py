@@ -271,13 +271,35 @@ class TestDiagnosticsOnRealData:
         )
 
     def test_unresolved_links_are_reported(self, real_index):
-        """Exit criterion 3."""
+        """Exit criterion 3 — that unresolved links are *reported*, which is a
+        property of the reporter, not of the corpus.
+
+        This asserted `unresolved_total > 0` until 2026-09-02, which passed
+        only because the vault had 36 unresolved links at the time. Closing
+        them all failed the test. A test that breaks when the defect it
+        describes is fixed is testing the wrong thing: the reporter must stay
+        correct at zero, and zero is the goal state.
+        """
         report = link_report(real_index)
-        assert report.unresolved_total > 0
-        assert report.unresolved_distinct > 0
+
+        assert report.total_links > 0, "the corpus must have links to report on"
+        assert report.unresolved_total >= 0
+        assert report.unresolved_distinct == len(report.unresolved_targets)
+
+        # The counts must agree with the map they summarize, whether or not it
+        # is empty -- that is the invariant a consumer relies on.
+        assert report.unresolved_total == sum(
+            info["count"] for info in report.unresolved_targets.values()
+        )
+
         for target, info in report.unresolved_targets.items():
             assert info["count"] >= 1
             assert info["sources"], f"{target} must name the files that link to it"
+
+        assert sum(report.by_status.values()) == report.total_links, (
+            "every link must be classified: the status histogram is the whole "
+            "population, not a sample of it"
+        )
 
     def test_reports_serialize_to_json(self, real_index):
         import json

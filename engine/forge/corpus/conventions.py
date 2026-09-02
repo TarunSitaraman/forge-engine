@@ -1,7 +1,7 @@
-"""Machine-readable representation of Forge's competing convention systems.
+"""Machine-readable representation of competing convention systems.
 
-The Phase 0 audit found two convention systems in active use that contradict
-each other on filenames, tags, and frontmatter:
+The Phase 0 audit found two convention systems in active use in *this* vault
+that contradict each other on filenames, tags, and frontmatter:
 
 * ``CONVENTIONS.md``            — repo-wide: kebab-case, namespaced ``#type/``
   tags, minimal frontmatter "only when it carries real metadata".
@@ -12,6 +12,20 @@ each other on filenames, tags, and frontmatter:
 decision that belongs to a human (ADR-001 D3). What it does is make both
 systems explicit and measure conformance, so the decision can be made against
 evidence instead of preference.
+
+**A system is only applied when the document defining it is actually in the
+vault.** These rulesets are transcriptions of two specific Markdown files, not
+universal truths about note-taking. Asserting them against a vault that has
+never heard of them measures conformance to rules its author never agreed to —
+and reports conflicts between two documents that do not exist there. Before
+2026-09-02 this module did exactly that: a three-file test vault was told its
+filenames were 33% conforming and that ``dsa-local`` claimed 0 files, which is
+noise at best and, to anyone running the tool on their own notes, a bug.
+
+The check is deliberately presence-only. Inferring a vault's conventions from
+its contents is a different and much larger question — a majority pattern is
+not the same as an intended rule — and guessing wrong is worse than saying
+nothing.
 """
 
 from __future__ import annotations
@@ -129,16 +143,38 @@ KNOWN_CONFLICTS: tuple[dict[str, str], ...] = (
 )
 
 
+#: Reported when the vault defines none of the known convention systems. This
+#: is the ordinary case for any vault that is not this one, and it is not a
+#: failure: there is simply nothing to measure conformance against.
+NO_SYSTEMS_STATUS = (
+    "NOT APPLICABLE — no convention document found in this vault "
+    "(looked for: {documents})"
+)
+
+
+def applicable_systems(index: CorpusIndex) -> tuple[ConventionSystem, ...]:
+    """The systems whose defining document is actually present in the vault.
+
+    Presence, not inference. A ruleset is a transcription of a specific file;
+    with that file absent there is no evidence its rules were ever adopted.
+    """
+    present = {f.path for f in index.files}
+    return tuple(s for s in SYSTEMS if s.defined_in in present)
+
+
 @dataclass
 class ConventionReport:
     systems: list[dict[str, Any]] = field(default_factory=list)
     conflicts: list[dict[str, str]] = field(default_factory=list)
     conformance: dict[str, dict[str, Any]] = field(default_factory=dict)
     resolution_status: str = "UNRESOLVED — requires human decision (ADR-001 D3)"
+    #: Systems whose defining document was found. Empty is normal elsewhere.
+    applied: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "resolution_status": self.resolution_status,
+            "applied": self.applied,
             "systems": self.systems,
             "conflicts": self.conflicts,
             "conformance": self.conformance,
@@ -150,9 +186,22 @@ def analyze_conventions(index: CorpusIndex) -> ConventionReport:
 
     Reports both. Chooses neither.
     """
+    systems = applicable_systems(index)
+    if not systems:
+        # Nothing to measure against, and nothing to report a conflict between.
+        return ConventionReport(
+            resolution_status=NO_SYSTEMS_STATUS.format(
+                documents=", ".join(s.defined_in for s in SYSTEMS)
+            ),
+            applied=[],
+            systems=[],
+            conflicts=[],
+            conformance={},
+        )
+
     conformance: dict[str, dict[str, Any]] = {}
 
-    for system in SYSTEMS:
+    for system in systems:
         scoped = [f for f in index.files if system.claims(f.path)]
         filename_ok = tags_ok = fm_ok = 0
 
@@ -201,8 +250,16 @@ def analyze_conventions(index: CorpusIndex) -> ConventionReport:
                     for r in s.rules
                 ],
             }
-            for s in SYSTEMS
+            for s in systems
         ],
-        conflicts=[dict(c) for c in KNOWN_CONFLICTS],
+        # A conflict is only real when both sides are present. With one system
+        # applied there is nothing for it to contradict.
+        conflicts=[dict(c) for c in KNOWN_CONFLICTS] if len(systems) > 1 else [],
         conformance=conformance,
+        applied=[s.id for s in systems],
+        resolution_status=(
+            "UNRESOLVED — requires human decision (ADR-001 D3)"
+            if len(systems) > 1
+            else f"SINGLE SYSTEM — {systems[0].name}; no competing document found"
+        ),
     )
