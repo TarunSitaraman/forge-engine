@@ -3,31 +3,38 @@ name: tests
 on:
   push:
     branches: [main]
+    # Docs carry no tests, and roughly a third of commits here touch nothing
+    # else. Skipping them keeps the badge meaningful and the runs cheap.
+    paths-ignore: ["**.md", "docs/**", "LICENSE"]
   pull_request:
+    paths-ignore: ["**.md", "docs/**", "LICENSE"]
   workflow_dispatch:
+
+# A rapid series of pushes only needs the last one tested.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   pytest:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        # The floor declared in pyproject (>=3.10) and a current release.
-        python-version: ["3.10", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
 
+      # One version, not a matrix: 3.10 is the floor declared in pyproject, so
+      # it catches the newer-syntax-crept-in class of bug that testing only on
+      # a current release would miss. Add versions if the suite ever needs them.
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.10"
           cache: pip
 
       - name: Install
         run: pip install -e ".[dev]"
 
-      # No secrets, no network, no model. The 42 vault-dependent tests skip
-      # unless FORGE_TEST_VAULT points at a corpus, which CI deliberately does
-      # not set -- the vault is a separate private repository.
+      # No secrets, no network, no model. FORGE_TEST_VAULT is deliberately
+      # unset, so the 42 vault-dependent tests skip and 1,072 run -- the vault
+      # is a separate private repository.
       - name: Test
         run: python -m pytest tests
