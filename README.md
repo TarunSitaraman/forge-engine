@@ -6,14 +6,16 @@ Forge ingests sources, extracts claims with page-level provenance, links them
 into a knowledge graph — and when new evidence contradicts something it already
 believed, it *tells you* instead of silently overwriting it.
 
-~21,400 lines of Python, 1,114 offline tests, no paid API required.
+[![tests](https://github.com/TarunSitaraman/forge-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/TarunSitaraman/forge-engine/actions/workflows/tests.yml)
+
+~22,500 lines of Python, 1,114 offline tests, no paid API required.
 
 ---
 
 ## Why this exists
 
 Forge was not built against a toy corpus. It was built against a real personal
-knowledge vault — 646 Markdown files, ~57,600 lines, one canonical file per
+knowledge vault — 671 Markdown files, ~58,800 lines, one canonical file per
 concept, enforced by hand for a year. Then a
 [full audit](docs/architecture/forge-current-state.md) measured what that
 discipline actually produced:
