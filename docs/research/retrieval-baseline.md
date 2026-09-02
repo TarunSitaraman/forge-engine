@@ -5,10 +5,95 @@
 `forge/evaluation/data/retrieval-v1.yaml`, run over the real Forge vault. Nothing
 here is estimated, and nothing was tuned against the labels.*
 
-**Headline: lexical search is the best retrieval method Forge currently has.
-Embeddings were built, measured, and rejected. Hybrid fusion was swept across
-four weights and every one of them regressed. No vector database is
-justified.**
+**Headline (Phase 3, since superseded — see §0 below): lexical search is the
+best retrieval method Forge currently has. Embeddings were built, measured, and
+rejected. Hybrid fusion was swept across four weights and every one of them
+regressed. No vector database is justified.**
+
+---
+
+## 0. Title boosting measured 2026-09-02 — a shipped setting that costs recall
+
+**The heading/filename boost was already in the code, already shipping, and had
+never been scored.** `SearchQuery.title_boost` existed from Phase 3, the
+answering service passed `TITLE_BOOST = 1.25`, and no run of the labelled set
+had ever exercised it — `retrieval-eval` had no way to sweep it. The value was
+chosen from a single convincing anecdote, recorded in `search.py`: asking *"what
+is retrieval augmented generation?"* ranked four Prompt-Library spans above
+`Technologies/Docs/rag.md`, the canonical page, which missed the top eight
+entirely.
+
+The anecdote is real. It does not generalise.
+
+Measured over 670 sources / 8,133 spans, `hashing-v1-256c`, same labelled set:
+
+| Method | R@5 | R@10 | P@5 | MRR | Misses | Latency |
+|---|---:|---:|---:|---:|---:|---:|
+| lexical (FTS5/BM25) | 0.468 | **0.662** | 0.167 | 0.519 | **4** | **8.3 ms/q** |
+| title (b=1.25) *— the shipped value* | 0.468 | 0.600 | 0.167 | 0.532 | 5 | 9.6 ms/q |
+| title (b=1.5) | 0.468 | 0.621 | 0.167 | 0.514 | 5 | 9.5 ms/q |
+| title (b=2) | 0.447 | 0.579 | 0.158 | 0.502 | 5 | 9.7 ms/q |
+| title (b=3) | 0.406 | 0.558 | 0.142 | 0.491 | 6 | 9.5 ms/q |
+| hybrid (w=0.25) | 0.524 | 0.662 | 0.183 | 0.547 | 4 | 617 ms/q |
+| **hybrid (w=0.50)** | **0.551** | **0.685** | **0.200** | 0.536 | 4 | 623 ms/q |
+| hybrid (w=0.75) | 0.511 | 0.678 | 0.192 | **0.569** | 4 | 636 ms/q |
+
+**Every title boost is a regression, and the shipped 1.25 is the mildest of
+them.** It buys nothing at R@5 — identical to lexical — costs 0.0625 of R@10,
+and turns a hit into a fifth miss. The comparison harness classifies all four
+as `regression` without being asked to.
+
+### Where the damage is, and why
+
+Per-category R@10 isolates it:
+
+| Category | lexical | b=1.25 | change |
+|---|---:|---:|---|
+| `exact_concept` | 0.933 | 0.933 | — |
+| `technology` | 1.000 | 1.000 | — |
+| `project` | 0.750 | 0.750 | — |
+| `related_concept` | 0.578 | 0.578 | — |
+| `dsa` | 0.500 | 0.375 | **−0.125** |
+| `fuzzy_concept` | 0.300 | 0.100 | **−0.200** |
+
+The boost is inert on the categories it was meant to help and destructive on
+the two hardest. That is mechanically what it should do, in hindsight: it can
+only fire when the query's words appear in a filename or heading, which is
+precisely the case where BM25 already ranks that page well. It adds nothing
+there, and the multiplier it applies to those already-winning pages pushes down
+the differently-worded pages that answer a `fuzzy_concept` query. `fuzzy_concept`
+loses two thirds of its recall.
+
+**A boost that can only reward pages the baseline already finds is not a
+retrieval improvement; it is a re-ranking of the results you did not need
+re-ranked, paid for out of the results you did.**
+
+### What this does not settle
+
+The eval measures **document recall**. The answering service uses the boost for
+**span selection** inside an answer, which is a different question, and the
+anecdote that motivated it was about span ordering. It is possible the boost
+earns its keep there and is still wrong here. What is no longer possible is
+shipping it as though it were measured — and a setting that costs 20 points of
+`fuzzy_concept` recall needs a better defence than one query.
+
+The honest options are to default `title_boost` to 1.0 and keep the field for
+callers who want it, or to keep 1.25 in answering *only*, with this table cited
+next to it. Left as a decision, not silently changed.
+
+### Alias-driven query expansion: not attempted, and why
+
+The Phase 3 miss analysis proposed two deterministic improvements. This is the
+other one, and **it has no data to run on**: the vault contains zero `aliases:`
+frontmatter keys across all 671 files, and zero aliased wikilinks
+(`[[target|shown]]`) across all 4,703 links. `config/concept-identity.yaml`
+records collision *decisions*, not surface forms.
+
+Expansion needs a source of alternative names before it can be built. That is
+corpus work — adding `aliases:` to canonical pages, which Obsidian already
+supports natively — not engine work, and it should be measured against
+`fuzzy_concept` when it exists, since that is the category with room to move
+(R@5 = 0.100).
 
 ---
 

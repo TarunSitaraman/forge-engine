@@ -873,7 +873,9 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
     def retrieval_eval(
         vault: Optional[Path] = typer.Option(None),
         dataset: Optional[Path] = typer.Option(None, help="Labelled query set."),
-        methods: str = typer.Option("lexical", help="Comma-separated: lexical,semantic,hybrid"),
+        methods: str = typer.Option(
+            "lexical", help="Comma-separated: lexical,title,semantic,hybrid"
+        ),
         provider: str = typer.Option("hashing", help="Embedding provider for semantic/hybrid."),
         detail: bool = typer.Option(False, help="Include per-query scores."),
         json_out: bool = typer.Option(False, "--json"),
@@ -899,7 +901,11 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
 
         rotted = data.verify_labels(settings.vault_path)
         wanted = tuple(m.strip() for m in methods.split(",") if m.strip())
-        embedder = _embedding_provider(settings, provider) if wanted != ("lexical",) else None
+        # Only semantic and hybrid need vectors. `title` is lexical with a
+        # ranking multiplier, so building an embedder for it would demand a
+        # model the method never consults.
+        needs_vectors = any(m in ("semantic", "hybrid") for m in wanted)
+        embedder = _embedding_provider(settings, provider) if needs_vectors else None
 
         run = RetrievalEvaluator(store, embeddings=embedder).run(data, methods=wanted)
         payload = run.to_dict(include_scores=detail)

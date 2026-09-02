@@ -3,12 +3,17 @@
 Runs the labelled query set against one or more retrieval methods and reports
 metrics. Its purpose is to make "is this better?" a measured question.
 
-Three methods can be compared:
+Four methods can be compared:
 
 * ``lexical``  — FTS5/BM25. The baseline, and the default retrieval path.
 * ``semantic`` — cosine over stored embeddings.
 * ``hybrid``   — weighted fusion of the two, swept across several weights
   rather than assuming a 50/50 split.
+* ``title``    — lexical with the heading/filename boost applied, swept across
+  several multipliers. The boost already existed in ``SearchQuery`` and was
+  used by the answering service at a hard-coded 1.25, but had never been run
+  against the labelled set — so the value was chosen, not measured. This makes
+  it measurable, which is the only reason it is here.
 
 Nothing here tunes retrieval. The set is for measuring; optimizing against it
 would make the numbers meaningless.
@@ -34,6 +39,12 @@ log = get_logger(__name__)
 #: the semantic score; the remainder goes to lexical. 0.0 and 1.0 are included
 #: as sanity anchors — they must reproduce the pure methods.
 DEFAULT_FUSION_WEIGHTS = (0.0, 0.25, 0.5, 0.75, 1.0)
+
+#: Title/heading boost multipliers swept for the ``title`` method. 1.0 is the
+#: no-op anchor and must reproduce ``lexical`` exactly; 1.25 is the value the
+#: answering service already ships, included so the shipped choice is scored
+#: against the alternatives rather than assumed.
+DEFAULT_TITLE_BOOSTS = (1.0, 1.25, 1.5, 2.0, 3.0)
 
 #: Documents retrieved per query before truncation to k.
 RETRIEVAL_DEPTH = 30
@@ -85,6 +96,7 @@ class RetrievalEvaluator:
         *,
         methods: Sequence[str] = ("lexical",),
         fusion_weights: Sequence[float] = DEFAULT_FUSION_WEIGHTS,
+        title_boosts: Sequence[float] = DEFAULT_TITLE_BOOSTS,
     ) -> EvaluationRun:
         run = EvaluationRun(
             dataset_version=dataset.version,
@@ -117,6 +129,16 @@ class RetrievalEvaluator:
         if "lexical" in methods:
             run.summaries.append(self._evaluate(dataset, "lexical"))
 
+        if "title" in methods:
+            for boost in title_boosts:
+                # 1.0 is the no-op and duplicates lexical; keep it as the
+                # anchor when running title alone, drop it otherwise.
+                if boost == 1.0 and len(methods) > 1:
+                    continue
+                run.summaries.append(
+                    self._evaluate(dataset, f"title(b={boost:g})", title_boost=boost)
+                )
+
         if "semantic" in methods and semantic_ready:
             run.summaries.append(self._evaluate(dataset, "semantic"))
 
@@ -146,28 +168,43 @@ class RetrievalEvaluator:
     # -- per-method --------------------------------------------------------
 
     def _evaluate(
-        self, dataset: EvalDataset, method: str, *, semantic_weight: float = 0.0
+        self,
+        dataset: EvalDataset,
+        method: str,
+        *,
+        semantic_weight: float = 0.0,
+        title_boost: float = 1.0,
     ) -> MetricSummary:
         scores: list[QueryScore] = []
         started = time.perf_counter()
 
         for query in dataset:
-            retrieved = self._retrieve(query, method, semantic_weight)
+            retrieved = self._retrieve(query, method, semantic_weight, title_boost)
             scores.append(score_query(query.id, query.category, retrieved, query.relevant))
 
         elapsed_ms = (time.perf_counter() - started) * 1000 / max(1, len(dataset))
         return summarize(method, scores, latency_ms=elapsed_ms)
 
-    def _retrieve(self, query: EvalQuery, method: str, semantic_weight: float) -> list[str]:
+    def _retrieve(
+        self,
+        query: EvalQuery,
+        method: str,
+        semantic_weight: float,
+        title_boost: float = 1.0,
+    ) -> list[str]:
         """Return ranked source locators for one query."""
         if method == "lexical":
             return self._lexical(query.query)
+        if method.startswith("title"):
+            return self._lexical(query.query, title_boost=title_boost)
         if method == "semantic":
             return self._semantic(query.query)
         return self._hybrid(query.query, semantic_weight)
 
-    def _lexical(self, text: str) -> list[str]:
-        hits = self.search.search(SearchQuery(text=text, limit=RETRIEVAL_DEPTH))
+    def _lexical(self, text: str, *, title_boost: float = 1.0) -> list[str]:
+        hits = self.search.search(
+            SearchQuery(text=text, limit=RETRIEVAL_DEPTH, title_boost=title_boost)
+        )
         return self._to_documents(((h.source.locator, h.score) for h in hits if h.source))
 
     def _semantic(self, text: str) -> list[str]:

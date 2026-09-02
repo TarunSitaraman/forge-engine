@@ -428,6 +428,78 @@ class TestEvaluator:
 
         assert run.queries == 1
         assert run.best() is not None
+
+
+class TestTitleBoostSweep:
+    """The title boost shipped in the answering service at a hard-coded 1.25
+    without ever being scored. Measuring it is the whole point of the method,
+    so the sweep must be a real sweep and its anchor must be a real anchor."""
+
+    @pytest.fixture
+    def tiny_dataset(self, tmp_path) -> EvalDataset:
+        path = tmp_path / "tiny.yaml"
+        path.write_text(
+            yaml.safe_dump(
+                {
+                    "version": 1,
+                    "unit": "source",
+                    "queries": [
+                        {
+                            "id": "t1",
+                            "category": "exact_concept",
+                            "query": "retrieval augmented generation",
+                            "relevant": ["docs/rag.md"],
+                        }
+                    ],
+                }
+            )
+        )
+        return EvalDataset.load(path)
+
+    def test_it_reports_one_summary_per_boost(self, store, tiny_dataset):
+        run = RetrievalEvaluator(store).run(
+            tiny_dataset, methods=("title",), title_boosts=(1.0, 1.5, 2.0)
+        )
+
+        assert [s.method for s in run.summaries] == [
+            "title(b=1)",
+            "title(b=1.5)",
+            "title(b=2)",
+        ]
+
+    def test_the_no_op_anchor_reproduces_lexical_exactly(self, store, tiny_dataset):
+        """b=1.0 must be lexical. Without this the sweep could drift from its
+        own baseline and every delta would be measured against nothing."""
+        run = RetrievalEvaluator(store).run(
+            tiny_dataset, methods=("lexical", "title"), title_boosts=(1.0,)
+        )
+        lexical = next(s for s in run.summaries if s.method == "lexical")
+
+        anchored = RetrievalEvaluator(store).run(
+            tiny_dataset, methods=("title",), title_boosts=(1.0,)
+        ).summaries[0]
+
+        assert anchored.recall_at_5 == lexical.recall_at_5
+        assert anchored.recall_at_10 == lexical.recall_at_10
+        assert anchored.mrr == lexical.mrr
+
+    def test_the_anchor_is_dropped_when_lexical_is_already_running(
+        self, store, tiny_dataset
+    ):
+        """Otherwise the table carries the same row twice under two names."""
+        run = RetrievalEvaluator(store).run(
+            tiny_dataset, methods=("lexical", "title"), title_boosts=(1.0, 1.5)
+        )
+
+        assert [s.method for s in run.summaries] == ["lexical", "title(b=1.5)"]
+
+    def test_it_needs_no_embeddings(self, store, tiny_dataset):
+        """The boost is a lexical ranking multiplier. Requiring vectors for it
+        would make a model a dependency of a method that never consults one."""
+        run = RetrievalEvaluator(store).run(tiny_dataset, methods=("title",))
+
+        assert run.summaries, "the sweep must run with no embedding provider at all"
+        assert not any("skipped" in note for note in run.notes)
         assert run.to_dict()["dataset_version"] == 1
 
     def test_fusion_weights_are_swept_not_assumed(self):
