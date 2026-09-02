@@ -100,17 +100,20 @@ asserted:
 
 | Method | R@5 | R@10 | MRR | Latency |
 |---|---:|---:|---:|---:|
-| **lexical (FTS5/BM25)** | **0.406** | **0.608** | **0.471** | **18.7 ms/q** |
+| lexical (FTS5/BM25) | 0.510 | 0.685 | 0.535 | **11 ms/q** |
+| **hybrid (w=0.50)** | **0.574** | **0.699** | **0.604** | 860 ms/q |
 
-Embeddings were built, measured, and **rejected**; hybrid fusion was swept
-across four weights and every one regressed. No vector database is justified —
-[the numbers](docs/research/retrieval-baseline.md).
+Re-baselined 2026-09-01 with the full sweep — two methods, four fusion weights,
+deterministic embedder, byte-identical on re-run. **This reversed the earlier
+finding.** Embeddings were built, measured and rejected in Phase 3, when every
+fusion weight regressed; on the current corpus every weight improves.
 
-Those figures were measured over the corpus as it stood before the engine was
-split into this repository. The same command over the current vault reports
-`R@5=0.510 R@10=0.685 MRR=0.529` — **a corpus change, not a retrieval
-improvement**, and deliberately not promoted to the table above, since one run
-of one method does not replace a swept baseline. See §0 of that document.
+It still ships lexical-only, and the reason is now cost rather than quality:
+**78× the latency for +0.064 R@5**, on a 24-query set where that is a handful
+of documents moving rank. Two things changed under the old measurement at once
+— the corpus lost the engine's `docs/`, and the chunker took spans from 1,692
+to 7,118 — so the cause is not attributed. [The numbers, and what they do not
+license](docs/research/retrieval-baseline.md).
 
 Extraction quality has its own eval, and its headline metric is deliberately
 **junk rate rather than recall**, because the failure mode this corpus actually

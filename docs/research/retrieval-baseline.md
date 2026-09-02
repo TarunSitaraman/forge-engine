@@ -12,32 +12,70 @@ justified.**
 
 ---
 
-## 0. Corpus note — the numbers below predate the repository split
+## 0. Re-baselined 2026-09-01 — and the rejection no longer holds
 
-**Added 2026-09-01.** Every figure on this page was measured over the vault
-*as it stood before the engine was split out*, which included the engine's own
-top-level `docs/` tree as indexable content. That tree left with the engine, so
-the corpus these numbers describe no longer exists in that form.
+**Everything in §2 onward was measured before the engine was split out of the
+vault.** The full sweep has been re-run on the current corpus, same command,
+same labelled set, same embedder. The conclusion changed.
 
-Re-running the identical command against the post-split vault (634 files) gives:
+Measured at engine `b3218bf`, over 643 sources / 7,118 spans, with
+`hashing-v1-256c`. Re-running produces byte-identical scores — the hashing
+provider is deterministic, so this is reproducible rather than a single sample.
 
-| Method | R@5 | R@10 | MRR | Latency |
-|---|---:|---:|---:|---:|
-| lexical, pre-split corpus | 0.406 | 0.608 | 0.471 | 18.7 ms/q |
-| lexical, post-split corpus | 0.510 | 0.685 | 0.529 | 12.5 ms/q |
+| Method | R@5 | R@10 | P@5 | MRR | Misses | Latency |
+|---|---:|---:|---:|---:|---:|---:|
+| lexical (FTS5/BM25) | 0.510 | 0.685 | 0.192 | 0.535 | 4 | **11.1 ms/q** |
+| semantic (hashing-v1-256c) | 0.532 | 0.643 | 0.208 | 0.563 | 5 | 769 ms/q |
+| hybrid (w=0.25) | 0.565 | 0.693 | 0.208 | 0.566 | 4 | 775 ms/q |
+| **hybrid (w=0.50)** | **0.574** | **0.699** | **0.217** | **0.604** | **4** | 860 ms/q |
+| hybrid (w=0.75) | 0.567 | 0.678 | 0.217 | 0.571 | 4 | 891 ms/q |
 
-**This is not a retrieval improvement and must not be quoted as one.** Nothing
-in the retrieval implementation changed between the two rows; the corpus did.
-Removing ~20 engine documents that were competing for the same queries is
-exactly the effect §"docs/ was answering vault questions" predicted, now visible
-as a number. Whether the corpus also grew in ways that helped is unseparated —
-12 DSA problem pages were added over the same period.
+**Then, every fusion weight regressed. Now, every fusion weight improves.**
+At `w=0.50` hybrid beats lexical on all four quality metrics — R@5 +0.064,
+R@10 +0.014, P@5 +0.025, MRR +0.070. The headline claim this document has
+carried since Phase 3, *"hybrid fusion was swept across four weights and every
+one of them regressed"*, is no longer true of this system.
 
-The rest of this page is left exactly as measured. The comparisons it draws —
-lexical against embeddings, and the four fusion weights — are all *within* the
-pre-split corpus, so they remain valid against each other, which is what they
-were for. Re-establishing a post-split baseline means re-running the whole sweep,
-and one run of one method is not that.
+### What changed, and what did not
+
+Held constant: the labelled set (24 queries, 48 labels, unedited), the
+embedder (`hashing-v1-256c`), the command, and the fusion weights.
+
+Changed — **two things at once, and they are not separable from these runs**:
+
+| | Then | Now |
+|---|---:|---:|
+| Sources | 645 | 643 |
+| Spans | 1,692 | **7,118** |
+
+The file count barely moved. The span count is **4.2×**, which is the chunker,
+not the corpus. The engine's own `docs/` tree also left in the split, removing
+~20 documents that had been competing for these queries.
+
+So the reversal is real *for the system as it stands*, and attributing it to
+either cause would be guesswork. A run that isolates them would re-chunk the
+pre-split corpus at the current settings, which is possible and has not been
+done.
+
+### What this does not license
+
+**The latency is now the argument, not the quality.** Hybrid costs 860 ms/q
+against lexical's 11 ms/q — **78× slower** for +0.064 R@5. Nothing about
+`forge search` being interactive has changed, and §7's reasoning about what a
+vector store would cost to operate stands untouched.
+
+`hashing-v1-256c` remains a hashed bag of tokens and character 4-grams, not a
+learned embedding. It is a floor, not a representative of what embeddings can
+do — which cuts both ways now: a real model was never the thing being
+rejected, and it is still unmeasured. §9 has the command.
+
+**24 queries and 48 labels is a small set.** A 0.064 difference on it is a
+handful of documents moving rank. Before any of this justifies shipping a
+vector store, the set needs to be big enough for the difference to survive.
+
+The rest of this document is left exactly as measured, with its original
+numbers and its original conclusion, because it is a dated record of what was
+true of that corpus.
 
 ---
 
