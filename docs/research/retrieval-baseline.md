@@ -12,6 +12,90 @@ regressed. No vector database is justified.**
 
 ---
 
+## 0. The fuzzy_concept ceiling is a ranking problem, not a retrieval one (2026-09-02)
+
+Three independent methods now put `fuzzy_concept` R@10 at **exactly 0.300**:
+lexical, hybrid over hashing vectors at every fusion weight, and hybrid over
+spaCy static vectors at every fusion weight. A number that stable under
+unrelated changes is a property of the system, not of any one method.
+
+### First, a negative result: static word vectors are much worse than hashing
+
+`SpacyEmbeddingProvider` (mean-pooled 300-d `en_core_web_md` vectors) was added
+to test whether *semantic* matching beats *vocabulary overlap*. It does not —
+not this kind of semantic matching:
+
+| Method | R@5 | R@10 | P@5 | MRR | Misses |
+|---|---:|---:|---:|---:|---:|
+| lexical | **0.468** | **0.662** | 0.167 | 0.519 | **4** |
+| semantic (spacy) | 0.231 | 0.260 | 0.100 | 0.246 | 15 |
+| hybrid (w=0.25) | 0.496 | 0.601 | 0.183 | **0.554** | 5 |
+| hybrid (w=0.50) | 0.432 | 0.594 | 0.158 | 0.551 | 6 |
+| hybrid (w=0.75) | 0.289 | 0.414 | 0.133 | 0.323 | 10 |
+
+Every weight regresses, and semantic alone misses 15 of 24 queries. Compare
+the *hashing* provider, which is not even semantic and reaches R@5 = 0.551 at
+w=0.50. Mean-pooling static vectors over a whole span averages it toward the
+corpus mean, so spans stop being distinguishable; the hashing vector keeps rare
+discriminating terms and beats it comfortably.
+
+One thing does behave as predicted. Semantic-alone raises `fuzzy_concept` R@5
+from 0.100 to 0.200, and `hybrid(w=0.75)` reaches 0.300 — the best fuzzy R@5
+measured — while destroying `project` (0.750 → 0.250) and `technology`
+(1.000 → 0.333). **The semantic signal helps exactly where predicted and hurts
+everywhere else.** It is a real signal buried in a bad instrument.
+
+### Then the diagnostic that matters
+
+Are the `fuzzy_concept` targets even retrievable? Every one was probed at
+depth 3000 against lexical search. `label_rot` is empty; all five queries
+return 550–650 distinct documents.
+
+| Query target | Rank |
+|---|---:|
+| `DSA/01_Patterns/Sliding Window.md` | 1 |
+| `Technologies/Docs/rag.md` | 8 |
+| `DSA/01_Patterns/Topological Sort.md` | 15 |
+| `DSA/09_CheatSheets/Sliding Window Cheat Sheet.md` | 35 |
+| `Technologies/Docs/vector-databases.md` | 112 |
+| `DSA/03_DataStructures/Disjoint Set.md` | 211 |
+| `DSA/01_Patterns/Union Find.md` | 231 |
+
+**Nothing is missing. Everything is mis-ranked.** Indexing and chunking are
+exonerated: the candidate set contains every labelled document. BM25 places
+them 100–200 positions too low because the queries deliberately share almost no
+vocabulary with them — `"keeping track of which items belong to the same group
+as they merge"` has no term in common with `Union Find`.
+
+### What this rules out
+
+**A cross-encoder re-ranker over the top 30 cannot fix this.** It can only
+reorder what it is given, and four of the seven targets sit at ranks 35, 112,
+211 and 231. Re-ranking a shortlist that excludes the answer changes nothing.
+To reach rank 231 the shortlist would have to be ~250 deep, and a cross-encoder
+scoring 250 candidates per query is a different cost proposition from scoring
+30 — that trade needs measuring before it is assumed.
+
+`RETRIEVAL_DEPTH = 30` is also not the binding constraint in the way it first
+appears. Raising it to 250 would let those documents *into* the evaluation
+window, but they would still rank below 30 and contribute nothing to R@5 or
+R@10. The depth is a symptom; the ranking is the disease.
+
+### What this points at
+
+A **bi-encoder over the whole index** — a transformer sentence encoder scoring
+every document independently of its lexical rank. That is the one instrument
+tested here that can move a document from rank 231 into the top 10, because it
+never sees rank 231 in the first place. Static vectors were too weak an
+instrument to settle it, and the fact that the fuzzy-specific signal survived
+even in them is the encouraging part of an otherwise negative result.
+
+Left unmeasured: this environment blocks `huggingface.co` and `ollama.com`
+(403 at the proxy), so no transformer encoder can be obtained here. See
+`docs/plans/neural-embeddings.md`.
+
+---
+
 ## 0. Title boosting measured 2026-09-02 — a shipped setting that costs recall
 
 **The heading/filename boost was already in the code, already shipping, and had

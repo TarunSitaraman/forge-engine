@@ -96,6 +96,14 @@ and a negative one is worth publishing.
 
 ## 3. Prerequisites
 
+**This cannot be done in the engine's build sandbox.** `huggingface.co` and
+`ollama.com` both return 403 at the proxy, verified 2026-09-02. `pypi.org` and
+GitHub release assets *are* reachable, which is how the spaCy model in §6 was
+obtained — so if a transformer encoder is ever published as a GitHub release
+wheel, that route works. Until then this needs a machine with open network
+access.
+
+
 ```bash
 brew install ollama          # or the installer from ollama.com
 ollama serve                 # leave running
@@ -248,24 +256,61 @@ everything else.
 **The vault is read-only to the engine.** Nothing here writes to it. Derived
 state lives in `.forge/` and is rebuildable.
 
-## 6. If the hypothesis fails
+## 6. The diagnostic in §6 has already been run — read this before starting
 
-`fuzzy_concept` R@10 stays at 0.300 with a real neural embedder. Then
-vocabulary was not the bottleneck, and the candidate set is the thing to
-examine. In order:
+This section originally said what to check *if* the hypothesis failed. Two of
+those checks have since been done, and they change the plan. Full write-up in
+`docs/research/retrieval-baseline.md`.
 
-1. **Are the labelled documents even indexed?** `forge retrieval-eval`
-   reports `label_rot` for labels that no longer resolve. Check it is empty.
-2. **Is `RETRIEVAL_DEPTH = 30` the binding constraint?** Raise it to 100
-   temporarily and see whether the missing documents appear at any depth. If
-   they do, this is a ranking problem. If they never appear, it is an
-   indexing or chunking problem, and no retrieval change will fix it.
-3. **Inspect the five `fuzzy_concept` queries individually.**
-   `--detail` gives per-query scores. Five queries is few enough to read by
-   hand, and at R@5 = 0.100 something specific is wrong rather than
-   diffusely hard.
-4. **Suspect chunking before suspecting the model.** If spans split mid-idea,
-   no embedder recovers the connection.
+**A third method was tried and failed.** `SpacyEmbeddingProvider` (mean-pooled
+300-d `en_core_web_md` vectors) is in the tree, wired to `--provider spacy`,
+and measured. It is far worse than hashing — semantic alone misses 15 of 24
+queries — because mean-pooling static vectors over a span averages it toward
+the corpus mean. It left `fuzzy_concept` R@10 at 0.300, the third method to do
+so. **Do not spend time on static word vectors.**
+
+**But the ceiling is now explained.** Every `fuzzy_concept` target was probed
+against lexical search at depth 3000. `label_rot` is empty and every labelled
+document is present in the candidate set:
+
+| Target | Rank |
+|---|---:|
+| `DSA/01_Patterns/Sliding Window.md` | 1 |
+| `Technologies/Docs/rag.md` | 8 |
+| `DSA/01_Patterns/Topological Sort.md` | 15 |
+| `DSA/09_CheatSheets/Sliding Window Cheat Sheet.md` | 35 |
+| `Technologies/Docs/vector-databases.md` | 112 |
+| `DSA/03_DataStructures/Disjoint Set.md` | 211 |
+| `DSA/01_Patterns/Union Find.md` | 231 |
+
+Nothing is missing; everything is mis-ranked. **Indexing and chunking are
+exonerated** — do not go looking there. BM25 puts these 100–200 positions too
+low because the queries share almost no vocabulary with their targets, which is
+what `fuzzy_concept` was designed to do.
+
+**Consequences for the tasks below:**
+
+1. **Task 5 (cross-encoder) will not break the ceiling and should be
+   re-scoped.** A re-ranker only reorders what it is handed, and four targets
+   sit below rank 30. Re-ranking the top 30 cannot surface a document at rank
+   231. Expect it to improve MRR and P@5 — worth having — but do not expect
+   R@10 to move, and do not treat a flat R@10 as a bug. If you want it to have
+   a chance at the ceiling, the shortlist has to be ~250 deep, and scoring 250
+   candidates per query is a different cost proposition that needs measuring
+   rather than assuming.
+2. **Task 2 is still the right experiment, and now for a sharper reason.** A
+   bi-encoder scores every document independently of its lexical rank, so it
+   is the only instrument tested that *can* move a document from 231 into the
+   top 10. It never sees rank 231.
+3. **Raising `RETRIEVAL_DEPTH` is not a fix.** It admits those documents to the
+   evaluation window but they still rank below 30 and contribute nothing to
+   R@5 or R@10. Depth is a symptom.
+
+The encouraging part of the negative result: even in a bad instrument, the
+fuzzy-specific signal survived — semantic-alone raised `fuzzy_concept` R@5 from
+0.100 to 0.200, and `hybrid(w=0.75)` reached 0.300, the best fuzzy R@5
+measured, while wrecking every other category. The signal is real and the
+instrument was too blunt.
 
 ## 7. Acceptance
 

@@ -15,7 +15,12 @@ import typer
 
 from ..activation import ProposalActivator, RelationshipActivator
 from ..domain import LinkType, ProposalStatus, ProposalType, SafetyClass
-from ..embeddings import HashingEmbeddingProvider, NullEmbeddingProvider, OllamaEmbeddingProvider
+from ..embeddings import (
+    HashingEmbeddingProvider,
+    NullEmbeddingProvider,
+    OllamaEmbeddingProvider,
+    SpacyEmbeddingProvider,
+)
 from ..evaluation import DEFAULT_DATASET, EvalDataset, RetrievalEvaluator
 from ..graph import KnowledgeGraph, check_integrity
 from ..llm.base import CALLS
@@ -48,6 +53,8 @@ def _embedding_provider(settings: Any, name: str):
         return HashingEmbeddingProvider()
     if name == "ollama":
         return OllamaEmbeddingProvider(settings.llm.base_url)
+    if name == "spacy":
+        return SpacyEmbeddingProvider()
     return NullEmbeddingProvider()
 
 
@@ -704,7 +711,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
     @embeddings_app.command("status")
     def embeddings_status(
         vault: Optional[Path] = typer.Option(None),
-        provider: str = typer.Option("ollama", help="ollama | hashing | none"),
+        provider: str = typer.Option("ollama", help="ollama | spacy | hashing | none"),
         json_out: bool = typer.Option(False, "--json"),
     ) -> None:
         """Report embedding availability and the retrieval degradation mode."""
@@ -731,7 +738,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
     @embeddings_app.command("build")
     def embeddings_build(
         vault: Optional[Path] = typer.Option(None),
-        provider: str = typer.Option("hashing", help="ollama | hashing"),
+        provider: str = typer.Option("hashing", help="ollama | spacy | hashing"),
         json_out: bool = typer.Option(False, "--json"),
     ) -> None:
         """Embed every stored span. Optional — lexical retrieval works without it."""
@@ -876,7 +883,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         methods: str = typer.Option(
             "lexical", help="Comma-separated: lexical,title,semantic,hybrid"
         ),
-        provider: str = typer.Option("hashing", help="Embedding provider for semantic/hybrid."),
+        provider: str = typer.Option("hashing", help="Embedding provider for semantic/hybrid: hashing | spacy | ollama."),
         detail: bool = typer.Option(False, help="Include per-query scores."),
         json_out: bool = typer.Option(False, "--json"),
     ) -> None:

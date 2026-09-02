@@ -44,6 +44,12 @@ agent = ["langgraph>=1.0", "langgraph-checkpoint-sqlite>=3.0"]
 # `forge shell` offers every command with nothing beyond the standard library
 # and what typer already brings.
 tui = ["textual>=1.0"]
+# Static word vectors, for measuring whether *semantic* matching beats
+# vocabulary overlap. An extra for the same reason as the others: retrieval
+# must work with no model at all, and `hashing` remains the zero-dependency
+# path. The model itself is a separate install and ships from GitHub releases:
+#   pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl
+vectors = ["spacy>=3.7"]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
