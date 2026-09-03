@@ -3,10 +3,41 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "forge-engine"
+# `forge-engine` was taken on PyPI by an unrelated, actively maintained project
+# (a terminal AI harness, last released 2026-08-03), so the distribution name
+# differs from the GitHub repository name. The import package and the console
+# script stay `forge`; PyPI's `forge` is a Django scaffolder, and the overlap
+# between its users and this tool's is close enough to zero to accept.
+name = "forge-kb"
 version = "0.1.0"
-description = "Forge Knowledge OS engine — canonical knowledge model, deterministic corpus indexing, provenance."
+description = "Find what is quietly broken in a Markdown knowledge vault: dead wikilinks, missing frontmatter, contradictory conventions."
 readme = "README.md"
+authors = [{ name = "Tarun Sitaraman", email = "tarunsitaraman134@gmail.com" }]
+keywords = [
+    "markdown",
+    "obsidian",
+    "knowledge-base",
+    "wikilinks",
+    "frontmatter",
+    "linter",
+    "static-analysis",
+    "zettelkasten",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Text Processing :: Markup :: Markdown",
+    "Topic :: Software Development :: Quality Assurance",
+    "Typing :: Typed",
+]
 # Verified on 3.10, 3.11, 3.12, and 3.13 — the full suite passes on each.
 # The real floor is 3.10: the domain models use PEP 604 unions (`str | None`)
 # which pydantic evaluates at runtime, so 3.9 and below genuinely cannot load
@@ -60,6 +91,11 @@ dev = [
 
 [project.scripts]
 forge = "forge.cli.main:app"
+
+[project.urls]
+Homepage = "https://github.com/TarunSitaraman/forge-engine"
+Repository = "https://github.com/TarunSitaraman/forge-engine"
+Issues = "https://github.com/TarunSitaraman/forge-engine/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["engine/forge"]

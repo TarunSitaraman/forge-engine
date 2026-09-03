@@ -59,9 +59,9 @@ These are enforced in code and asserted in tests, not stated as aspirations:
 ## What it does
 
 ```bash
-pip install -e ".[dev]"          # Python 3.10+
+pip install forge-kb             # Python 3.10+
 
-forge tui                       # full-screen UI  (pip install "forge-engine[tui]")
+forge tui                       # full-screen UI  (pip install "forge-kb[tui]")
 forge shell                     # interactive: header bar, slash commands, history
 forge index                     # deterministic index; reports "LLM calls: 0"
 forge diagnostics               # every frontmatter and link defect
@@ -188,6 +188,29 @@ Start with [`docs/`](docs/README.md): the
 [CLI reference](docs/cli.md), and the per-phase implementation notes.
 
 ## Install
+
+```bash
+pip install forge-kb             # Python 3.10+
+```
+
+Then point it at any folder of Markdown and see what is broken — no model, no
+API key, no network, no configuration:
+
+```bash
+cd /path/to/your/notes
+forge index
+forge diagnostics
+```
+
+The distribution is `forge-kb`; the command and the import package are both
+`forge`. The names differ because `forge-engine` on PyPI is an unrelated,
+actively maintained project.
+
+Optional extras: `forge-kb[tui]` for the full-screen interface,
+`forge-kb[vectors]` for static word-vector embeddings, `forge-kb[agent]` for
+the LangGraph evolution workflow. None are needed to index or diagnose.
+
+**To work on the engine itself:**
 
 ```bash
 git clone https://github.com/TarunSitaraman/forge-engine.git
