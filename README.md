@@ -7,8 +7,24 @@ into a knowledge graph — and when new evidence contradicts something it alread
 believed, it *tells you* instead of silently overwriting it.
 
 [![tests](https://github.com/TarunSitaraman/forge-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/TarunSitaraman/forge-engine/actions/workflows/tests.yml)
+[![PyPI](https://img.shields.io/pypi/v/forge-kb.svg)](https://pypi.org/project/forge-kb/)
+[![Python](https://img.shields.io/pypi/pyversions/forge-kb.svg)](https://pypi.org/project/forge-kb/)
 
 ~22,500 lines of Python, 1,114 offline tests, no paid API required.
+
+```bash
+pip install forge-kb
+cd /path/to/your/notes
+forge index && forge diagnostics
+```
+
+Point it at any folder of Markdown and it reports what is quietly broken —
+dead wikilinks, missing frontmatter, conventions that contradict each other.
+No model, no API key, no network, no configuration.
+
+> The distribution is **`forge-kb`**; the command and the import package are
+> both `forge`. The names differ because `forge-engine` on PyPI is an
+> unrelated, actively maintained project.
 
 ---
 
