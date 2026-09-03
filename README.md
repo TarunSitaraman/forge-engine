@@ -81,6 +81,7 @@ forge tui                       # full-screen UI  (pip install "forge-kb[tui]")
 forge shell                     # interactive: header bar, slash commands, history
 forge index                     # deterministic index; reports "LLM calls: 0"
 forge diagnostics               # every frontmatter and link defect
+forge diagnostics --html r.html # a self-contained report you can send someone
 forge corpus-stats              # counts from the filesystem, never from a doc
 forge ingest paper.pdf          # spans carrying page + section provenance
 forge search "chunking"         # evidence with citations, not generated prose

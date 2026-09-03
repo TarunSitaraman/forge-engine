@@ -258,6 +258,12 @@ def diagnostics(
     vault: Optional[Path] = typer.Option(None),
     json_out: bool = typer.Option(False, "--json"),
     limit: int = typer.Option(15, help="Rows shown in text mode."),
+    html: Optional[Path] = typer.Option(
+        None, "--html", help="Write a self-contained HTML report to this path."
+    ),
+    markdown: Optional[Path] = typer.Option(
+        None, "--markdown", help="Write a Markdown report to this path."
+    ),
 ) -> None:
     """Report metadata, link, and convention problems. Never modifies the vault."""
     settings = _settings(vault)
@@ -281,6 +287,19 @@ def diagnostics(
     if not payload:
         err(f"unknown diagnostics target {what!r}", err=True)
         raise typer.Exit(code=2)
+
+    # Files are written before any early return, so `--json --html out.html`
+    # produces both rather than silently dropping one.
+    if html or markdown:
+        from ..reporting import render_html, render_markdown
+
+        name = settings.vault_path.name or str(settings.vault_path)
+        for target, render in ((html, render_html), (markdown, render_markdown)):
+            if target is None:
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(render(payload, vault_name=name), encoding="utf-8")
+            typer.echo(f"wrote {target}")
 
     if _emit(payload, json_out):
         return
