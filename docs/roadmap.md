@@ -185,7 +185,16 @@ that is a bigger pile of facts nobody is maintaining.
       grounding, 0 false-positive conflicts. A passing smoke test, not a
       characterisation. See
       [provider availability](./research/provider-availability.md) §6.
-- [ ] **Real-model evaluation, cloud** — still not run.
+- [x] **Real-model evaluation, cloud** — run 2026-09-03 against
+      `openai/gpt-oss-120b` on Groq, 21 cases. Structured-output validity
+      1.00, grounding 1.00, classification 0.76. The average hides the
+      finding: SUPPORTS, REFINES and IRRELEVANT are each 100%, while
+      **INSUFFICIENT_EVIDENCE is 2/6** and accounts for four of the five
+      failures — the model reaches for a nearby label instead of declining.
+      One of those four read a mechanism as support for an outcome and produced
+      a `CLAIM_EVIDENCE` proposal, which is the error shape a provenance
+      floor cannot catch: the citation is real, the reasoning is not. See
+      [assessment quality](./research/assessment-quality.md).
 
 *Deferred from the original Phase 4 scope, now the leading candidates for
 Phase 5:* bootstrapping concepts from filenames, seeding edges from the ~4,100
@@ -224,8 +233,17 @@ with a real model**, and populate the graph at corpus scale.
   relationship, not only a claim.
 
 **Gate**
-- [ ] Assessment metrics measured on a real local model and a real cloud model
-- [ ] False-positive conflict rate measured and judged acceptable
+- [~] Assessment metrics measured on a real model — cloud done 2026-09-03
+      (21 cases, `openai/gpt-oss-120b`). The local row is still the 5-case
+      2026-08-14 run, so the two are not comparable; re-running the local
+      model against the 21-case set is the missing half.
+- [x] False-positive conflict rate measured — **2 of 18 non-conflict cases,
+      11.1%**, both INSUFFICIENT_EVIDENCE misread as POTENTIAL_CONFLICT.
+      Conflict recall 2/3; the miss absorbed a contrary finding as a REFINES,
+      which is the costlier direction since a refinement supersedes without a
+      human looking. **Not** judged acceptable for promoting
+      `POTENTIAL_CONFLICT` to an asserted `Contradiction`; human routing
+      stays. See [assessment quality](./research/assessment-quality.md).
 - [ ] A second overlapping document updates the model rather than duplicating it
 - [ ] Interrupting mid-ingestion and resuming does not duplicate work *(already
       true for evolution; needs proving for ingestion)*
