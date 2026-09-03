@@ -1023,3 +1023,61 @@ class TestWorkflowRun:
         )
 
         assert run.by_classification() == {"IRRELEVANT": 1, "SUPPORTS": 1}
+
+
+class TestTheAssessmentPromptGuardsAgainstOverAsserting:
+    """Measured 2026-09-03 on openai/gpt-oss-120b: INSUFFICIENT_EVIDENCE scored
+    2/6 and accounted for four of five failures, while SUPPORTS, REFINES and
+    IRRELEVANT were each 100%. The model reached for a nearby label rather than
+    declining -- once reading a mechanism as SUPPORTS for an outcome the text
+    never reported, which produced a CLAIM_EVIDENCE proposal.
+
+    These lock the prompt properties added in response. They assert the
+    guidance is present, not that any model obeys it -- only
+    scripts/assessment_eval.py can measure that.
+    """
+
+    def test_insufficient_evidence_has_positive_cues_not_just_a_definition(self):
+        """A class with no recognisable cues is a class the model will not
+        reach for. Every other class had richer guidance than this one."""
+        from forge.evolution.prompts import ASSESSMENT_INSTRUCTION
+
+        for cue in ("mechanism", "population", "anecdote", "single observation"):
+            assert cue in ASSESSMENT_INSTRUCTION, f"missing cue: {cue}"
+
+    def test_it_is_framed_as_a_finding_rather_than_a_failure_to_decide(self):
+        # Whitespace-normalized: the prompt is wrapped prose, so a phrase can
+        # straddle a line break without that meaning anything.
+        from forge.evolution.prompts import ASSESSMENT_INSTRUCTION
+
+        flat = " ".join(ASSESSMENT_INSTRUCTION.split())
+        assert "positive finding, not a failure to decide" in flat
+
+    def test_the_supports_boundary_is_stated(self):
+        """The gap that let mechanism-without-outcome become SUPPORTS: there
+        was a SUPPORTS/REFINES tie-break and none for SUPPORTS/INSUFFICIENT."""
+        from forge.evolution.prompts import ASSESSMENT_INSTRUCTION
+
+        assert "not SUPPORTS" in " ".join(ASSESSMENT_INSTRUCTION.split())
+
+    def test_irrelevant_and_insufficient_are_distinguished(self):
+        """Both yield no proposal, so nothing pressed the model to tell them
+        apart -- which is how an on-topic anecdote became IRRELEVANT."""
+        from forge.evolution.prompts import ASSESSMENT_INSTRUCTION
+
+        assert "about something else" in " ".join(ASSESSMENT_INSTRUCTION.split())
+        assert "does not settle it" in " ".join(ASSESSMENT_INSTRUCTION.split())
+
+    def test_the_conservative_direction_is_named(self):
+        """'Be conservative' is ambiguous without saying which error is worse."""
+        from forge.evolution.prompts import ASSESSMENT_INSTRUCTION
+
+        assert "worse error than" in " ".join(ASSESSMENT_INSTRUCTION.split())
+
+    def test_the_version_was_bumped_so_the_cache_cannot_serve_stale_answers(self):
+        """Cache effectiveness was 1.00 in the measured run. Editing the prompt
+        without bumping the version would return the pre-fix answers and show
+        no change -- the fix would look like it did nothing."""
+        from forge.evolution.prompts import PROMPT_VERSION
+
+        assert PROMPT_VERSION != "assess-prompts/0.1.0"

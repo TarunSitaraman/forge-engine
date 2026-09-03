@@ -110,19 +110,60 @@ wrong is most expensive."
 - **21 cases is still small.** 33% on a class of six is 2 correct. The
   confidence interval on that is wide, and the honest reading is "clearly
   weak", not "exactly 33%".
-- **Not compared against the local model.** The 2026-08-14 Qwen3 8B run used
-  the 5-case set, so the two are not comparable. Re-running the local model
-  against this set is the missing row, and per the standing rule these are
-  reported as separate rows and never averaged — they are different
+- **No local-model row, and there will not be one soon.** The 2026-08-14
+  Qwen3 8B result was produced on an RTX 4050 machine that is no longer in
+  use; current work runs against Groq. The two runs use different sets (5 vs
+  21 cases) as well as different models, so they are not comparable and are
+  not presented as a pair. Should a local row ever be wanted, the standing
+  rule holds: separate rows, never averaged — they are different
   instruments.
 
-## 6. What follows
+## 6. The prompt had three defects, and they map onto the four failures
 
-1. **Prompt work on the INSUFFICIENT_EVIDENCE class.** All four failures are a
-   model reaching for a nearby label rather than declining. Making declining
-   the explicit, low-cost default is a prompt change, and this set now
-   measures whether it worked.
-2. **Re-run the local model against the 21-case set**, for the comparison row.
-3. **Keep contradiction detection human-routed.** Measured, not assumed.
-4. **Repeat runs for variance** before any of these numbers are quoted as
-   characterisations rather than a single observation.
+Reading `ASSESSMENT_INSTRUCTION` after the run, the failures are not mysterious:
+
+1. **INSUFFICIENT_EVIDENCE had the thinnest definition of any class** — one
+   line, *"the new evidence touches the topic but does not say enough to
+   judge"*, with no recognisable cues. Every other class got richer guidance.
+   A class the model cannot recognise is a class it will not reach for.
+2. **The tie-breaks were asymmetric and pointed the wrong way.** There was a
+   SUPPORTS/REFINES rule biasing toward SUPPORTS, and *no* SUPPORTS /
+   INSUFFICIENT_EVIDENCE rule at all — which is precisely the
+   `mechanism-without-outcome → SUPPORTS` failure.
+3. **Nothing distinguished IRRELEVANT from INSUFFICIENT_EVIDENCE.** Both
+   produce no proposal, so no pressure existed to tell them apart — which is
+   how an on-topic anecdote became IRRELEVANT.
+
+Note the one rule that *did* exist — *"if you are unsure whether something
+conflicts, choose INSUFFICIENT_EVIDENCE rather than POTENTIAL_CONFLICT"* — was
+ignored twice. Restating a tie-break is not enough; the class needed positive
+cues, not just a preference.
+
+`assess-prompts/0.2.0` gives INSUFFICIENT_EVIDENCE five concrete cues (outcome
+not reported, different population, partial overlap, single observation
+without comparison, intended rather than measured), names which direction
+"be conservative" runs in (asserting a relationship the text does not
+establish is worse than declining, because a wrong SUPPORTS changes stored
+knowledge), and states the IRRELEVANT boundary explicitly.
+
+### The next number will be optimistic, and that has to be said
+
+**These cues were written after seeing which cases failed.** That is fitting to
+the evaluation set, and it means a post-fix score on these same 21 cases
+measures "did the prompt absorb these five failure shapes", not "is the model
+better at recognising insufficient evidence". The cues were deliberately
+written as general epistemic categories rather than case-specific patches, but
+that mitigates the problem; it does not remove it.
+
+An honest confirmation needs held-out cases — new INSUFFICIENT_EVIDENCE cases
+written without reference to the failures above. Until then the post-fix
+number is a check that the change did something, not evidence of quality.
+
+## 7. What follows
+
+1. **Re-run the 21 cases on `assess-prompts/0.2.0`.** Read it as a sanity
+   check, with the caveat above.
+2. **Write held-out INSUFFICIENT_EVIDENCE cases** — the only way to know
+   whether the fix generalises.
+3. **Repeat runs for variance.** Every number here is one observation.
+4. **Keep contradiction detection human-routed.** Measured, not assumed.

@@ -233,10 +233,12 @@ with a real model**, and populate the graph at corpus scale.
   relationship, not only a claim.
 
 **Gate**
-- [~] Assessment metrics measured on a real model — cloud done 2026-09-03
-      (21 cases, `openai/gpt-oss-120b`). The local row is still the 5-case
-      2026-08-14 run, so the two are not comparable; re-running the local
-      model against the 21-case set is the missing half.
+- [x] Assessment metrics measured on a real model — cloud, 2026-09-03,
+      21 cases against `openai/gpt-oss-120b`. **The local half is dropped
+      rather than pending:** the 2026-08-14 Qwen3 8B result came from an
+      RTX 4050 machine no longer in use, and current work runs against Groq.
+      Two models on one hosted provider is the comparison available; a local
+      row would be a different instrument and is not required to close this.
 - [x] False-positive conflict rate measured — **2 of 18 non-conflict cases,
       11.1%**, both INSUFFICIENT_EVIDENCE misread as POTENTIAL_CONFLICT.
       Conflict recall 2/3; the miss absorbed a contrary finding as a REFINES,
