@@ -8,6 +8,12 @@
 judgement does not, and it fails in one specific place — it cannot reliably
 tell that evidence is insufficient.**
 
+*Updated 2026-09-04 (§7): a prompt fix took classification 0.76 → 0.86 and
+conflict recall 2/3 → 3/3, but **the false-positive conflict rate held at
+exactly 11.1%** — one false conflict was fixed and a different one created.
+A previously-passing REFINES case regressed, and the two cases given the most
+explicit instructions did not move at all.*
+
 ---
 
 ## 1. What was measured
@@ -159,11 +165,98 @@ An honest confirmation needs held-out cases — new INSUFFICIENT_EVIDENCE cases
 written without reference to the failures above. Until then the post-fix
 number is a check that the change did something, not evidence of quality.
 
-## 7. What follows
+## 7. Re-run on `assess-prompts/0.2.0` — the number moved, the rate did not
 
-1. **Re-run the 21 cases on `assess-prompts/0.2.0`.** Read it as a sanity
-   check, with the caveat above.
-2. **Write held-out INSUFFICIENT_EVIDENCE cases** — the only way to know
-   whether the fix generalises.
-3. **Repeat runs for variance.** Every number here is one observation.
-4. **Keep contradiction detection human-routed.** Measured, not assumed.
+*Run 2026-09-04, same 21 cases, same model, same command.*
+
+| | 0.1.0 | 0.2.0 |
+|---|---:|---:|
+| Classification | 0.76 | **0.86** |
+| Proposal | 0.81 | **0.86** |
+| Validity / grounding | 1.00 / 1.00 | 1.00 / 1.00 |
+| **False-positive conflicts** | **2/18 (11.1%)** | **2/18 (11.1%)** |
+| Conflict recall | 2/3 | **3/3** |
+
+Per class:
+
+| Class | 0.1.0 | 0.2.0 | |
+|---|---:|---:|---|
+| SUPPORTS | 4/4 | 4/4 | — |
+| IRRELEVANT | 5/5 | 5/5 | — |
+| POTENTIAL_CONFLICT | 2/3 | **3/3** | improved |
+| INSUFFICIENT_EVIDENCE | 2/6 | **4/6** | improved |
+| **REFINES** | **3/3** | **2/3** | **regressed** |
+
+Three cases fixed, one broken, two unmoved:
+
+- **fixed** — `conflict-contrary-finding`, `insufficient-partial-overlap`,
+  `insufficient-anecdote-without-comparison`
+- **broken** — `refines-narrows-scope`, which passed before and now returns
+  POTENTIAL_CONFLICT
+- **unmoved** — `insufficient-different-population`,
+  `insufficient-mechanism-without-outcome`
+
+### Four things the headline hides
+
+**1. The false-positive conflict rate did not improve. It relocated.**
+2 of 18 before, 2 of 18 after — identical. `insufficient-partial-overlap`
+stopped being a false conflict and `refines-narrows-scope` started being one.
+The metric that Phase 5 actually gates on is unchanged, and a reader looking
+only at 0.76 → 0.86 would conclude otherwise.
+
+**2. A case that passed now fails.** Prompt edits are not local. The cues
+added for INSUFFICIENT_EVIDENCE include *"reports on a different population,
+system, version, or setting"*, and narrowing a claim's scope is structurally
+that — so a REFINES case now reads as a mismatch and escalates to conflict.
+Strengthening one class degraded its neighbour, which is precisely what a
+21-case set exists to catch and what a 5-case set could not have.
+
+**3. The two most explicitly instructed cases did not move.** This is the
+uncomfortable one. `insufficient-mechanism-without-outcome` has both a cue
+(*"describes a mechanism, plan, or process without reporting the outcome the
+claim is about"*) and a dedicated rule (*"If the evidence does not report the
+outcome, measurement, or comparison the claim asserts, choose
+INSUFFICIENT_EVIDENCE — not SUPPORTS"*). It still returns SUPPORTS.
+`insufficient-different-population` is named almost verbatim in its cue and
+still returns POTENTIAL_CONFLICT.
+
+The three cases that *were* fixed had no such targeted instruction; they
+improved from the general framing. **Writing a more specific instruction did
+not produce a more reliable outcome — if anything the reverse.** That is
+evidence against the reflex of adding another line to the prompt when a case
+fails.
+
+**4. The dangerous failure survives.** Evidence describing a mechanism is
+still read as support for an outcome it never reported, still producing a
+`CLAIM_EVIDENCE` proposal. The single error most likely to write a wrong
+belief into the knowledge base is the one the fix did not touch.
+
+### How much of the gain is real
+
+The caveat from §6 stands and now has a size. Of the three fixed cases, all
+three were among those the cues were written against — so the honest reading
+is that the prompt absorbed part of a known failure set, not that the model
+improved. Against that, two targeted cases resisted the fix and a fourth
+broke, which suggests the absorption is shallower than +0.10 implies.
+
+**The defensible claim is: conflict recall went 2/3 → 3/3, the false-positive
+rate held at 11.1%, and INSUFFICIENT_EVIDENCE remains the weakest class at
+4/6.** Everything else needs held-out cases.
+
+## 8. What follows
+
+1. **Write held-out cases.** Now the priority rather than one of several:
+   three of the fixed cases were written against, two targeted ones resisted,
+   and nothing here distinguishes absorption from improvement. Held-out
+   INSUFFICIENT_EVIDENCE and REFINES cases would settle it.
+2. **Investigate `mechanism-without-outcome` specifically.** It has the most
+   explicit instruction in the prompt and ignores it. If instruction cannot
+   fix it, the options are a structural one — a second pass that asks only
+   "does this text report the outcome the claim asserts?" — or accepting it
+   and relying on human review of `CLAIM_EVIDENCE` proposals.
+3. **Watch REFINES for further erosion.** One regression may be noise across a
+   single run; two would be a pattern.
+4. **Repeat runs for variance.** Still one observation per prompt version, and
+   the whole 0.76 → 0.86 delta is 2 cases.
+5. **Keep contradiction detection human-routed.** The false-positive rate did
+   not move.

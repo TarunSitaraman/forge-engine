@@ -240,7 +240,10 @@ with a real model**, and populate the graph at corpus scale.
       Two models on one hosted provider is the comparison available; a local
       row would be a different instrument and is not required to close this.
 - [x] False-positive conflict rate measured — **2 of 18 non-conflict cases,
-      11.1%**, both INSUFFICIENT_EVIDENCE misread as POTENTIAL_CONFLICT.
+      11.1%**, and *unchanged* by the 0.2.0 prompt fix that took overall
+      classification 0.76 → 0.86: one false conflict was fixed and a different
+      one created. Originally both were INSUFFICIENT_EVIDENCE misread as
+      POTENTIAL_CONFLICT; now one is a REFINES case that regressed.
       Conflict recall 2/3; the miss absorbed a contrary finding as a REFINES,
       which is the costlier direction since a refinement supersedes without a
       human looking. **Not** judged acceptable for promoting
