@@ -357,7 +357,7 @@ are small-n and should not be read as improvements over §7 — different cases,
 not a fairer test of the same ones.
 
 
-## 9. The structural check also failed, 2026-09-05
+## 9. The structural check also failed, 2026-09-04
 
 Built `assess-prompts` out of the loop entirely: a second pass over any
 SUPPORTS or REFINES asking one question — *does this passage state the
@@ -427,6 +427,32 @@ same.
    infeasible. If a larger model handles INSUFFICIENT_EVIDENCE cleanly, the
    finding is about this model; if it does not, the finding is about the task,
    and that is worth knowing either way.
+
+   `--model` overrides the configured model for one run, so the comparison
+   needs no config edit and leaves `forge.env` alone:
+
+   ```
+   python3 scripts/assessment_eval.py --provider cloud \
+       --model MODEL --json > fitted-MODEL.json
+
+   python3 scripts/assessment_eval.py --provider cloud \
+       --model MODEL --json \
+       --dataset engine/forge/evaluation/data/assessment-holdout-v1.yaml \
+       > holdout-MODEL.json
+   ```
+
+   Both sets, because the fitted set has seen three rounds of prompt work aimed
+   at it and the held-out set has seen none. A model that scores well on the
+   fitted set alone has told us nothing the prompt did not already encode.
+
+   The comparison to beat, `openai/gpt-oss-120b`: **0.86 fitted (18/21), 0.72
+   held-out (13/18)**. But the headline is not the number to read. Read
+   INSUFFICIENT_EVIDENCE, which sat at **4/6 fitted and 6/10 held-out** and did
+   not move on any variant tried — and within it the three held-out failures in
+   the table above, where the passage contains the sentence that should have
+   blocked the inference and the model asserted SUPPORTS anyway. Those three are
+   the test. A model that scores 0.80 overall while still asserting support from
+   a self-selected sample has not fixed anything this document is about.
 3. **Design around it rather than through it.** Phase 4 already routes every
    proposal to a human. The measured position is that `CLAIM_EVIDENCE`
    proposals in particular cannot be trusted unreviewed — which is an argument

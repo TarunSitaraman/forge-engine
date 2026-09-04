@@ -174,6 +174,18 @@ def main() -> int:
     parser.add_argument("--dataset", type=Path, default=ROOT / DEFAULT_ASSESSMENT_SET)
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument(
+        "--model",
+        default=None,
+        help=(
+            "Override the model for this run without editing forge.env. The "
+            "point is the comparison: three prompt-side fixes have now failed "
+            "to move INSUFFICIENT_EVIDENCE on openai/gpt-oss-120b, so the open "
+            "question is whether a stronger model handles the class at all. "
+            "Sets FORGE_CLOUD_MODEL for --provider cloud and FORGE_MODEL_DEFAULT "
+            "for --provider ollama."
+        ),
+    )
+    parser.add_argument(
         "--corroborate",
         action="store_true",
         help=(
@@ -183,6 +195,11 @@ def main() -> int:
         ),
     )
     args = parser.parse_args()
+    if args.model and args.provider == "scripted":
+        parser.error(
+            "--model needs a real provider: the scripted one answers from the "
+            "dataset and never reaches a model"
+        )
 
     dataset = AssessmentDataset.load(args.dataset)
     workdir = Path(tempfile.mkdtemp(prefix="forge-assess-eval-"))
@@ -197,6 +214,16 @@ def main() -> int:
         import os
 
         os.environ["FORGE_LLM_PROVIDER"] = args.provider
+        if args.model:
+            # The cloud provider reads one model; Ollama binds four roles that
+            # each fall back to FORGE_MODEL_DEFAULT. Setting the role default
+            # rather than the four role variables leaves an explicitly bound
+            # role alone, which is the behaviour someone overriding one model
+            # on the command line would expect.
+            if args.provider == "cloud":
+                os.environ["FORGE_CLOUD_MODEL"] = args.model
+            else:
+                os.environ["FORGE_MODEL_DEFAULT"] = args.model
         settings = Settings.load(state_dir=workdir / "state")
         provider = get_provider(settings)
         reachable, detail = provider.health()
