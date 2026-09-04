@@ -164,11 +164,40 @@ def evolving(settings):
     store.close()
 
 
-def provider_for(classification: str = "POTENTIAL_CONFLICT", refined: str = "") -> MockProvider:
-    """Scripted analysis model that echoes the ids Forge actually showed it."""
+def provider_for(
+    classification: str = "POTENTIAL_CONFLICT",
+    refined: str = "",
+    *,
+    corroborates: bool = True,
+) -> MockProvider:
+    """Scripted analysis model that echoes the ids Forge actually showed it.
+
+    Answers both questions the pipeline asks: the assessment, and the
+    corroboration pass over anything it classified SUPPORTS or REFINES.
+    `corroborates=False` makes that second answer a no, which is how the
+    routing tests exercise a demotion end to end.
+    """
 
     def respond(request):
         text = request.messages[-1].content
+
+        if "Does the PASSAGE state" in text:
+            passage = text.split("PASSAGE:", 1)[-1].split("Does the PASSAGE", 1)[0]
+            first = next(
+                (ln.strip() for ln in passage.splitlines() if ln.strip()), "evidence"
+            )
+            return json.dumps(
+                {
+                    "reports_outcome": corroborates,
+                    "quote": first if corroborates else "",
+                    "rationale": (
+                        "The passage reports what the claim asserts."
+                        if corroborates
+                        else "The passage does not report what the claim asserts."
+                    ),
+                }
+            )
+
         claims = re.findall(r"\[claim_id: ([^\]]+)\]", text)
         spans = re.findall(r"\[span_id: ([^\]]+)\]", text)
         if not claims or not spans:

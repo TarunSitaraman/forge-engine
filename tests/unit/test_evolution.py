@@ -166,13 +166,46 @@ def knowledge(store):
     }
 
 
-def scripted(classification: str, *, refined: str = "", span_ids=None, claim_id=None):
-    """A provider that answers with one assessment, echoing real ids."""
+def scripted(
+    classification: str,
+    *,
+    refined: str = "",
+    span_ids=None,
+    claim_id=None,
+    corroborates: bool = True,
+):
+    """A provider that answers with one assessment, echoing real ids.
+
+    The pipeline asks two different questions now, so a stand-in for a model
+    has to answer both. `corroborates` controls the second one: True upholds an
+    assertion, False demotes it to INSUFFICIENT_EVIDENCE.
+    """
 
     def respond(request):
         import re
 
         text = request.messages[-1].content
+
+        # The corroboration pass: one claim, one passage, a yes/no question.
+        if "Does the PASSAGE state" in text:
+            passage = text.split("PASSAGE:", 1)[-1].split("Does the PASSAGE", 1)[0]
+            # Quote real text from the passage -- an unverifiable quote is
+            # treated as a no, which would make `corroborates=True` a lie.
+            first = next(
+                (ln.strip() for ln in passage.splitlines() if ln.strip()), "evidence"
+            )
+            return json.dumps(
+                {
+                    "reports_outcome": corroborates,
+                    "quote": first if corroborates else "",
+                    "rationale": (
+                        "The passage reports the outcome the claim asserts."
+                        if corroborates
+                        else "The passage never reports the outcome the claim asserts."
+                    ),
+                }
+            )
+
         claims = re.findall(r"\[claim_id: ([^\]]+)\]", text)
         spans = re.findall(r"\[span_id: ([^\]]+)\]", text)
         return json.dumps(
@@ -577,8 +610,15 @@ class TestAssessmentCache:
 
         second = assessor_for(store, provider).assess([knowledge["span_b"]], [knowledge["claim"]])
 
-        assert first.llm_calls == 1
+        # Two calls, not one: the assessment plus the corroboration pass over
+        # it, since SUPPORTS is an assertion. That is the check's whole cost.
+        assert first.llm_calls == 2
+        assert first.corroboration.checked == 1
+        # And zero on the repeat -- both derivations cache independently, so a
+        # re-run is still free. A check that could not be cached would have
+        # made every replay cost a call per assertion.
         assert second.llm_calls == 0
+        assert second.corroboration.llm_calls == 0
         assert second.cache.hits == 1
         assert CALLS.count == 0
         assert second.records[0].cached is True
@@ -595,7 +635,7 @@ class TestAssessmentCache:
         )
 
         assert batch.cache.hits == 0
-        assert batch.llm_calls == 1
+        assert batch.llm_calls == 2  # assessment + corroboration
 
     def test_a_different_provider_invalidates_the_cache(self, knowledge):
         """Same model name on a different provider is not the same judgement."""
@@ -1081,3 +1121,178 @@ class TestTheAssessmentPromptGuardsAgainstOverAsserting:
         from forge.evolution.prompts import PROMPT_VERSION
 
         assert PROMPT_VERSION != "assess-prompts/0.1.0"
+
+
+class TestCorroboration:
+    """The second pass, added 2026-09-05 after two prompt revisions failed.
+
+    Measured on the held-out set: three of five failures were SUPPORTS where
+    the passage never reported the outcome, twice while the passage itself
+    contained the sentence that should have blocked it. Cases the prompt cues
+    named scored no better than cases they did not (3/5 each), so the fix is
+    structural rather than another cue.
+    """
+
+    def test_an_unsupported_assertion_is_demoted(self, knowledge):
+        batch = assessor_for(
+            knowledge["store"], scripted("SUPPORTS", corroborates=False)
+        ).assess([knowledge["span_b"]], [knowledge["claim"]])
+
+        assert batch.records[0].classification is AssessmentClass.INSUFFICIENT_EVIDENCE
+        assert batch.corroboration.demoted == 1
+
+    def test_a_supported_assertion_survives(self, knowledge):
+        batch = assessor_for(
+            knowledge["store"], scripted("SUPPORTS", corroborates=True)
+        ).assess([knowledge["span_b"]], [knowledge["claim"]])
+
+        assert batch.records[0].classification is AssessmentClass.SUPPORTS
+        assert batch.corroboration.upheld == 1
+        assert batch.corroboration.demoted == 0
+
+    def test_refines_is_checked_too(self, knowledge):
+        """REFINES asserts a relationship just as SUPPORTS does — it edits the
+        stored claim, which is if anything the more consequential write."""
+        batch = assessor_for(
+            knowledge["store"],
+            scripted("REFINES", refined="A sharper statement.", corroborates=False),
+        ).assess([knowledge["span_b"]], [knowledge["claim"]])
+
+        assert batch.records[0].classification is AssessmentClass.INSUFFICIENT_EVIDENCE
+
+    def test_the_demotion_says_so_in_the_rationale(self, knowledge):
+        """A reviewer seeing INSUFFICIENT_EVIDENCE should be able to tell it was
+        demoted, not that the first pass said so."""
+        batch = assessor_for(
+            knowledge["store"], scripted("SUPPORTS", corroborates=False)
+        ).assess([knowledge["span_b"]], [knowledge["claim"]])
+
+        assert "corroboration" in batch.records[0].rationale
+
+    def test_non_assertions_are_never_checked(self, knowledge):
+        """The failure being targeted is over-assertion. Spending a call on
+        IRRELEVANT buys nothing, and a check that could promote would be a
+        second place for the same error to enter."""
+        for classification in ("IRRELEVANT", "POTENTIAL_CONFLICT", "INSUFFICIENT_EVIDENCE"):
+            # A distinct model_id per iteration: the store is shared, so
+            # without this the second pass reads the first one's cached answer.
+            batch = assessor_for(
+                knowledge["store"],
+                scripted(classification, corroborates=False),
+                model_id=f"mock-{classification}",
+            ).assess([knowledge["span_b"]], [knowledge["claim"]])
+
+            assert batch.corroboration.checked == 0, classification
+            assert batch.records[0].classification.value == classification
+
+    def test_it_can_only_demote(self, knowledge):
+        """Even answering yes to everything, nothing is promoted."""
+        for classification in ("IRRELEVANT", "INSUFFICIENT_EVIDENCE"):
+            batch = assessor_for(
+                knowledge["store"],
+                scripted(classification, corroborates=True),
+                model_id=f"yes-{classification}",
+            ).assess([knowledge["span_b"]], [knowledge["claim"]])
+
+            assert batch.records[0].classification.value == classification
+
+    def test_it_can_be_switched_off(self, knowledge):
+        """So the check can be measured against its own absence on one set."""
+        batch = assessor_for(
+            knowledge["store"],
+            scripted("SUPPORTS", corroborates=False),
+            corroborate=False,
+        ).assess([knowledge["span_b"]], [knowledge["claim"]])
+
+        assert batch.records[0].classification is AssessmentClass.SUPPORTS
+        assert batch.corroboration.checked == 0
+        assert batch.llm_calls == 1
+
+    def test_a_provider_failure_leaves_the_records_untouched(self, knowledge):
+        """Half-reviewed is worse than unreviewed: nothing downstream could
+        tell a verified assertion from one whose check never ran."""
+        from forge.evolution.corroboration import Corroborator
+
+        store = knowledge["store"]
+        assessor = assessor_for(store, scripted("SUPPORTS"))
+        assessor._corroborator = Corroborator(
+            store,
+            MockProvider(fail_with=ProviderUnavailable("down")),
+            provider_id="mock",
+            model_id="mock-1",
+        )
+
+        batch = assessor.assess([knowledge["span_b"]], [knowledge["claim"]])
+
+        assert batch.outcome is AssessmentOutcome.SEMANTIC_ANALYSIS_UNAVAILABLE
+        assert batch.corroboration.unavailable
+        assert batch.records[0].classification is AssessmentClass.SUPPORTS
+
+
+class TestTheQuoteCheck:
+    """A boolean is cheap to get wrong. Pointing at a sentence that is not in
+    the text is a different and rarer failure, so a yes must be quotable."""
+
+    def test_a_quote_from_the_evidence_verifies(self):
+        from forge.evolution.corroboration import quote_is_present
+
+        evidence = "Latency fell by thirty-one percent after the change."
+        assert quote_is_present("Latency fell by thirty-one percent", evidence) == 1.0
+
+    def test_whitespace_and_case_do_not_matter(self):
+        """Models reflow text. An exact substring test would reject quotes
+        that are genuinely present."""
+        from forge.evolution.corroboration import quote_is_present
+
+        assert quote_is_present("LATENCY   fell\n by", "Latency fell by ten percent") == 1.0
+
+    def test_an_invented_quote_scores_low(self):
+        from forge.evolution.corroboration import quote_is_present
+
+        score = quote_is_present(
+            "throughput doubled across every shard", "The pool holds sixty-four handles."
+        )
+        assert score < 0.80
+
+    def test_an_empty_quote_is_zero(self):
+        from forge.evolution.corroboration import quote_is_present
+
+        assert quote_is_present("", "anything at all") == 0.0
+
+    def test_a_yes_with_an_unverifiable_quote_is_treated_as_a_no(self, knowledge):
+        """The load-bearing case: the model says the passage reports the
+        outcome and cannot show where."""
+        def respond(request):
+            text = request.messages[-1].content
+            if "Does the PASSAGE state" in text:
+                return json.dumps(
+                    {
+                        "reports_outcome": True,
+                        "quote": "a sentence that appears nowhere in the evidence at all",
+                        "rationale": "Asserting support without support.",
+                    }
+                )
+            import re
+
+            claims = re.findall(r"\[claim_id: ([^\]]+)\]", text)
+            spans = re.findall(r"\[span_id: ([^\]]+)\]", text)
+            return json.dumps(
+                {
+                    "assessments": [
+                        {
+                            "claim_id": claims[0],
+                            "classification": "SUPPORTS",
+                            "rationale": "The new evidence backs this claim as stated.",
+                            "evidence_span_ids": [spans[0]],
+                            "refined_statement": "",
+                        }
+                    ]
+                }
+            )
+
+        batch = assessor_for(knowledge["store"], MockProvider(responder=respond)).assess(
+            [knowledge["span_b"]], [knowledge["claim"]]
+        )
+
+        assert batch.records[0].classification is AssessmentClass.INSUFFICIENT_EVIDENCE
+        assert "not found" in batch.corroboration.demotions[0]["reason"]

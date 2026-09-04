@@ -17,7 +17,7 @@ from ..domain import AssessmentClass
 
 #: Part of the derivation key. Bump on any shape change so cached assessments
 #: from an older schema are recomputed rather than mixed in.
-SCHEMA_VERSION = "assess/0.1.0"
+SCHEMA_VERSION = "assess/0.2.0"
 
 
 class StrictSchema(BaseModel):
@@ -70,3 +70,27 @@ class RelevanceJudgement(StrictSchema):
 
     concept_ids: list[str] = Field(min_length=0, max_length=20)
     rationale: str = Field(min_length=1, max_length=400)
+
+
+class CorroborationCheck(StrictSchema):
+    """One narrow question asked about an already-assertive assessment.
+
+    Measured 2026-09-04, three of five held-out failures were the model
+    answering SUPPORTS where the passage never reported the outcome the claim
+    asserts — twice while the passage itself contained the sentence that should
+    have blocked the inference. Two prompt revisions did not move it, and cases
+    the cues named scored no better than cases they did not, so the constraint
+    is not what the model was told.
+
+    This asks that one thing on its own, with nothing else to weigh.
+    ``reports_outcome`` is the answer; ``quote`` makes a yes checkable.
+    """
+
+    #: Does the passage report the outcome, measurement, or comparison the
+    #: claim asserts?
+    reports_outcome: bool
+    #: The sentence that reports it. Required on a yes and checked against the
+    #: evidence text: a model that cannot point at the sentence has not found
+    #: one, whatever its boolean said.
+    quote: str = Field(default="", max_length=400)
+    rationale: str = Field(min_length=8, max_length=400)

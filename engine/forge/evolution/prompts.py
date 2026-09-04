@@ -12,7 +12,7 @@ does is make the *conservative* answer the natural one.
 
 from __future__ import annotations
 
-PROMPT_VERSION = "assess-prompts/0.2.0"
+PROMPT_VERSION = "assess-prompts/0.3.0"
 
 SYSTEM = (
     "You are an evidence-assessment component inside a knowledge system. "
@@ -106,3 +106,47 @@ def claims_block(claims: list[tuple[str, str, str]]) -> str:
         lines.append(statement)
         lines.append("")
     return "\n".join(lines)
+
+
+#: Bumped separately from PROMPT_VERSION: the corroboration check is its own
+#: derivation, cached under its own key, and its wording can change without
+#: invalidating every stored assessment.
+CORROBORATION_PROMPT_VERSION = "corroborate-prompts/0.1.0"
+
+CORROBORATION_SYSTEM = (
+    "You check one thing and nothing else. You are given a claim and a "
+    "passage, and you report whether the passage states the outcome, "
+    "measurement, or comparison the claim asserts. "
+    "You are not asked whether the claim is true, whether it is plausible, or "
+    "whether the passage is about the same topic. Only whether the specific "
+    "thing the claim asserts is reported in the text you were given. "
+    "You return only JSON."
+)
+
+CORROBORATION_INSTRUCTION = """\
+CLAIM:
+{claim}
+
+PASSAGE:
+{evidence}
+
+Does the PASSAGE state the outcome, measurement, or comparison that the CLAIM
+asserts?
+
+Answer false when the passage:
+- describes a mechanism, design, or plan, and never says what it produced;
+- reports a related quantity instead of the one the claim names;
+- shows an association where the claim asserts a cause;
+- reports a total where the claim is about one part of it;
+- repeats that someone else asserted the claim, rather than observing it;
+- uses a key term in a different sense than the claim does;
+- gives a direction where the claim gives a size, or one instance where the
+  claim generalises.
+
+Answer true only if you can quote the sentence that reports it. Put that
+sentence verbatim in `quote`. If you cannot find one sentence to quote, the
+answer is false.
+
+Being on the same subject is not enough. Being consistent with the claim is
+not enough. The passage must report the thing itself.
+"""

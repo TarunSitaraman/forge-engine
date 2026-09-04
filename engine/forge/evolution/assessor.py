@@ -49,11 +49,12 @@ from ..llm.base import (
 from ..logging import get_logger
 from ..storage.sqlite_store import SqliteStore
 from .prompts import ASSESSMENT_INSTRUCTION, PROMPT_VERSION, SYSTEM, claims_block, evidence_block
+from .corroboration import CorroborationOutcome, Corroborator
 from .schemas import SCHEMA_VERSION, AssessmentResponse
 
 log = get_logger(__name__)
 
-ASSESSOR_VERSION = "assessor/0.1.0"
+ASSESSOR_VERSION = "assessor/0.2.0"
 
 #: Claims per model call. Batching keeps cost down, but a large batch degrades
 #: quality and makes one malformed field discard a lot of work.
@@ -88,6 +89,8 @@ class AssessmentBatch:
     llm_calls: int = 0
     duration_ms: float = 0.0
     detail: str = ""
+    #: What the corroboration pass did, when it ran. Empty otherwise.
+    corroboration: CorroborationOutcome = field(default_factory=CorroborationOutcome)
 
     @property
     def ok(self) -> bool:
@@ -109,6 +112,7 @@ class AssessmentBatch:
             "llm_calls": self.llm_calls,
             "duration_ms": round(self.duration_ms, 2),
             "detail": self.detail,
+            "corroboration": self.corroboration.to_dict(),
         }
 
 
@@ -125,12 +129,24 @@ class EvidenceAssessor:
         provider_id: str,
         model_id: str,
         batch_size: int = DEFAULT_BATCH_SIZE,
+        corroborate: bool = True,
     ) -> None:
         self.store = store
         self.provider = provider
         self.provider_id = provider_id
         self.model_id = model_id
         self.batch_size = batch_size
+        # Off is supported so the check can be measured against its own
+        # absence on the same set. Default on: the failure it targets writes
+        # wrong beliefs into the graph, and the cost is one call per assertion.
+        self.corroborate = corroborate
+        self._corroborator = (
+            Corroborator(
+                store, provider, provider_id=provider_id, model_id=model_id
+            )
+            if corroborate
+            else None
+        )
 
     # -- entry point -------------------------------------------------------
 
@@ -170,6 +186,25 @@ class EvidenceAssessor:
             outcome = self._assess_chunk(spans, chunk, evidence_hash, allowed_spans, batch)
             if outcome is not AssessmentOutcome.COMPLETED:
                 batch.outcome = outcome
+                batch.duration_ms = (time.perf_counter() - started) * 1000
+                return batch
+
+        # Second pass. Only assertions are examined, and only downwards --
+        # SUPPORTS/REFINES to INSUFFICIENT_EVIDENCE -- so this can decline a
+        # relationship but never invent one. Runs over cached records too: a
+        # cache hit from before the check existed is exactly the assertion
+        # most worth reviewing.
+        if self._corroborator is not None and batch.records:
+            batch.records, batch.corroboration = self._corroborator.review(
+                batch.records, claims, spans, evidence_hash
+            )
+            batch.llm_calls += batch.corroboration.llm_calls
+            if batch.corroboration.unavailable:
+                # No silent downgrade, in either direction: an assertion whose
+                # check could not run is not quietly kept and not quietly
+                # demoted. The batch reports why and the caller decides.
+                batch.outcome = AssessmentOutcome.SEMANTIC_ANALYSIS_UNAVAILABLE
+                batch.detail = batch.corroboration.unavailable
                 batch.duration_ms = (time.perf_counter() - started) * 1000
                 return batch
 

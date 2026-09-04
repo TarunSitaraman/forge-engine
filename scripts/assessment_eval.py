@@ -173,6 +173,15 @@ def main() -> int:
     parser.add_argument("--provider", default="scripted", choices=("scripted", "ollama", "cloud"))
     parser.add_argument("--dataset", type=Path, default=ROOT / DEFAULT_ASSESSMENT_SET)
     parser.add_argument("--json", action="store_true", dest="as_json")
+    parser.add_argument(
+        "--no-corroborate",
+        action="store_true",
+        help=(
+            "Disable the second corroboration pass. The check exists to stop "
+            "SUPPORTS being asserted where the passage never reports the "
+            "outcome; this flag measures the same set without it."
+        ),
+    )
     args = parser.parse_args()
 
     dataset = AssessmentDataset.load(args.dataset)
@@ -180,6 +189,7 @@ def main() -> int:
     settings = Settings.load(state_dir=workdir / "state")
 
     scripted = args.provider == "scripted"
+    corroborate = not args.no_corroborate
     if scripted:
         provider = scripted_provider(dataset)
         provider_id, model_id = "mock", "mock-1"
@@ -206,7 +216,11 @@ def main() -> int:
         store.initialize()
         claim, evidence_span, source = build_case(store, case, index)
         assessor = EvidenceAssessor(
-            store, provider, provider_id=provider_id, model_id=model_id
+            store,
+            provider,
+            provider_id=provider_id,
+            model_id=model_id,
+            corroborate=corroborate,
         )
 
         result = CaseResult(case_id=case.id, expected=case.expected_classification.value)
@@ -270,7 +284,12 @@ def main() -> int:
     else:
         print(f"dataset : {dataset.path} (v{dataset.version}, {len(dataset)} cases)")
         print(f"balance : {dataset.by_classification()}")
-        print(f"provider: {report.provider_id} / {report.model_id}\n")
+        print(f"provider: {report.provider_id} / {report.model_id}")
+        print(
+            "corroborate: "
+            + ("on (second pass over SUPPORTS/REFINES)" if corroborate else "OFF")
+            + "\n"
+        )
         print("  " + report.headline())
         print()
         for result in report.results:
