@@ -259,6 +259,13 @@ with a real model**, and populate the graph at corpus scale.
 - [ ] Concept extraction scored against the ~500 filename-derived concepts
 - [ ] Retrieval improvements measured against the Phase 3 labelled set
 
+*A structural corroboration pass exists but is off by default* — a second
+question over any SUPPORTS/REFINES, measured 2026-09-05 at 13/18 with and
+13/18 without on the held-out set (50% precision, 33% recall on the failures
+it targets). Three attempts at this class have now failed, so the constraint
+is read as the model's judgement rather than the prompting. `--corroborate`
+enables it; see [assessment quality](./research/assessment-quality.md) §9.
+
 *Still deliberately not built:* contradiction *detection* as an autonomous
 capability. Phase 4's `POTENTIAL_CONFLICT` routes to a human by design, and
 promoting it to an asserted `Contradiction` entity should wait until the

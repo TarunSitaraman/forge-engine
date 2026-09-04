@@ -129,16 +129,25 @@ class EvidenceAssessor:
         provider_id: str,
         model_id: str,
         batch_size: int = DEFAULT_BATCH_SIZE,
-        corroborate: bool = True,
+        corroborate: bool = False,
     ) -> None:
         self.store = store
         self.provider = provider
         self.provider_id = provider_id
         self.model_id = model_id
         self.batch_size = batch_size
-        # Off is supported so the check can be measured against its own
-        # absence on the same set. Default on: the failure it targets writes
-        # wrong beliefs into the graph, and the cost is one call per assertion.
+        # Default OFF, on measurement rather than principle. On the held-out
+        # set 2026-09-05 the check scored 13/18 with and 13/18 without: it
+        # fixed one case and broke another, caught 1 of the 3 failures it was
+        # built for, and 1 of its 2 demotions was wrong. A coin flip that
+        # costs a call per assertion does not earn being on by default.
+        #
+        # It is kept, and worth turning on deliberately, because the error it
+        # trades is the cheaper one: it removed a CLAIM_EVIDENCE proposal
+        # built from evidence that redefined the claim's key term, and paid
+        # for it by declining a legitimate REFINES. Wrong assertions write
+        # false beliefs; wrong declines only fail to write true ones. That
+        # asymmetry is a reason to enable it, not a reason to assume it.
         self.corroborate = corroborate
         self._corroborator = (
             Corroborator(

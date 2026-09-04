@@ -610,15 +610,11 @@ class TestAssessmentCache:
 
         second = assessor_for(store, provider).assess([knowledge["span_b"]], [knowledge["claim"]])
 
-        # Two calls, not one: the assessment plus the corroboration pass over
-        # it, since SUPPORTS is an assertion. That is the check's whole cost.
-        assert first.llm_calls == 2
-        assert first.corroboration.checked == 1
-        # And zero on the repeat -- both derivations cache independently, so a
-        # re-run is still free. A check that could not be cached would have
-        # made every replay cost a call per assertion.
+        # One call: corroboration defaults off after measuring net-zero on
+        # the held-out set, so the assertive path costs what it always did.
+        assert first.llm_calls == 1
+        assert first.corroboration.checked == 0
         assert second.llm_calls == 0
-        assert second.corroboration.llm_calls == 0
         assert second.cache.hits == 1
         assert CALLS.count == 0
         assert second.records[0].cached is True
@@ -635,7 +631,7 @@ class TestAssessmentCache:
         )
 
         assert batch.cache.hits == 0
-        assert batch.llm_calls == 2  # assessment + corroboration
+        assert batch.llm_calls == 1
 
     def test_a_different_provider_invalidates_the_cache(self, knowledge):
         """Same model name on a different provider is not the same judgement."""
@@ -1135,7 +1131,7 @@ class TestCorroboration:
 
     def test_an_unsupported_assertion_is_demoted(self, knowledge):
         batch = assessor_for(
-            knowledge["store"], scripted("SUPPORTS", corroborates=False)
+            knowledge["store"], scripted("SUPPORTS", corroborates=False), corroborate=True
         ).assess([knowledge["span_b"]], [knowledge["claim"]])
 
         assert batch.records[0].classification is AssessmentClass.INSUFFICIENT_EVIDENCE
@@ -1143,7 +1139,7 @@ class TestCorroboration:
 
     def test_a_supported_assertion_survives(self, knowledge):
         batch = assessor_for(
-            knowledge["store"], scripted("SUPPORTS", corroborates=True)
+            knowledge["store"], scripted("SUPPORTS", corroborates=True), corroborate=True
         ).assess([knowledge["span_b"]], [knowledge["claim"]])
 
         assert batch.records[0].classification is AssessmentClass.SUPPORTS
@@ -1156,6 +1152,7 @@ class TestCorroboration:
         batch = assessor_for(
             knowledge["store"],
             scripted("REFINES", refined="A sharper statement.", corroborates=False),
+            corroborate=True,
         ).assess([knowledge["span_b"]], [knowledge["claim"]])
 
         assert batch.records[0].classification is AssessmentClass.INSUFFICIENT_EVIDENCE
@@ -1164,7 +1161,7 @@ class TestCorroboration:
         """A reviewer seeing INSUFFICIENT_EVIDENCE should be able to tell it was
         demoted, not that the first pass said so."""
         batch = assessor_for(
-            knowledge["store"], scripted("SUPPORTS", corroborates=False)
+            knowledge["store"], scripted("SUPPORTS", corroborates=False), corroborate=True
         ).assess([knowledge["span_b"]], [knowledge["claim"]])
 
         assert "corroboration" in batch.records[0].rationale
@@ -1290,9 +1287,9 @@ class TestTheQuoteCheck:
                 }
             )
 
-        batch = assessor_for(knowledge["store"], MockProvider(responder=respond)).assess(
-            [knowledge["span_b"]], [knowledge["claim"]]
-        )
+        batch = assessor_for(
+            knowledge["store"], MockProvider(responder=respond), corroborate=True
+        ).assess([knowledge["span_b"]], [knowledge["claim"]])
 
         assert batch.records[0].classification is AssessmentClass.INSUFFICIENT_EVIDENCE
         assert "not found" in batch.corroboration.demotions[0]["reason"]

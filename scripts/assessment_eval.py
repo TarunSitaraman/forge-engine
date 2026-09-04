@@ -174,12 +174,12 @@ def main() -> int:
     parser.add_argument("--dataset", type=Path, default=ROOT / DEFAULT_ASSESSMENT_SET)
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument(
-        "--no-corroborate",
+        "--corroborate",
         action="store_true",
         help=(
-            "Disable the second corroboration pass. The check exists to stop "
-            "SUPPORTS being asserted where the passage never reports the "
-            "outcome; this flag measures the same set without it."
+            "Enable the second corroboration pass over SUPPORTS/REFINES. Off "
+            "by default: measured 13/18 with and 13/18 without on the held-out "
+            "set, fixing one case and breaking another."
         ),
     )
     args = parser.parse_args()
@@ -189,7 +189,7 @@ def main() -> int:
     settings = Settings.load(state_dir=workdir / "state")
 
     scripted = args.provider == "scripted"
-    corroborate = not args.no_corroborate
+    corroborate = args.corroborate
     if scripted:
         provider = scripted_provider(dataset)
         provider_id, model_id = "mock", "mock-1"

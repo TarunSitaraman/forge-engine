@@ -14,7 +14,11 @@ exactly 11.1%** — one false conflict was fixed and a different one created.
 §8: on a held-out set the fix was not written against, **cases the cues
 describe and cases they do not scored identically, 3/5 each** — the cues
 conferred no measurable advantage, and the REFINES regression reproduced on a
-fresh case. Validity and grounding stayed at 1.00 on both sets.*
+fresh case. §9: a structural second-pass check scored **13/18 with and 13/18
+without**, fixing one case and breaking another at 50% precision. **Three
+approaches have now failed to move this class, which is enough to conclude the
+constraint is the model's judgement rather than how it is asked.** Validity and
+grounding stayed at 1.00 throughout.*
 
 ---
 
@@ -353,21 +357,81 @@ are small-n and should not be read as improvements over §7 — different cases,
 not a fairer test of the same ones.
 
 
-## 9. What follows
+## 9. The structural check also failed, 2026-09-05
 
-1. **Stop tuning the prompt for this class.** Near and far scored the same,
-   which is what it looks like when instruction is not the binding
-   constraint. A third pass of cue-writing has no evidence behind it.
-2. **Try the structural fix instead.** A second, single-question pass over any
-   assessment returning SUPPORTS or REFINES — *"does this passage report the
-   outcome, measurement, or comparison the claim asserts?"* — demoting to
-   INSUFFICIENT_EVIDENCE on a no. It targets the three-in-five failure
-   directly, costs one extra call on the assertive path only, and is
-   measurable on both sets. This is the next thing worth building.
-3. **Consider reverting the boundary-condition language in 0.2.0.** It is the
-   confirmed cause of two REFINES failures and bought little measurable
-   elsewhere.
-4. **Repeat runs for variance.** Still one observation per prompt version per
-   set.
-5. **Keep contradiction detection human-routed.** Nothing measured has
-   changed that.
+Built `assess-prompts` out of the loop entirely: a second pass over any
+SUPPORTS or REFINES asking one question — *does this passage state the
+outcome, measurement, or comparison the claim asserts?* — demoting on a no,
+with the yes required to quote a sentence found in the evidence.
+
+Same held-out set, same model, with and against itself:
+
+| | without | with |
+|---|---:|---:|
+| Classification | 13/18 (0.722) | **13/18 (0.722)** |
+| Latency | 10,385 ms/case | 11,939 ms/case |
+
+**Identical.** It fixed `ht-far-term-defined-differently` and broke
+`ht-probe-refines-adds-precondition`, a correct REFINES it demoted.
+
+Its own behaviour, which is the more useful number:
+
+- 6 assertions examined, 2 demoted
+- **1 demotion correct, 1 wrong — 50% precision**
+- **1 of the 3 target failures caught — 33% recall**
+- `ht-near-single-incident` and `ht-far-correlation-for-causal-claim` were
+  examined and **upheld**. Asked the narrow question directly, about a single
+  incident with no baseline and about an explicitly self-selected
+  correlation, the model still answered that the passage reports the outcome.
+
+### Three approaches, none of which moved the class
+
+| Approach | Result |
+|---|---|
+| Cues describing the failure (`0.2.0`) | No advantage on cases they describe over cases they do not |
+| An explicit rule naming the case | The two most explicitly instructed cases never moved |
+| A narrow structural question | 33% recall, 50% precision, net zero |
+
+That is now enough evidence to stop: **the constraint is the model's
+judgement, not how it is asked.** `openai/gpt-oss-120b` cannot reliably tell
+that on-topic evidence fails to establish a claim, and no phrasing tested
+changes it.
+
+### Why it is kept, and defaulted off
+
+Off by default. A coin flip on whether a demotion is right does not earn a
+call per assertion.
+
+But the trade it makes is the cheaper one, and that is a real argument for
+turning it on deliberately. Dangerous failures — an assertion built from
+evidence that does not establish the claim — went **3 → 2**. It removed a
+`CLAIM_EVIDENCE` proposal derived from a passage that redefined the claim's
+key term, and paid for it by declining a legitimate REFINES. Wrong assertions
+write false beliefs into the graph; wrong declines only fail to write true
+ones.
+
+That asymmetry is not free either. A demoted REFINES produces no proposal at
+all, so a legitimate update is dropped silently rather than routed to anyone.
+At 50% precision the check buys a small reduction in the worse error with a
+matching increase in the quieter one, and a reader should be able to see both
+halves of that trade rather than a single accuracy figure that shows neither.
+
+`--corroborate` turns it on; `corroborate=True` in the constructor does the
+same.
+
+## 10. What follows
+
+1. **Do not write a fourth fix for this class.** Three failed. The next honest
+   move is a different model, not a different prompt or wrapper.
+2. **Try one stronger model on both sets** before concluding the task is
+   infeasible. If a larger model handles INSUFFICIENT_EVIDENCE cleanly, the
+   finding is about this model; if it does not, the finding is about the task,
+   and that is worth knowing either way.
+3. **Design around it rather than through it.** Phase 4 already routes every
+   proposal to a human. The measured position is that `CLAIM_EVIDENCE`
+   proposals in particular cannot be trusted unreviewed — which is an argument
+   for keeping that gate, not for removing it once accuracy "improves".
+4. **Repeat runs for variance.** Every number in this document is a single
+   observation, and the deltas being argued over are one and two cases.
+5. **Keep contradiction detection human-routed.** Unchanged by anything
+   measured here.
