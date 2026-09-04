@@ -1,0 +1,297 @@
+# Evidence-assessment HELD-OUT set, version 1.
+#
+# WHY THIS FILE EXISTS, SEPARATELY
+#
+# `assessment-v1.yaml` is no longer a clean instrument. The prompt cues in
+# `assess-prompts/0.2.0` were written after reading which of its cases failed,
+# so a score on it now measures how much of a known failure set the prompt
+# absorbed. Measured 2026-09-04, it went 0.76 -> 0.86 that way.
+#
+# This set exists to answer the question that one can no longer answer: does
+# the prompt handle cases it was not written against? It is kept in a separate
+# file rather than appended, so the fitted set stays intact and the two are
+# never accidentally averaged.
+#
+# THE LIMITATION THIS DESIGN CANNOT REMOVE
+#
+# The author of these cases had already seen the failures. That cannot be
+# undone, and it is a weaker guarantee than a set written blind. What has been
+# done instead is to make the leakage visible and bounded:
+#
+#   - cases are derived from a taxonomy of *why* evidence can fail to settle a
+#     claim, not from the observed failures;
+#   - every case uses a different technical domain from the fitted set, which
+#     is entirely RAG and ML, so surface similarity cannot carry a pattern
+#     match;
+#   - the set is stratified, and one stratum deliberately targets categories
+#     no cue in 0.2.0 mentions.
+#
+# Read a strong `near` score with suspicion and a strong `far` score as the
+# real signal.
+#
+# STRATA
+#
+# near-transfer (5, all INSUFFICIENT_EVIDENCE)
+#   One per cue in assess-prompts/0.2.0, same epistemic shape, different
+#   content. Tests whether a cue generalises past the case it was written for,
+#   or was memorised.
+#
+# far-transfer (5, all INSUFFICIENT_EVIDENCE)
+#   Reasons evidence fails to settle a claim that NO cue names: correlation
+#   offered for a causal claim, an aggregate that hides the subgroup, a
+#   secondhand report, a term the evidence defines differently, and a
+#   direction confirmed where a magnitude was asserted. If the class is
+#   understood these pass; if only the five listed patterns are recognised
+#   they fail.
+#
+# regression-probe (4: 2 REFINES, 2 SUPPORTS)
+#   0.2.0 broke `refines-narrows-scope`, escalating a scope change to
+#   POTENTIAL_CONFLICT. These are cases a conflict-happy prompt would
+#   over-escalate. They exist to detect that the cure is worse than the
+#   disease.
+#
+# conflict (2) and irrelevant (2)
+#   Enough to keep the false-positive conflict rate measurable — 16 of the 18
+#   cases have a correct answer other than POTENTIAL_CONFLICT — and to catch a
+#   prompt that has stopped flagging real disagreement.
+
+version: 1
+unit: assessment
+
+cases:
+
+  # --- near transfer: one per 0.2.0 cue, different domain -----------------
+
+  - id: ht-near-mechanism-not-outcome
+    stratum: near-transfer
+    expected_classification: INSUFFICIENT_EVIDENCE
+    expected_proposal: null
+    claim: "Connection pooling reduces p99 latency in the checkout service."
+    evidence: >-
+      The checkout service now obtains database handles from a shared pool
+      rather than opening a connection per request. The pool is configured with
+      a ceiling of sixty-four handles and a thirty-second idle timeout.
+    note: >-
+      Describes the mechanism in detail and never reports a latency figure.
+      Cue (a): outcome not reported.
+
+  - id: ht-near-different-deployment
+    stratum: near-transfer
+    expected_classification: INSUFFICIENT_EVIDENCE
+    expected_proposal: null
+    claim: "The scheduler keeps node utilisation above eighty percent in production clusters."
+    evidence: >-
+      On a four-node laptop test cluster running synthetic workloads, the
+      scheduler held average utilisation at eighty-six percent over an hour.
+    note: >-
+      A different setting entirely from the production clusters the claim is
+      about. Cue (b): different population or setting.
+
+  - id: ht-near-adjacent-metric
+    stratum: near-transfer
+    expected_classification: INSUFFICIENT_EVIDENCE
+    expected_proposal: null
+    claim: "The new compression format reduces storage cost for archived logs."
+    evidence: >-
+      Benchmarking the new format against the previous one showed compression
+      throughput improved from 180 MB/s to 240 MB/s on the same hardware.
+    note: >-
+      Measures speed where the claim is about cost. Overlaps the topic and
+      leaves the assertion untested. Cue (c): partial overlap.
+
+  - id: ht-near-single-incident
+    stratum: near-transfer
+    expected_classification: INSUFFICIENT_EVIDENCE
+    expected_proposal: null
+    claim: "Raising the file descriptor limit prevents the gateway from dropping connections under load."
+    evidence: >-
+      After the limit was raised on gateway-3, the on-call engineer noted that
+      the service ran through the evening peak without dropping a connection.
+    note: >-
+      One host, one evening, nothing to compare against. Cue (d): single
+      observation without a baseline.
+
+  - id: ht-near-planned-not-done
+    stratum: near-transfer
+    expected_classification: INSUFFICIENT_EVIDENCE
+    expected_proposal: null
+    claim: "The build system caches dependency resolution across CI runs."
+    evidence: >-
+      The migration plan allocates the second quarter to introducing a shared
+      resolution cache, with rollout to the main pipelines to follow.
+    note: >-
+      Intended, not measured, and not yet done. Cue (e): future rather than
+      observed.
+
+  # --- far transfer: no cue in 0.2.0 names any of these -------------------
+
+  - id: ht-far-correlation-for-causal-claim
+    stratum: far-transfer
+    expected_classification: INSUFFICIENT_EVIDENCE
+    expected_proposal: null
+    claim: "Adding request tracing reduced the time engineers need to diagnose incidents."
+    evidence: >-
+      Teams that had adopted request tracing reported shorter median diagnosis
+      times than teams that had not. Adoption was voluntary and teams chose
+      when to enable it.
+    note: >-
+      Association between two things, offered for a claim about cause, with
+      self-selection unaddressed. The evidence is genuinely about the claim and
+      genuinely does not settle it.
+
+  - id: ht-far-aggregate-hides-subgroup
+    stratum: far-transfer
+    expected_classification: INSUFFICIENT_EVIDENCE
+    expected_proposal: null
+    claim: "Cold-start latency improved for functions written in Java."
+    evidence: >-
+      Across all supported runtimes, mean cold-start latency fell by
+      thirty-one percent following the release.
+    note: >-
+      A total that necessarily includes the subgroup the claim names, while
+      saying nothing about it. The average could have improved with Java
+      unchanged or worse.
+
+  - id: ht-far-secondhand-attribution
+    stratum: far-transfer
+    expected_classification: INSUFFICIENT_EVIDENCE
+    expected_proposal: null
+    claim: "The library handles Unicode normalisation correctly for composed characters."
+    evidence: >-
+      The maintainers state in the project README that normalisation is handled
+      correctly for all composed forms.
+    note: >-
+      Someone asserting the claim is not evidence for it. The passage reports a
+      claim rather than an observation, so nothing in it can be checked.
+
+  - id: ht-far-term-defined-differently
+    stratum: far-transfer
+    expected_classification: INSUFFICIENT_EVIDENCE
+    expected_proposal: null
+    claim: "The queue guarantees at-least-once delivery."
+    evidence: >-
+      The design document defines delivery as successful once a message has
+      been written to the broker's log, and reports that under this definition
+      no deliveries were lost during the failover test.
+    note: >-
+      The evidence measures a different sense of "delivery" from the one the
+      claim asserts. Consumer receipt is never established.
+
+  - id: ht-far-direction-without-magnitude
+    stratum: far-transfer
+    expected_classification: INSUFFICIENT_EVIDENCE
+    expected_proposal: null
+    claim: "Batching writes cuts disk IO by more than half."
+    evidence: >-
+      Enabling write batching reduced the number of disk operations in the
+      staging environment. The reduction was consistent across three runs.
+    note: >-
+      Confirms the direction and never states a size, where the claim asserts a
+      specific threshold. Consistent with the claim and insufficient for it.
+
+  # --- regression probes: would a conflict-happy prompt escalate these? ---
+
+  - id: ht-probe-refines-adds-precondition
+    stratum: regression-probe
+    expected_classification: REFINES
+    expected_proposal: claim_refinement
+    refined_statement: "Index rebuilds complete within the maintenance window when the table has fewer than fifty million rows."
+    claim: "Index rebuilds complete within the maintenance window."
+    evidence: >-
+      Rebuilds finished inside the window on every table measured up to fifty
+      million rows. Beyond that size they consistently overran it.
+    note: >-
+      Adds a necessary condition to a claim that is otherwise right. A prompt
+      over-tuned toward conflict reads the overrun as disagreement.
+
+  - id: ht-probe-refines-tightens-bound
+    stratum: regression-probe
+    expected_classification: REFINES
+    expected_proposal: claim_refinement
+    refined_statement: "The parser handles inputs up to 2 MB without additional allocation."
+    claim: "The parser handles large inputs without additional allocation."
+    evidence: >-
+      Allocation profiling showed no additional allocation for inputs up to
+      2 MB. Above that the parser allocates a spill buffer.
+    note: >-
+      Makes a vague claim precise. The spill buffer is a boundary, not a
+      contradiction, and the mirror of the case 0.2.0 regressed on.
+
+  - id: ht-probe-supports-restated
+    stratum: regression-probe
+    expected_classification: SUPPORTS
+    expected_proposal: claim_evidence
+    claim: "Read replicas reduce load on the primary database."
+    evidence: >-
+      After read traffic was routed to replicas, query volume reaching the
+      primary fell by roughly two thirds and stayed there across the following
+      month.
+    note: >-
+      Straightforward corroboration in different words. Included so a prompt
+      biased toward declining cannot pass this set by refusing everything.
+
+  - id: ht-probe-supports-narrower-but-consistent
+    stratum: regression-probe
+    expected_classification: SUPPORTS
+    expected_proposal: claim_evidence
+    claim: "Enabling HTTP keep-alive lowers request overhead."
+    evidence: >-
+      On the internal API tier, enabling keep-alive removed roughly forty
+      percent of TCP handshakes and cut mean per-request overhead accordingly.
+    note: >-
+      A narrower instance of a general claim, measured and consistent with it.
+      Genuine support rather than a scope mismatch.
+
+  # --- real conflicts: recall must not be traded away ---------------------
+
+  - id: ht-conflict-direct-reversal
+    stratum: conflict
+    expected_classification: POTENTIAL_CONFLICT
+    expected_proposal: claim_conflict
+    claim: "The cache warm-up step shortens the first request after deploy."
+    evidence: >-
+      Measuring the same deploy pipeline with and without the warm-up step, the
+      first request was slower with warm-up enabled, by about 400 ms, in every
+      one of twenty deploys.
+    note: >-
+      Same metric, same setting, opposite direction, measured repeatedly. A
+      human should look.
+
+  - id: ht-conflict-fails-in-stated-condition
+    stratum: conflict
+    expected_classification: POTENTIAL_CONFLICT
+    expected_proposal: claim_conflict
+    claim: "The retry policy recovers from transient broker failures without data loss."
+    evidence: >-
+      During a nine-second broker outage the retry policy exhausted its budget
+      and the producer discarded four hundred buffered messages.
+    note: >-
+      Describes a case where the claim does not hold, under exactly the
+      condition it names.
+
+  # --- irrelevant ---------------------------------------------------------
+
+  - id: ht-irrelevant-same-system-other-property
+    stratum: irrelevant
+    expected_classification: IRRELEVANT
+    expected_proposal: null
+    claim: "The message broker preserves ordering within a partition."
+    evidence: >-
+      The broker's administrative console was redesigned this release, with
+      topic configuration moved under a single settings page.
+    note: >-
+      Same system, unrelated property. Harder than an obviously off-topic
+      passage and must not be confused with INSUFFICIENT_EVIDENCE, which
+      requires the evidence to bear on the claim.
+
+  - id: ht-irrelevant-shared-term-different-field
+    stratum: irrelevant
+    expected_classification: IRRELEVANT
+    expected_proposal: null
+    claim: "Table partitioning improves query performance on the events table."
+    evidence: >-
+      In the physical data centre, partitioning the network into separate
+      VLANs for storage and application traffic reduced broadcast noise.
+    note: >-
+      "Partitioning" in an unrelated sense. Tests that a shared word is not
+      read as a shared subject.

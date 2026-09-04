@@ -243,12 +243,57 @@ broke, which suggests the absorption is shallower than +0.10 implies.
 rate held at 11.1%, and INSUFFICIENT_EVIDENCE remains the weakest class at
 4/6.** Everything else needs held-out cases.
 
-## 8. What follows
+## 8. The held-out set
 
-1. **Write held-out cases.** Now the priority rather than one of several:
-   three of the fixed cases were written against, two targeted ones resisted,
-   and nothing here distinguishes absorption from improvement. Held-out
-   INSUFFICIENT_EVIDENCE and REFINES cases would settle it.
+`assessment-holdout-v1.yaml`, 18 cases, written 2026-09-04. Separate file, not
+appended — appending would destroy both instruments at once, making the fitted
+score uninterpretable and the held-out score fitted.
+
+**The limitation this cannot remove:** its author had already read the
+failures. That is a weaker guarantee than a set written blind, and no design
+undoes it. What the design does is bound the leakage and make it visible:
+cases derive from a taxonomy of *why* evidence fails to settle a claim rather
+than from the observed failures; every case uses a technical domain absent
+from the fitted set, which is entirely RAG and ML, so surface similarity
+cannot carry a pattern match; and the strata separate what can be trusted from
+what cannot.
+
+| Stratum | n | Class | What it measures |
+|---|---:|---|---|
+| near-transfer | 5 | INSUFFICIENT_EVIDENCE | One per 0.2.0 cue, same shape, different content. Did the cue generalise, or was it memorised? |
+| far-transfer | 5 | INSUFFICIENT_EVIDENCE | Five reasons **no cue names**. Is the class understood, or only the listed patterns? |
+| regression-probe | 4 | REFINES ×2, SUPPORTS ×2 | Cases a conflict-happy prompt would over-escalate. Is the cure worse than the disease? |
+| conflict | 2 | POTENTIAL_CONFLICT | Recall must not be traded away. |
+| irrelevant | 2 | IRRELEVANT | The IRRELEVANT/INSUFFICIENT boundary, which 0.2.0 also touched. |
+
+**Read a strong `near` score with suspicion and a strong `far` score as the
+real signal.** Near-transfer shares its epistemic shape with a written cue, so
+it can be passed by a prompt that generalised only slightly. Far-transfer
+cannot: correlation offered for a causal claim, an aggregate that hides the
+subgroup the claim names, a secondhand report of the claim rather than an
+observation, a term the evidence defines differently, and a direction
+confirmed where a magnitude was asserted — none appear in `assess-prompts`.
+
+16 of the 18 have a correct answer other than POTENTIAL_CONFLICT, so the
+false-positive conflict rate stays the headline number here as well.
+
+`tests/unit/test_holdout_set.py` guards the design structurally: no id or
+claim shared with the fitted set, the strata balance, and — the load-bearing
+one — that no far-transfer case has become described by a prompt cue. If a
+future cue names one of those five categories, that test fails and says the
+case must move to near-transfer with a replacement written.
+
+### Not yet run against a real model
+
+The set is written and passes the pipeline against the scripted provider
+(validity, grounding, proposal mapping and cache all 1.00, which is what that
+mode measures). **No model has seen it.** Until it runs against
+`openai/gpt-oss-120b`, §7's numbers stand as the last word, with their caveats.
+
+## 9. What follows
+
+1. **Run the held-out set against the real model.** Written; unrun. The
+   far-transfer stratum is the number that matters.
 2. **Investigate `mechanism-without-outcome` specifically.** It has the most
    explicit instruction in the prompt and ignores it. If instruction cannot
    fix it, the options are a structural one — a second pass that asks only
