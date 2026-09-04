@@ -8,11 +8,13 @@
 judgement does not, and it fails in one specific place — it cannot reliably
 tell that evidence is insufficient.**
 
-*Updated 2026-09-04 (§7): a prompt fix took classification 0.76 → 0.86 and
+*Updated 2026-09-04. §7: a prompt fix took classification 0.76 → 0.86 and
 conflict recall 2/3 → 3/3, but **the false-positive conflict rate held at
 exactly 11.1%** — one false conflict was fixed and a different one created.
-A previously-passing REFINES case regressed, and the two cases given the most
-explicit instructions did not move at all.*
+§8: on a held-out set the fix was not written against, **cases the cues
+describe and cases they do not scored identically, 3/5 each** — the cues
+conferred no measurable advantage, and the REFINES regression reproduced on a
+fresh case. Validity and grounding stayed at 1.00 on both sets.*
 
 ---
 
@@ -283,25 +285,89 @@ one — that no far-transfer case has become described by a prompt cue. If a
 future cue names one of those five categories, that test fails and says the
 case must move to near-transfer with a replacement written.
 
-### Not yet run against a real model
+### Result, 2026-09-04: near and far transfer scored identically
 
-The set is written and passes the pipeline against the scripted provider
-(validity, grounding, proposal mapping and cache all 1.00, which is what that
-mode measures). **No model has seen it.** Until it runs against
-`openai/gpt-oss-120b`, §7's numbers stand as the last word, with their caveats.
+`class=0.72`, `proposal=0.78`, validity and grounding **1.00**, 13/18.
+
+| Stratum | Score | |
+|---|---:|---|
+| **near-transfer** | **3/5 (60%)** | cases a cue was written for |
+| **far-transfer** | **3/5 (60%)** | cases no cue names |
+| regression-probe | 3/4 (75%) | |
+| conflict | 2/2 (100%) | |
+| irrelevant | 2/2 (100%) | |
+
+**The prediction going in was that near would score well and far would be the
+real test. Near and far came out the same, to the case.**
+
+That equality is the finding. If the cues worked by giving the model five
+patterns to match, near-transfer — which shares its epistemic shape with a
+written cue — should have beaten far-transfer, which shares nothing. It did
+not, by any margin. **The cues conferred no measurable advantage on the cases
+they were written to describe.**
+
+Read alongside the fitted set that is fairly damning of the fix. On
+`assessment-v1` after 0.2.0, INSUFFICIENT_EVIDENCE was 4/6 (67%). Here it is
+6/10 (60%) — the same number within the noise of these sample sizes. **The
+most economical explanation is that ~60% is this model's baseline on the class
+and the prompt moved it very little**, the +0.10 on the fitted set being two
+cases' worth of absorption plus a conflict flip rather than a capability
+change.
+
+### The regression is confirmed, not noise
+
+`ht-probe-refines-tightens-bound` returned POTENTIAL_CONFLICT. That case was
+written as a deliberate mirror of `refines-narrows-scope` — the case 0.2.0
+broke on the fitted set — in an unrelated domain. **It reproduced.** Two
+independent cases, same shape, same wrong answer: 0.2.0 escalates a stated
+boundary condition to disagreement. The §7 note that one regression might be
+noise is settled; it is a behaviour.
+
+### The dangerous failure is the characteristic one
+
+Three of the five failures asserted a relationship the text does not
+establish, each producing a `CLAIM_EVIDENCE` proposal:
+
+| Case | Actual | What the passage actually said |
+|---|---|---|
+| `ht-near-single-incident` | SUPPORTS | One host, one evening, no baseline |
+| `ht-far-correlation-for-causal-claim` | SUPPORTS | An association — **and the passage states adoption was voluntary and self-selected** |
+| `ht-far-term-defined-differently` | SUPPORTS | **The passage defines the key term differently from the claim** |
+
+On the fitted set this shape was one failure in five. Here it is three in
+five. It is not an edge case; it is what this model does when evidence is
+on-topic and inconclusive. The last two are the striking ones — in both, the
+passage explicitly contains the sentence that should have blocked the
+inference, and the model asserted support anyway.
+
+### What did hold
+
+Validity and grounding stayed at **1.00 on a set the pipeline had never
+seen** — no malformed output, no invented citation, across 18 fresh cases in
+domains absent from the fitted set. The safety properties generalise; the
+judgement does not. That contrast is the clearest single statement this
+document can make about where the engineering is sound and where it is not.
+
+False-positive conflicts were **1/16 (6.2%)** and conflict recall 2/2. Both
+are small-n and should not be read as improvements over §7 — different cases,
+not a fairer test of the same ones.
+
 
 ## 9. What follows
 
-1. **Run the held-out set against the real model.** Written; unrun. The
-   far-transfer stratum is the number that matters.
-2. **Investigate `mechanism-without-outcome` specifically.** It has the most
-   explicit instruction in the prompt and ignores it. If instruction cannot
-   fix it, the options are a structural one — a second pass that asks only
-   "does this text report the outcome the claim asserts?" — or accepting it
-   and relying on human review of `CLAIM_EVIDENCE` proposals.
-3. **Watch REFINES for further erosion.** One regression may be noise across a
-   single run; two would be a pattern.
-4. **Repeat runs for variance.** Still one observation per prompt version, and
-   the whole 0.76 → 0.86 delta is 2 cases.
-5. **Keep contradiction detection human-routed.** The false-positive rate did
-   not move.
+1. **Stop tuning the prompt for this class.** Near and far scored the same,
+   which is what it looks like when instruction is not the binding
+   constraint. A third pass of cue-writing has no evidence behind it.
+2. **Try the structural fix instead.** A second, single-question pass over any
+   assessment returning SUPPORTS or REFINES — *"does this passage report the
+   outcome, measurement, or comparison the claim asserts?"* — demoting to
+   INSUFFICIENT_EVIDENCE on a no. It targets the three-in-five failure
+   directly, costs one extra call on the assertive path only, and is
+   measurable on both sets. This is the next thing worth building.
+3. **Consider reverting the boundary-condition language in 0.2.0.** It is the
+   confirmed cause of two REFINES failures and bought little measurable
+   elsewhere.
+4. **Repeat runs for variance.** Still one observation per prompt version per
+   set.
+5. **Keep contradiction detection human-routed.** Nothing measured has
+   changed that.

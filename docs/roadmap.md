@@ -240,10 +240,13 @@ with a real model**, and populate the graph at corpus scale.
       Two models on one hosted provider is the comparison available; a local
       row would be a different instrument and is not required to close this.
 - [x] False-positive conflict rate measured — **2 of 18 non-conflict cases,
-      11.1%**, and *unchanged* by the 0.2.0 prompt fix that took overall
+      11.1%** on the fitted set, *unchanged* by the 0.2.0 prompt fix that took
       classification 0.76 → 0.86: one false conflict was fixed and a different
-      one created. Originally both were INSUFFICIENT_EVIDENCE misread as
-      POTENTIAL_CONFLICT; now one is a REFINES case that regressed.
+      one created. **1 of 16 (6.2%) on the held-out set**, where the REFINES
+      regression reproduced on a fresh case, confirming it as behaviour rather
+      than noise. Held-out also showed cases the prompt cues describe and cases
+      they do not scoring identically (3/5 each), so prompt instruction is not
+      the binding constraint on this class.
       Conflict recall 2/3; the miss absorbed a contrary finding as a REFINES,
       which is the costlier direction since a refinement supersedes without a
       human looking. **Not** judged acceptable for promoting
