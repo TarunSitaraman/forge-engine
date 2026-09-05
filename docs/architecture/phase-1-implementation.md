@@ -1,8 +1,8 @@
-# Phase 1 — Implementation Architecture
+# Phase 1: Implementation Architecture
 
 *What was actually built, how it behaves, and where the extension points are. Describes the implementation as it exists, not as it was planned.*
 
-**Status:** implemented · **Tests:** 243 passing, 95% coverage · **LLM required:** no
+**Status:** implemented, **Tests:** 243 passing, 95% coverage, **LLM required:** no
 
 ---
 
@@ -21,8 +21,8 @@ The canonical knowledge foundation. Concretely:
 
 **Not** in Phase 1: concept extraction, claim extraction, embeddings,
 retrieval, graph queries, contradiction detection, LangGraph workflows.
-Those are Phases 2–5. The store has `concepts` and `claims` tables and
-they are deliberately empty after indexing — a fact asserted by
+Those are Phases 2-5. The store has `concepts` and `claims` tables and
+they are deliberately empty after indexing, a fact asserted by
 `test_no_claims_are_created_during_indexing`.
 
 ---
@@ -59,7 +59,7 @@ engine/forge/
 
 **The dependency rule:** `domain/` imports nothing from `storage/`,
 `llm/`, or `corpus/`. `corpus/` cannot reach `llm/`. That second one is
-not a convention — it is why "indexing makes zero LLM calls" is a
+not a convention. It is why "indexing makes zero LLM calls" is a
 structural property rather than a promise.
 
 ---
@@ -86,7 +86,7 @@ Nine entities, exactly as approved. `Contradiction`, `Synthesis`,
 Re-indexing an unchanged vault must produce a byte-identical index. Random
 ids make that impossible. Every id derived from corpus content is a
 BLAKE2b digest over namespaced parts, with `\x00` separators so
-`("a","bc")` cannot collide with `("ab","c")` — a test asserts exactly that.
+`("a","bc")` cannot collide with `("ab","c")`: a test asserts exactly that.
 
 ### Content hashing normalizes line endings
 
@@ -96,7 +96,7 @@ depending on the checkout and every file reads as modified.
 
 ---
 
-## 4. Provenance — how enforcement works
+## 4. Provenance: how enforcement works
 
 Five tiers, with an explicit strength ordering in `enums.TIER_STRENGTH`:
 
@@ -128,7 +128,7 @@ Provenance(
 
 Three further rules ride along in the same validator:
 
-1. `derivation=MODEL` requires a `model_id` — unattributable model output
+1. `derivation=MODEL` requires a `model_id`, unattributable model output
    is not storable.
 2. `derivation=DETERMINISTIC` must **not** carry a `model_id`.
 3. `derivation=MODEL` can never produce `SOURCE_FACT`.
@@ -144,10 +144,10 @@ separately catchable. There is a test asserting it is *not* a
 ### Two more places the rules are structural
 
 - **`EvidenceRelation.QUOTES` cannot be model-derived.** A quote asserts
-  verbatim text — a deterministic check. A model claiming it cannot be
+  verbatim text, a deterministic check. A model claiming it cannot be
   trusted to be verbatim.
 - **Semantic link types cannot be deterministic.** `SUPPORTS`,
-  `CONTRADICTS`, `REFINES`, `PART_OF`, … require judgement, so
+  `CONTRADICTS`, `REFINES`, `PART_OF`, ... require judgement, so
   `Derivation.DETERMINISTIC` is rejected for them. Only `MENTIONS`,
   `DERIVED_FROM`, `PRECEDES`, `RELATED_TO`, `ABOUT` may be asserted by
   ordinary code. This makes Principle 7 checkable rather than cultural.
@@ -175,12 +175,12 @@ it invalidated. Revisions are frozen.
 `SUPERSEDED`, sets `superseded_by` and `valid_to`, keeps its statement
 verbatim, writes a `SUPERSEDE` revision holding both states, and writes a
 `CREATE` revision for the replacement. Deleting a source likewise writes an
-`INVALIDATE` revision carrying the prior state — history survives deletion.
+`INVALIDATE` revision carrying the prior state, history survives deletion.
 
 Ordering uses a monotonic `seq` column, not timestamps: two revisions
 written in the same millisecond must still be totally ordered.
 
-Storage-agnostic by construction — a `Revision` is a plain record of
+Storage-agnostic by construction, a `Revision` is a plain record of
 `(entity, op, before, after, cause)`. Nothing about it presumes a graph
 database.
 
@@ -191,7 +191,7 @@ database.
 ### Code-fence masking (the hazard that matters)
 
 The corpus contains 555 fenced code blocks, many with Python literals like
-`[[0,1],[1,0]]`. A naive wikilink regex reads those as links — the Phase 0
+`[[0,1],[1,0]]`. A naive wikilink regex reads those as links, the Phase 0
 audit's first pass did exactly that.
 
 `mask_code` blanks fenced blocks and inline code **while preserving line
@@ -214,8 +214,8 @@ Phase 0 characterized two. Implementation found a third.
 `FM008` is new. The final wikilink is missing one closing bracket, which is
 why those 18 files initially had *no* verified repair: the extractor
 requires `]]` and the leftover `]` tripped the residue check that prevents
-lossy rewrites. Handling it explicitly — rather than loosening the residue
-check — keeps the safety property and makes the defect visible as its own
+lossy rewrites. Handling it explicitly, rather than loosening the residue
+check, keeps the safety property and makes the defect visible as its own
 class.
 
 **Nothing is repaired automatically.** Proposals are generated, applied
@@ -223,7 +223,7 @@ class.
 parses to a mapping with no nested-list values. Files on disk are untouched
 (ADR-001 D2).
 
-A repair is refused when wikilinks do not account for the whole value —
+A repair is refused when wikilinks do not account for the whole value,
 a mechanical rewrite could silently drop mixed-in content.
 
 ### Reading broken metadata without repairing it
@@ -244,7 +244,7 @@ normalized (rename) → close matches as *candidates*.
 **Ambiguity is never resolved by guessing.** Where several files share a
 stem, status is `AMBIGUOUS`, `resolved_path` is `None`, and all candidates
 are reported. This matters because the real corpus has three genuine
-collisions — `Heap`, `Binary Search`, `Trie` — each existing as both a
+collisions, `Heap`, `Binary Search`, `Trie`: each existing as both a
 pattern and an algorithm/data-structure, accounting for **180 of the 282
 unresolved link occurrences**. That is a measured violation of the vault's
 own "one canonical home per concept" rule, and picking a side on the user's
@@ -274,7 +274,7 @@ file cannot abort a 629-file run.
 
 `detect_changes` compares `{path: content_hash}` against the store and
 classifies each source `NEW` / `MODIFIED` / `UNCHANGED` / `DELETED`.
-`requires_processing` is `new + modified` — when it is empty, there is
+`requires_processing` is `new + modified`, when it is empty, there is
 provably no work, and therefore no model calls.
 
 ### Spans
@@ -326,8 +326,8 @@ Nothing above `llm/` names a provider. Configuration binds **roles**
 (`extraction`, `analysis`, `resolution`, `synthesis`) to models; code asks
 for a role. All four roles must be bound or configuration fails at startup.
 
-- **`MockProvider`** — deterministic, offline, the CI default.
-- **`OllamaProvider`** — local HTTP, no key, no account. Structured output
+- **`MockProvider`.** Deterministic, offline, the CI default.
+- **`OllamaProvider`.** Local HTTP, no key, no account. Structured output
   uses Ollama's `format` parameter, with one bounded repair retry that
   feeds the model its own invalid output plus the validation error, then a
   hard failure.
@@ -349,7 +349,7 @@ is running" and "the model answered badly" need different fixes.
 | New source type (PDF, repo, web) | Add a parser; `Source.kind` already enumerates them |
 | Embeddings | `EmbeddingProvider` alongside `LLMProvider`; `Span.embedding_ref` reserved |
 | Vector store | New protocol in `storage/base.py` |
-| Graph store | Implement `KnowledgeStore` — nothing upstream changes |
+| Graph store | Implement `KnowledgeStore`, nothing upstream changes |
 | Concept extraction | Write into `concepts`/`claims`; tables and validation exist |
 | LangGraph workflows | `Provenance.workflow_run_id` and `Revision.workflow_run_id` are already threaded |
 | Contradiction/Synthesis | New entities; the tier ordering already supports them |
@@ -358,8 +358,8 @@ is running" and "the model answered badly" need different fixes.
 
 ## Related
 
-- [CLI usage](../cli.md) · [Test strategy](../test-strategy.md)
+- [CLI usage](../cli.md), [Test strategy](../test-strategy.md)
 - [Canonical knowledge model](../knowledge-model/canonical-model.md)
-- [Target architecture](./target-architecture.md) · [Technology decisions](./technology-decisions.md)
+- [Target architecture](./target-architecture.md), [Technology decisions](./technology-decisions.md)
 - [ADR-001](../decisions/001-forge-knowledge-os.md)
 - [Local model capability spike](../research/local-model-capability-spike.md)

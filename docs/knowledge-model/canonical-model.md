@@ -1,8 +1,8 @@
-# Forge — Canonical Knowledge Model
+# Forge: Canonical Knowledge Model
 
-*Proposed entity/relationship model for the Forge Knowledge OS. This is a proposal for review, not a frozen schema — §9 lists what still needs a human decision.*
+*Proposed entity/relationship model for the Forge Knowledge OS. This is a proposal for review, not a frozen schema: §9 lists what still needs a human decision.*
 
-**Status:** proposed · **Supersedes:** nothing · **Blocks:** all Phase-1 implementation
+**Status:** proposed, **Supersedes:** nothing, **Blocks:** all Phase-1 implementation
 
 ---
 
@@ -23,7 +23,7 @@ apply these rather than adding an entity.
 The brief's 19-entity list is the requirements input. Applying R3 and R4
 reduces it to **9 entities for Phase 1**, with the rest either derived,
 reified as edges, or deferred with their semantics reserved. Nothing in
-the brief's list is dropped — §7 maps each one.
+the brief's list is dropped, §7 maps each one.
 
 ---
 
@@ -37,9 +37,9 @@ The origin of information. Stable identity, independent of parsing.
 |---|---|---|
 | `id` | ULID | |
 | `kind` | enum | `pdf`, `markdown`, `repo`, `web`, `code`, `dataset`, `manual` |
-| `locator` | string | path, URL, or repo ref — canonicalized |
+| `locator` | string | path, URL, or repo ref, canonicalized |
 | `content_hash` | sha256 | **deterministic**; the dedup and change-detection key |
-| `title`, `authors`, `published_at` | — | extracted deterministically where the format allows |
+| `title`, `authors`, `published_at` | - | extracted deterministically where the format allows |
 | `ingested_at`, `last_seen_at` | timestamp | |
 | `trust_tier` | enum | see §4.3 |
 
@@ -58,7 +58,7 @@ version) without losing its identity or its prior parse.
 
 ### 2.3 `Span`
 
-A located region of a `Document`. **The atom of provenance** — the
+A located region of a `Document`. **The atom of provenance**, the
 thing Principle 4's "which section/page/chunk" resolves to.
 
 `id`, `document_id`, `locator` (page/char-offset/heading-path/line
@@ -79,13 +79,13 @@ descendant of the existing vault's "one canonical home per concept" rule.
 | Field | Type | Notes |
 |---|---|---|
 | `id` | ULID | |
-| `canonical_name` | string | one per concept — the invariant the vault maintains by hand |
+| `canonical_name` | string | one per concept, the invariant the vault maintains by hand |
 | `aliases` | string[] | drives deterministic match before any LLM call |
 | `kind` | enum | `concept`, `technology`, `pattern`, `algorithm`, `data_structure`, `project`, `person`, `experiment`, `decision`, `topic` |
 | `definition` | text | short; itself a `Claim` in strict terms (§9, Q3) |
-| `embedding_ref` | — | for similarity-based resolution |
+| `embedding_ref` | - | for similarity-based resolution |
 | `vault_path` | string? | link back to the canonical Markdown file, when one exists |
-| `created_at`, `updated_at`, `confidence` | — | |
+| `created_at`, `updated_at`, `confidence` | - | |
 
 `kind` exists so that `Technology`, `Project`, `Person`, `Experiment`,
 and `Decision` need no separate tables (R4) while remaining queryable
@@ -93,7 +93,7 @@ and separately constrainable later.
 
 ### 2.5 `Claim`
 
-An assertable statement. **The unit of understanding** — the thing that
+An assertable statement. **The unit of understanding**, the thing that
 can be supported, contradicted, refined, superseded, or doubted.
 
 | Field | Type | Notes |
@@ -101,11 +101,11 @@ can be supported, contradicted, refined, superseded, or doubted.
 | `id` | ULID | |
 | `statement` | text | normalized, single-assertion |
 | `subject_concept_id` | FK | primary concept |
-| `tier` | enum | provenance tier (§4) — **required** |
-| `confidence` | float 0–1 | §4.4 |
+| `tier` | enum | provenance tier (§4), **required** |
+| `confidence` | float 0-1 | §4.4 |
 | `status` | enum | `active`, `superseded`, `retracted`, `disputed` |
 | `derivation` | enum | `deterministic` \| `model` (R6) |
-| `extractor` / `model_id` / `prompt_version` | — | required when `derivation = model` |
+| `extractor` / `model_id` / `prompt_version` | - | required when `derivation = model` |
 | `valid_from`, `valid_to` | timestamp | supersession window, not deletion |
 | `created_at` | timestamp | |
 
@@ -121,7 +121,7 @@ mechanical enforcement of Principle 10.
 `infers_from`), `extractor`, `model_id?`, `confidence`, `created_at`.
 
 `relation` is what distinguishes "the source says this" from "a model
-concluded this from the source" at the level of individual evidence —
+concluded this from the source" at the level of individual evidence,
 finer-grained than the claim's own tier, and the reason quoting can
 never be confused with inference.
 
@@ -135,7 +135,7 @@ never be confused with inference.
 
 ### 2.8 `Provenance` (embedded record)
 
-Not a standalone table — an embedded, immutable record attached to every
+Not a standalone table, an embedded, immutable record attached to every
 assertable object (`Claim`, `ClaimLink`, `EvidenceLink`, `Synthesis`):
 
 ```
@@ -157,12 +157,12 @@ The append-only history spine, and the brief's `TimelineEvent`.
 
 **This is what makes "what changed in my understanding this month?"
 answerable.** It is Phase 1 because it cannot be reconstructed
-retroactively — a system that starts logging changes in Phase 9 has no
-history for Phases 1–8.
+retroactively, a system that starts logging changes in Phase 9 has no
+history for Phases 1-8.
 
 ---
 
-## 3. Extended entities (Phase 4–5)
+## 3. Extended entities (Phase 4-5)
 
 ### `Contradiction` (reified, first-class)
 
@@ -178,7 +178,7 @@ a field is a valid terminal state, not a bug (Principle 12).
 
 ### `Synthesis`
 
-A generated aggregate over claims — the highest-risk object in the
+A generated aggregate over claims, the highest-risk object in the
 model, since it is the one most likely to be mistaken for evidence.
 
 `id`, `scope` (concept/question/topic), `body` (Markdown),
@@ -188,7 +188,7 @@ model, since it is the one most likely to be mistaken for evidence.
 **Invariant:** a `Synthesis` is `stale = true` the moment any
 constituent claim changes status or confidence. Staleness is computed
 deterministically by graph traversal, never by an LLM. This is the
-brief's "does this make an existing synthesis outdated?" — answered by
+brief's "does this make an existing synthesis outdated?", answered by
 software, not judgment.
 
 ---
@@ -219,7 +219,7 @@ is the only tier that may exist without an `EvidenceLink`.
 Inference over extracted claims is `MODEL_INFERENCE`, never
 `SOURCE_FACT`. Synthesis over inferences is `SYNTHESIS`. Checked
 deterministically at write time. This one rule is what structurally
-prevents generated content from laundering itself into evidence — the
+prevents generated content from laundering itself into evidence, the
 failure mode Principle 10 exists to forbid.
 
 ### 4.3 Source trust tiers
@@ -251,7 +251,7 @@ one.
 
 ## 5. Relationship vocabulary
 
-Domain and range are constrained — this is what prevents the graph
+Domain and range are constrained. This is what prevents the graph
 becoming an untyped mesh.
 
 ### Concept ↔ Concept (structural)
@@ -270,10 +270,10 @@ becoming an untyped mesh.
 > graph fills with noise until the graph means nothing. Constraint: it
 > may only be created by similarity above a tuned threshold, must carry
 > its similarity score, is excluded from reasoning traversals by
-> default, and is a candidate for promotion to a specific type — never a
+> default, and is a candidate for promotion to a specific type: never a
 > fallback for "the model wasn't sure."
 
-### Claim ↔ Claim (epistemic — always via `ClaimLink`)
+### Claim ↔ Claim (epistemic: always via `ClaimLink`)
 
 | Type | Meaning |
 |---|---|
@@ -285,9 +285,7 @@ becoming an untyped mesh.
 
 ### Cross-type
 
-`MENTIONS` (Span → Concept, deterministic: alias/NER match) ·
-`EVIDENCED_BY` (Claim → Span, §2.6) · `ABOUT` (Claim → Concept) ·
-`ANSWERS` (Claim → Question, Phase 9)
+`MENTIONS` (Span → Concept, deterministic: alias/NER match), `EVIDENCED_BY` (Claim → Span, §2.6), `ABOUT` (Claim → Concept), `ANSWERS` (Claim → Question, Phase 9)
 
 ### Determinism split (Principle 7, made concrete)
 
@@ -299,24 +297,24 @@ Roughly half the edge vocabulary needs no LLM at all.
 
 ---
 
-## 6. Deferred entities (Phase 9 — semantics reserved now)
+## 6. Deferred entities (Phase 9: semantics reserved now)
 
 Defined here so Phase-1 tables don't preclude them; not populated yet.
 
-- **`Question`** — a research question with `status` (`open` |
+- **`Question`.** A research question with `status` (`open` |
   `partially_answered` | `answered`). Answered *by claims*, which is why
   claims must be first-class first.
-- **`KnowledgeGap`** — a *derived* observation (concept with no claims;
+- **`KnowledgeGap`.** A *derived* observation (concept with no claims;
   question with no answering claims; claim with only one source;
   contradiction unresolved past a threshold). Computed by deterministic
   graph queries, not generated.
-- **`Topic`** — a *derived cluster* of concepts, not a hand-maintained
+- **`Topic`.** A *derived cluster* of concepts, not a hand-maintained
   taxonomy. Not an entity in Phase 1 (R4); reintroduced as a
   materialized view if clustering proves useful.
-- **`Insight`** — deliberately **not** a separate entity. An insight is
+- **`Insight`.** Deliberately **not** a separate entity. An insight is
   a `Claim` with `tier ∈ {MODEL_INFERENCE, SYNTHESIS}` and high
   salience. Making it separate would create a second, parallel truth
-  path that escapes claim-level provenance rules — precisely what R1
+  path that escapes claim-level provenance rules: precisely what R1
   forbids.
 
 ---
@@ -331,7 +329,7 @@ Defined here so Phase-1 tables don't preclude them; not populated yet.
 | Project, Person, Technology, Experiment, Decision | `Concept.kind` values (R4) |
 | Insight | `Claim` + tier + salience |
 | TimelineEvent | `Revision` event log |
-| *(added)* | **`Span`** — required for real provenance |
+| *(added)* | **`Span`**, required for real provenance |
 
 ---
 
@@ -342,17 +340,17 @@ How the 620 existing files enter the model on first ingest.
 | Vault content | Maps to |
 |---|---|
 | Any `.md` file | `Source(kind=markdown, trust_tier=user_authored)` + `Document` |
-| Heading section | `Span` (structure-aware chunking — headings are already highly regular, see audit §4.3) |
+| Heading section | `Span` (structure-aware chunking, headings are already highly regular, see audit §4.3) |
 | `DSA/01_Patterns/*.md` | `Concept(kind=pattern)`, `canonical_name` = filename stem |
 | `DSA/02_Algorithms/`, `03_DataStructures/` | `Concept(kind=algorithm | data_structure)` |
 | `Technologies/Docs/*.md` | `Concept(kind=technology)` + claims at `USER_ASSERTION` |
 | `Projects/*/` | `Concept(kind=project)` + pack docs as sources |
 | `Technologies/Templates/`, `Playbooks/`, `Prompt-Library/` | Sources; **not** concept-bearing (procedures, not assertions) |
-| `Resources/*.md` | Pointers to *external* sources — seeds `Source` rows to ingest later |
+| `Resources/*.md` | Pointers to *external* sources, seeds `Source` rows to ingest later |
 | Wikilink `[[X]]` | `MENTIONS` → resolve to `Concept` by `canonical_name`/alias |
-| Frontmatter `related:` | `RELATED_TO` — **only after the §6.2 repair in the audit**; currently unparseable in all 283 files |
+| Frontmatter `related:` | `RELATED_TO`, **only after the §6.2 repair in the audit**; currently unparseable in all 283 files |
 | Frontmatter `tags:` | `Concept.aliases` / kind hints |
-| Frontmatter `canonical: true` | Asserts this file is the canonical home — a direct, pre-existing statement of the invariant |
+| Frontmatter `canonical: true` | Asserts this file is the canonical home, a direct, pre-existing statement of the invariant |
 | Git history | `Revision` seed (`created_at`, authorship) |
 
 **Two consequences worth stating plainly:**
@@ -369,11 +367,11 @@ How the 620 existing files enter the model on first ingest.
 
 ---
 
-## 9. Open questions — human decision required
+## 9. Open questions: human decision required
 
 Marked open rather than guessed.
 
-**Q1 — Claim granularity.** How atomic? "RAG reduces hallucination" vs
+**Q1, Claim granularity.** How atomic? "RAG reduces hallucination" vs
 "RAG reduces hallucination *in open-domain QA* by grounding generation
 in retrieved passages." Too atomic → explosion and lost context. Too
 coarse → claims that are partly supported and partly contradicted, which
@@ -381,33 +379,33 @@ breaks the whole epistemic layer. *Recommendation: single-assertion,
 context-preserving, with the source span always attached; tune against
 the DSA corpus before locking.*
 
-**Q2 — Concept identity across scale.** Is "attention" in a transformer
+**Q2, Concept identity across scale.** Is "attention" in a transformer
 paper the same concept as "attention" in a UX note? Recommend
 embedding-similarity + alias match with a **human confirmation step for
-merges above a threshold** — merges are destructive-ish and must be
+merges above a threshold**, merges are destructive-ish and must be
 reviewable (Principle 11).
 
-**Q3 — Is `Concept.definition` a field or a claim?** Strictly it is a
+**Q3, Is `Concept.definition` a field or a claim?** Strictly it is a
 claim and should carry provenance. Pragmatically a denormalized field is
 much easier to query. *Recommendation: field that is a
-`current_definition_claim_id` pointer — keeps provenance, keeps
+`current_definition_claim_id` pointer, keeps provenance, keeps
 queryability.*
 
-**Q4 — Confidence arithmetic.** Any principled aggregation (Bayesian,
+**Q4, Confidence arithmetic.** Any principled aggregation (Bayesian,
 Dempster-Shafer) rests on independence assumptions that are false here.
 *Recommendation: no arithmetic in Phase 1. Store evidence counts by
 tier and show them. An honest count beats a fabricated posterior.*
 
-**Q5 — Does the vault get written back to?** Determines whether
+**Q5, Does the vault get written back to?** Determines whether
 `Concept.vault_path` is read-only or bidirectional. **Blocks
-implementation** — see [ADR-001](../decisions/001-forge-knowledge-os.md).
+implementation**, see [ADR-001](../decisions/001-forge-knowledge-os.md).
 
-**Q6 — Contradiction sensitivity.** Aggressive detection produces false
+**Q6, Contradiction sensitivity.** Aggressive detection produces false
 positives that erode trust faster than missed contradictions do. Needs a
-labeled evaluation set before tuning — the existing corpus can provide
+labeled evaluation set before tuning, the existing corpus can provide
 one, since it certainly contains real internal disagreements.
 
-**Q7 — Namespaced vocabularies.** Audit §6.5 found two conflicting
+**Q7, Namespaced vocabularies.** Audit §6.5 found two conflicting
 convention systems in the vault. Should `Concept.kind` and tags be
 global or per-namespace? *Recommendation: per-namespace, because it
 requires no content rewriting.*
@@ -416,7 +414,7 @@ requires no content rewriting.*
 
 ## Related
 
-- [Current-state audit](../architecture/forge-current-state.md) — §6.2 (frontmatter repair), §8 (open decisions)
+- [Current-state audit](../architecture/forge-current-state.md), §6.2 (frontmatter repair), §8 (open decisions)
 - [Target architecture](../architecture/target-architecture.md)
 - [ADR-001](../decisions/001-forge-knowledge-os.md)
 - [Roadmap](../roadmap.md)

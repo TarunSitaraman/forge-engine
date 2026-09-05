@@ -5,12 +5,12 @@
 `openai/gpt-oss-120b` served by Groq. Every number here came out of that run.*
 
 **Headline: the pipeline's safety properties hold perfectly. The model's
-judgement does not, and it fails in one specific place — it cannot reliably
+judgement does not, and it fails in one specific place. It cannot reliably
 tell that evidence is insufficient.**
 
 *Updated 2026-09-05, and the update is a retraction. §10: re-running the
 fitted set against the same model, the same prompt and the same command scored
-**15/21 where §7 had measured 18/21** — and the three cases that differed were
+**15/21 where §7 had measured 18/21**, and the three cases that differed were
 exactly the three §7 credited a prompt revision with fixing. **The 0.76 → 0.86
 gain is withdrawn, along with every per-class movement resting on it.** A
 single run on this set carries a spread of at least three cases, which is wider
@@ -21,7 +21,7 @@ both sets**; INSUFFICIENT_EVIDENCE as the consistently weakest class; and one
 case, `insufficient-mechanism-without-outcome`, that has returned SUPPORTS in
 every run recorded here despite a cue, a dedicated rule, and a structural
 check written against it. §8's finding that cues conferred no advantage on the
-cases they describe (3/5 each, near and far) also survives — it is an argument
+cases they describe (3/5 each, near and far) also survives. It is an argument
 from no difference, which noise cannot manufacture.*
 
 *Earlier updates, now read in that light. §7: a prompt fix appeared to take
@@ -45,12 +45,12 @@ never worked at all.***
 | Latency | 8,038 ms/case |
 
 Validity and grounding at 1.00 are the load-bearing results. Every response
-parsed against the schema, and **not one citation was invented** — each
+parsed against the schema, and **not one citation was invented**: each
 resolved to a span id actually in the store. The guard that rejects ungrounded
 output never had to fire, which is the outcome it was built for.
 
 Latency is inflated by Groq free-tier rate limiting: the run hit HTTP 429
-repeatedly and the client's backoff absorbed it, sleeping 1–12 s between
+repeatedly and the client's backoff absorbed it, sleeping 1-12 s between
 attempts. Retries succeeded every time. The figure is throughput under a free
 tier, not model speed.
 
@@ -85,7 +85,7 @@ declining. Each of the four failures picks a different neighbour:
 without establishing an outcome was read as support for the outcome, and the
 pipeline duly produced a `CLAIM_EVIDENCE` proposal. That is the shape of
 error that adds a wrong belief to a knowledge base rather than merely failing
-to add a right one — and it is exactly what a provenance floor cannot catch,
+to add a right one, and it is exactly what a provenance floor cannot catch,
 because the citation is real and the quote is genuinely in the span. The
 reasoning is what is wrong.
 
@@ -97,15 +97,15 @@ encouraging and is not a rate."*
 
 Now it is a rate:
 
-- **False-positive conflicts: 2 of 18 non-conflict cases — 11.1%.**
+- **False-positive conflicts: 2 of 18 non-conflict cases, 11.1%.**
   Both are INSUFFICIENT_EVIDENCE cases misread as POTENTIAL_CONFLICT.
-- **Conflict recall: 2 of 3 — 67%.** `conflict-contrary-finding` was missed,
+- **Conflict recall: 2 of 3, 67%.** `conflict-contrary-finding` was missed,
   classified REFINES: a contrary finding was absorbed as a refinement rather
   than flagged as a disagreement.
 
 Both errors matter, and they are not symmetric in cost. A false positive costs
-a human a review of something that was never a conflict. A false negative —
-the missed contrary finding — means a claim was quietly *refined* by evidence
+a human a review of something that was never a conflict. A false negative,
+the missed contrary finding, means a claim was quietly *refined* by evidence
 that actually contradicts it. Under Phase 4's design a conflict routes to a
 human and a refinement supersedes non-destructively, so the miss is the one
 that changes stored knowledge without anyone looking.
@@ -138,27 +138,27 @@ wrong is most expensive."
   use; current work runs against Groq. The two runs use different sets (5 vs
   21 cases) as well as different models, so they are not comparable and are
   not presented as a pair. Should a local row ever be wanted, the standing
-  rule holds: separate rows, never averaged — they are different
+  rule holds: separate rows, never averaged. They are different
   instruments.
 
 ## 6. The prompt had three defects, and they map onto the four failures
 
 Reading `ASSESSMENT_INSTRUCTION` after the run, the failures are not mysterious:
 
-1. **INSUFFICIENT_EVIDENCE had the thinnest definition of any class** — one
+1. **INSUFFICIENT_EVIDENCE had the thinnest definition of any class.** One
    line, *"the new evidence touches the topic but does not say enough to
    judge"*, with no recognisable cues. Every other class got richer guidance.
    A class the model cannot recognise is a class it will not reach for.
 2. **The tie-breaks were asymmetric and pointed the wrong way.** There was a
    SUPPORTS/REFINES rule biasing toward SUPPORTS, and *no* SUPPORTS /
-   INSUFFICIENT_EVIDENCE rule at all — which is precisely the
+   INSUFFICIENT_EVIDENCE rule at all: which is precisely the
    `mechanism-without-outcome → SUPPORTS` failure.
 3. **Nothing distinguished IRRELEVANT from INSUFFICIENT_EVIDENCE.** Both
-   produce no proposal, so no pressure existed to tell them apart — which is
+   produce no proposal, so no pressure existed to tell them apart: which is
    how an on-topic anecdote became IRRELEVANT.
 
-Note the one rule that *did* exist — *"if you are unsure whether something
-conflicts, choose INSUFFICIENT_EVIDENCE rather than POTENTIAL_CONFLICT"* — was
+Note the one rule that *did* exist, *"if you are unsure whether something
+conflicts, choose INSUFFICIENT_EVIDENCE rather than POTENTIAL_CONFLICT"*: was
 ignored twice. Restating a tie-break is not enough; the class needed positive
 cues, not just a preference.
 
@@ -178,11 +178,11 @@ better at recognising insufficient evidence". The cues were deliberately
 written as general epistemic categories rather than case-specific patches, but
 that mitigates the problem; it does not remove it.
 
-An honest confirmation needs held-out cases — new INSUFFICIENT_EVIDENCE cases
+An honest confirmation needs held-out cases, new INSUFFICIENT_EVIDENCE cases
 written without reference to the failures above. Until then the post-fix
 number is a check that the change did something, not evidence of quality.
 
-## 7. Re-run on `assess-prompts/0.2.0` — the number moved, the rate did not
+## 7. Re-run on `assess-prompts/0.2.0`: the number moved, the rate did not
 
 *Run 2026-09-04, same 21 cases, same model, same command.*
 
@@ -198,25 +198,25 @@ Per class:
 
 | Class | 0.1.0 | 0.2.0 | |
 |---|---:|---:|---|
-| SUPPORTS | 4/4 | 4/4 | — |
-| IRRELEVANT | 5/5 | 5/5 | — |
+| SUPPORTS | 4/4 | 4/4 | - |
+| IRRELEVANT | 5/5 | 5/5 | - |
 | POTENTIAL_CONFLICT | 2/3 | **3/3** | improved |
 | INSUFFICIENT_EVIDENCE | 2/6 | **4/6** | improved |
 | **REFINES** | **3/3** | **2/3** | **regressed** |
 
 Three cases fixed, one broken, two unmoved:
 
-- **fixed** — `conflict-contrary-finding`, `insufficient-partial-overlap`,
+- **fixed**, `conflict-contrary-finding`, `insufficient-partial-overlap`,
   `insufficient-anecdote-without-comparison`
-- **broken** — `refines-narrows-scope`, which passed before and now returns
+- **broken**: `refines-narrows-scope`, which passed before and now returns
   POTENTIAL_CONFLICT
-- **unmoved** — `insufficient-different-population`,
+- **unmoved**, `insufficient-different-population`,
   `insufficient-mechanism-without-outcome`
 
 ### Four things the headline hides
 
 **1. The false-positive conflict rate did not improve. It relocated.**
-2 of 18 before, 2 of 18 after — identical. `insufficient-partial-overlap`
+2 of 18 before, 2 of 18 after: identical. `insufficient-partial-overlap`
 stopped being a false conflict and `refines-narrows-scope` started being one.
 The metric that Phase 5 actually gates on is unchanged, and a reader looking
 only at 0.76 → 0.86 would conclude otherwise.
@@ -224,7 +224,7 @@ only at 0.76 → 0.86 would conclude otherwise.
 **2. A case that passed now fails.** Prompt edits are not local. The cues
 added for INSUFFICIENT_EVIDENCE include *"reports on a different population,
 system, version, or setting"*, and narrowing a claim's scope is structurally
-that — so a REFINES case now reads as a mismatch and escalates to conflict.
+that, so a REFINES case now reads as a mismatch and escalates to conflict.
 Strengthening one class degraded its neighbour, which is precisely what a
 21-case set exists to catch and what a 5-case set could not have.
 
@@ -233,13 +233,13 @@ uncomfortable one. `insufficient-mechanism-without-outcome` has both a cue
 (*"describes a mechanism, plan, or process without reporting the outcome the
 claim is about"*) and a dedicated rule (*"If the evidence does not report the
 outcome, measurement, or comparison the claim asserts, choose
-INSUFFICIENT_EVIDENCE — not SUPPORTS"*). It still returns SUPPORTS.
+INSUFFICIENT_EVIDENCE: not SUPPORTS"*). It still returns SUPPORTS.
 `insufficient-different-population` is named almost verbatim in its cue and
 still returns POTENTIAL_CONFLICT.
 
 The three cases that *were* fixed had no such targeted instruction; they
 improved from the general framing. **Writing a more specific instruction did
-not produce a more reliable outcome — if anything the reverse.** That is
+not produce a more reliable outcome, if anything the reverse.** That is
 evidence against the reflex of adding another line to the prompt when a case
 fails.
 
@@ -251,7 +251,7 @@ belief into the knowledge base is the one the fix did not touch.
 ### How much of the gain is real
 
 The caveat from §6 stands and now has a size. Of the three fixed cases, all
-three were among those the cues were written against — so the honest reading
+three were among those the cues were written against, so the honest reading
 is that the prompt absorbed part of a known failure set, not that the model
 improved. Against that, two targeted cases resisted the fix and a fourth
 broke, which suggests the absorption is shallower than +0.10 implies.
@@ -263,7 +263,7 @@ rate held at 11.1%, and INSUFFICIENT_EVIDENCE remains the weakest class at
 ## 8. The held-out set
 
 `assessment-holdout-v1.yaml`, 18 cases, written 2026-09-04. Separate file, not
-appended — appending would destroy both instruments at once, making the fitted
+appended: appending would destroy both instruments at once, making the fitted
 score uninterpretable and the held-out score fitted.
 
 **The limitation this cannot remove:** its author had already read the
@@ -289,14 +289,14 @@ it can be passed by a prompt that generalised only slightly. Far-transfer
 cannot: correlation offered for a causal claim, an aggregate that hides the
 subgroup the claim names, a secondhand report of the claim rather than an
 observation, a term the evidence defines differently, and a direction
-confirmed where a magnitude was asserted — none appear in `assess-prompts`.
+confirmed where a magnitude was asserted: none appear in `assess-prompts`.
 
 16 of the 18 have a correct answer other than POTENTIAL_CONFLICT, so the
 false-positive conflict rate stays the headline number here as well.
 
 `tests/unit/test_holdout_set.py` guards the design structurally: no id or
-claim shared with the fitted set, the strata balance, and — the load-bearing
-one — that no far-transfer case has become described by a prompt cue. If a
+claim shared with the fitted set, the strata balance, and: the load-bearing
+one. That no far-transfer case has become described by a prompt cue. If a
 future cue names one of those five categories, that test fails and says the
 case must move to near-transfer with a replacement written.
 
@@ -316,14 +316,14 @@ case must move to near-transfer with a replacement written.
 real test. Near and far came out the same, to the case.**
 
 That equality is the finding. If the cues worked by giving the model five
-patterns to match, near-transfer — which shares its epistemic shape with a
-written cue — should have beaten far-transfer, which shares nothing. It did
+patterns to match, near-transfer: which shares its epistemic shape with a
+written cue: should have beaten far-transfer, which shares nothing. It did
 not, by any margin. **The cues conferred no measurable advantage on the cases
 they were written to describe.**
 
 Read alongside the fitted set that is fairly damning of the fix. On
 `assessment-v1` after 0.2.0, INSUFFICIENT_EVIDENCE was 4/6 (67%). Here it is
-6/10 (60%) — the same number within the noise of these sample sizes. **The
+6/10 (60%), the same number within the noise of these sample sizes. **The
 most economical explanation is that ~60% is this model's baseline on the class
 and the prompt moved it very little**, the +0.10 on the fitted set being two
 cases' worth of absorption plus a conflict flip rather than a capability
@@ -332,8 +332,8 @@ change.
 ### The regression is confirmed, not noise
 
 `ht-probe-refines-tightens-bound` returned POTENTIAL_CONFLICT. That case was
-written as a deliberate mirror of `refines-narrows-scope` — the case 0.2.0
-broke on the fitted set — in an unrelated domain. **It reproduced.** Two
+written as a deliberate mirror of `refines-narrows-scope`, the case 0.2.0
+broke on the fitted set, in an unrelated domain. **It reproduced.** Two
 independent cases, same shape, same wrong answer: 0.2.0 escalates a stated
 boundary condition to disagreement. The §7 note that one regression might be
 noise is settled; it is a behaviour.
@@ -346,33 +346,33 @@ establish, each producing a `CLAIM_EVIDENCE` proposal:
 | Case | Actual | What the passage actually said |
 |---|---|---|
 | `ht-near-single-incident` | SUPPORTS | One host, one evening, no baseline |
-| `ht-far-correlation-for-causal-claim` | SUPPORTS | An association — **and the passage states adoption was voluntary and self-selected** |
+| `ht-far-correlation-for-causal-claim` | SUPPORTS | An association, **and the passage states adoption was voluntary and self-selected** |
 | `ht-far-term-defined-differently` | SUPPORTS | **The passage defines the key term differently from the claim** |
 
 On the fitted set this shape was one failure in five. Here it is three in
 five. It is not an edge case; it is what this model does when evidence is
-on-topic and inconclusive. The last two are the striking ones — in both, the
+on-topic and inconclusive. The last two are the striking ones, in both, the
 passage explicitly contains the sentence that should have blocked the
 inference, and the model asserted support anyway.
 
 ### What did hold
 
 Validity and grounding stayed at **1.00 on a set the pipeline had never
-seen** — no malformed output, no invented citation, across 18 fresh cases in
+seen**, no malformed output, no invented citation, across 18 fresh cases in
 domains absent from the fitted set. The safety properties generalise; the
 judgement does not. That contrast is the clearest single statement this
 document can make about where the engineering is sound and where it is not.
 
 False-positive conflicts were **1/16 (6.2%)** and conflict recall 2/2. Both
-are small-n and should not be read as improvements over §7 — different cases,
+are small-n and should not be read as improvements over §7, different cases,
 not a fairer test of the same ones.
 
 
 ## 9. The structural check also failed, 2026-09-04
 
 Built `assess-prompts` out of the loop entirely: a second pass over any
-SUPPORTS or REFINES asking one question — *does this passage state the
-outcome, measurement, or comparison the claim asserts?* — demoting on a no,
+SUPPORTS or REFINES asking one question, *does this passage state the
+outcome, measurement, or comparison the claim asserts?*: demoting on a no,
 with the yes required to quote a sentence found in the evidence.
 
 Same held-out set, same model, with and against itself:
@@ -388,8 +388,8 @@ Same held-out set, same model, with and against itself:
 Its own behaviour, which is the more useful number:
 
 - 6 assertions examined, 2 demoted
-- **1 demotion correct, 1 wrong — 50% precision**
-- **1 of the 3 target failures caught — 33% recall**
+- **1 demotion correct, 1 wrong: 50% precision**
+- **1 of the 3 target failures caught: 33% recall**
 - `ht-near-single-incident` and `ht-far-correlation-for-causal-claim` were
   examined and **upheld**. Asked the narrow question directly, about a single
   incident with no baseline and about an explicitly self-selected
@@ -414,8 +414,8 @@ Off by default. A coin flip on whether a demotion is right does not earn a
 call per assertion.
 
 But the trade it makes is the cheaper one, and that is a real argument for
-turning it on deliberately. Dangerous failures — an assertion built from
-evidence that does not establish the claim — went **3 → 2**. It removed a
+turning it on deliberately. Dangerous failures, an assertion built from
+evidence that does not establish the claim, went **3 → 2**. It removed a
 `CLAIM_EVIDENCE` proposal derived from a passage that redefined the claim's
 key term, and paid for it by declining a legitimate REFINES. Wrong assertions
 write false beliefs into the graph; wrong declines only fail to write true
@@ -433,7 +433,7 @@ same.
 ## 10. The 0.2.0 gain did not reproduce, 2026-09-05
 
 *Same 21 cases, same model, same command, corroboration off, on
-`assess-prompts/0.3.0` — whose diff against 0.2.0 is the version string and an
+`assess-prompts/0.3.0`: whose diff against 0.2.0 is the version string and an
 appended block of corroboration constants. `SYSTEM` and the assessment
 instruction are byte-identical, so this is a re-run of §7, not a new condition.*
 
@@ -472,15 +472,15 @@ three cases on 21.
 Everything in this document argued from a one- or two-case delta, which is most
 of it:
 
-- §7's `0.76 → 0.86` — **withdrawn**. Within noise.
+- §7's `0.76 → 0.86`, **withdrawn**. Within noise.
 - §7's per-class movements (POTENTIAL_CONFLICT 2/3 → 3/3, INSUFFICIENT_EVIDENCE
-  2/6 → 4/6) — **withdrawn**. Both rest on the three unstable cases.
+  2/6 → 4/6): **withdrawn**. Both rest on the three unstable cases.
 - §9's "the structural check scored net zero, fixing one case and breaking
-  another" — the *net zero* stands as an observation, but "fixed
+  another": the *net zero* stands as an observation, but "fixed
   `ht-far-term-defined-differently`" and "broke
   `ht-probe-refines-adds-precondition`" are single-run flips and cannot be
   attributed to the check.
-- §8's near-transfer 3/5 vs far-transfer 3/5 equality — **survives**, because
+- §8's near-transfer 3/5 vs far-transfer 3/5 equality, **survives**, because
   it is an argument from *no difference*, which noise cannot manufacture. A
   spread this wide makes a real advantage harder to see, not easier, and none
   was there.
@@ -495,7 +495,7 @@ The properties measured as absolutes rather than deltas:
   set and 6/10 held out. Its rank is stable even though its value is not.
 - **The characteristic failure is asserting a relationship the passage does not
   report.** It appeared in every run, and `insufficient-mechanism-without-outcome`
-  has returned SUPPORTS on every single run recorded here — cued, instructed,
+  has returned SUPPORTS on every single run recorded here: cued, instructed,
   and structurally checked.
 
 That last one is the honest version of this document's thesis. Not "the model
@@ -521,7 +521,7 @@ python3 scripts/assessment_eval.py --provider cloud --model MODEL --repeat 3 --j
 **Re-run anything before believing it.** §10 is the precondition for every
 item below: a single run on this set carries a spread of at least three cases.
 
-1. **Do not write a fourth fix for this class.** Three failed — and §10 says
+1. **Do not write a fourth fix for this class.** Three failed, and §10 says
    the first one arguably never worked at all. The next honest move is a
    different model, not a different prompt or wrapper.
 2. **Try one stronger model on both sets** before concluding the task is
@@ -545,7 +545,7 @@ item below: a single run on this set carries a spread of at least three cases.
    ```
 
    The comparison step is not optional bookkeeping. **A model swap can score
-   identically and disagree on a third of the set** — that is exactly what the
+   identically and disagree on a third of the set**. That is exactly what the
    corroboration check did, 13/18 both ways while fixing one case and breaking
    another, and a headline delta showed none of it. `assessment_compare.py`
    prints the per-class table and names every case that moved in each
@@ -559,16 +559,16 @@ item below: a single run on this set carries a spread of at least three cases.
    The comparison to beat, `openai/gpt-oss-120b`: **0.86 fitted (18/21), 0.72
    held-out (13/18)**. But the headline is not the number to read. Read
    INSUFFICIENT_EVIDENCE, which sat at **4/6 fitted and 6/10 held-out** and did
-   not move on any variant tried — and within it the three held-out failures in
+   not move on any variant tried, and within it the three held-out failures in
    the table above, where the passage contains the sentence that should have
    blocked the inference and the model asserted SUPPORTS anyway. Those three are
    the test. A model that scores 0.80 overall while still asserting support from
    a self-selected sample has not fixed anything this document is about.
 3. **Design around it rather than through it.** Phase 4 already routes every
    proposal to a human. The measured position is that `CLAIM_EVIDENCE`
-   proposals in particular cannot be trusted unreviewed — which is an argument
+   proposals in particular cannot be trusted unreviewed, which is an argument
    for keeping that gate, not for removing it once accuracy "improves".
-4. ~~**Repeat runs for variance.**~~ Done — and it invalidated most of the
+4. ~~**Repeat runs for variance.**~~ Done, and it invalidated most of the
    deltas above. See §10. Left struck through rather than deleted because the
    warning was written before the measurement and turned out to be the most
    important line in the document.

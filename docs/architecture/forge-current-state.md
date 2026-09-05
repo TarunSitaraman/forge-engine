@@ -1,4 +1,4 @@
-# Forge — Current State Audit
+# Forge: Current State Audit
 
 *Factual audit of the Forge repository as it exists at commit `bb88c35`, performed 2026-08-12, before any Knowledge-OS implementation work. Every number here was measured against the filesystem, not copied from an existing doc.*
 
@@ -11,7 +11,7 @@
 There is no application code in this repository. No Python, no
 TypeScript, no `package.json`, no `pyproject.toml`, no Dockerfile, no
 CI configuration, no tests. The repository contains 620 Markdown files
-and one `.gitignore` — 621 files total, ~48,700 lines.
+and one `.gitignore`, 621 files total, ~48,700 lines.
 
 The "AI-maintained" property that Forge's philosophy claims is real but
 **entirely human-triggered and human-supervised**: it is implemented by
@@ -30,7 +30,7 @@ This has one very important consequence for the Knowledge-OS work:
 > `DSA/Validation Checklist.md`.
 
 The engine's job is to *mechanically enforce and scale* the invariants
-that 620 files currently maintain by discipline alone — and the audit
+that 620 files currently maintain by discipline alone, and the audit
 below shows that discipline has already measurably drifted.
 
 ---
@@ -47,7 +47,7 @@ below shows that discipline has already measurably drifted.
 | Build/CI/dependency manifests | **0** |
 | Tests | **0** |
 | Largest single file | `Projects/smartresq-project-handoff.md` (728 lines) |
-| Commits on `main` | 20+ (all `docs:` — no code has ever been committed) |
+| Commits on `main` | 20+ (all `docs:`, no code has ever been committed) |
 
 ### 2.2 Content distribution
 
@@ -61,7 +61,7 @@ below shows that discipline has already measurably drifted.
 | `Career/` | 11 | 688 | Career tooling |
 | `Resources/` | 12 | 415 | Curated external links |
 | `Systems/` | 1 | 42 | **Legacy stub** (see §6.1) |
-| `Reference/`, `Inbox/`, `Archive/`, `.obsidian-config/` | 1 each | 15–34 | Index-only, effectively empty |
+| `Reference/`, `Inbox/`, `Archive/`, `.obsidian-config/` | 1 each | 15-34 | Index-only, effectively empty |
 
 ### 2.3 Verified sub-counts
 
@@ -123,7 +123,7 @@ file change.
 
 - **Format:** plain Markdown, UTF-8, one concept per file.
 - **Source of truth:** the Git working tree. `WORKFLOW.md` is explicit
-  that "the repository is the source of truth… not backlinks, plugin
+  that "the repository is the source of truth... not backlinks, plugin
   metadata, or a database."
 - **Indexing:** hand-maintained `_index.md` files per folder, plus
   hand-maintained index pages under `DSA/00_Index/`. These are the only
@@ -133,7 +133,7 @@ file change.
 - **Retrieval today:** Obsidian quick-switcher, Obsidian backlinks,
   `grep`, and GitHub search. There is no semantic search of any kind.
 
-### 3.3 Metadata layer — measured coverage
+### 3.3 Metadata layer: measured coverage
 
 Frontmatter is present on **362 of 620 files (58%)**, and is almost
 entirely confined to one folder:
@@ -148,15 +148,15 @@ Keys in use: `type` (358), `status` (358), `tags` (358), `canonical`
 (358), `related` (283), `difficulty` (77), plus stragglers (`title`,
 `date`, `session`, `author`).
 
-So: the 258 files outside `DSA/` — including all 11 authoritative
-technology docs, all 49 project-pack files, and all 79 prompts — carry
+So: the 258 files outside `DSA/`, including all 11 authoritative
+technology docs, all 49 project-pack files, and all 79 prompts: carry
 **no machine-readable metadata at all**. Their type, status, and
 relationships exist only in prose and folder position.
 
 ### 3.4 Link graph
 
 Measured after stripping fenced code blocks and inline code (this
-matters — see §6.3):
+matters, see §6.3):
 
 | Metric | Value |
 |---|---:|
@@ -175,28 +175,28 @@ detects that. Obsidian's "unresolved links" panel is the only check, and
 > `README.md`. That was a false positive: the links are URL-encoded
 > (`DSA/00_Index/DSA%20Home.md`), which is correct for GitHub, and the
 > checker compared the encoded string against the filesystem without
-> decoding it. **A link checker must URL-decode before resolving** —
+> decoding it. **A link checker must URL-decode before resolving**,
 > recorded alongside §6.3 as a second parser requirement discovered by
 > getting it wrong here first.
 
 ### 3.5 AI functionality that exists today
 
 Three artifacts encode AI behavior, all as *prose instructions for a
-human-invoked model* — none are executable:
+human-invoked model*: none are executable:
 
-1. **`DSA/AI Ingestion Workflow.md`** — the closest thing to a
+1. **`DSA/AI Ingestion Workflow.md`.** The closest thing to a
    specification of the target pipeline. It already names the exact
    stages the Knowledge OS needs: parse → classify → create/update
    *exactly one* page → link without duplicating → validate. It also
    already specifies conflict handling ("prefer existing canonical
-   pages… keep the older canonical page and merge links into it") and
+   pages... keep the older canonical page and merge links into it") and
    duplicate detection ("search by title, platform slug, pattern, and
    distinctive constraints before creating a new page"). **This is a
    hand-written draft of the ingestion graph and should be treated as
    requirements input, not deleted.**
-2. **`DSA/05_Templates/HackerRank Ingestion Prompt.md`** — a concrete
+2. **`DSA/05_Templates/HackerRank Ingestion Prompt.md`.** A concrete
    single-source ingestion prompt.
-3. **`Technologies/Prompt-Library/`** — 79 prompts across 28
+3. **`Technologies/Prompt-Library/`**, 79 prompts across 28
    categories. These are operating procedures for a human+LLM pair,
    not system prompts for an application. Several
    (`Research/literature-review-synthesis.md`,
@@ -211,11 +211,11 @@ no embeddings, and no provider abstraction anywhere in the repository.**
 ### 3.6 Obsidian integration
 
 - `.obsidian-config/README.md` is documentation *about* how to
-  configure Obsidian — a reference copy of intended settings. The live
+  configure Obsidian, a reference copy of intended settings. The live
   `.obsidian/` directory is gitignored.
 - No Obsidian plugin exists. No community plugins are used, by policy.
 - Integration surface is therefore: wikilinks, folder layout, YAML
-  frontmatter, and Mermaid — all vanilla Markdown features.
+  frontmatter, and Mermaid: all vanilla Markdown features.
 - Policy constraint worth carrying forward:
   `.obsidian-config/README.md` forbids "anything that stores state
   Markdown can't represent." **Any Knowledge-OS write-back must remain
@@ -239,7 +239,7 @@ and not a rewrite.
    `Repository Linking Architecture.md`, and `Validation Checklist.md`
    collectively define: one canonical home per concept, typed
    relationships, mandatory metadata, and a 12-point quality gate. The
-   Knowledge OS does not need to invent its quality model — it needs to
+   Knowledge OS does not need to invent its quality model. It needs to
    *execute* this one.
 2. **A dense, typed link graph.** 4,131 links, and
    `Documentation Standards.md` already says links should express
@@ -251,14 +251,14 @@ and not a rewrite.
    Common Workflows → Common Mistakes → Best Practices → Cheatsheet →
    Interview Questions → Further Reading. Knowledge packs follow
    `_index.md` + numbered docs. **Predictable headings make
-   deterministic, structure-aware chunking possible** — a significant
+   deterministic, structure-aware chunking possible**: a significant
    head start over ingesting arbitrary Markdown.
 4. **Git as an existing provenance and history substrate.** Every
    change is already attributed and timestamped. Principle 12 (preserve
    history) is partially satisfied for free.
 5. **A high-quality, domain-dense corpus.** ~48.7k lines of curated
    engineering knowledge is a genuinely good evaluation set for
-   retrieval and concept extraction — far better than synthetic
+   retrieval and concept extraction, far better than synthetic
    fixtures.
 6. **An explicit anti-bloat culture.** README's "What Forge is not" and
    ROADMAP's "explicitly out of scope" sections are the same discipline
@@ -271,36 +271,35 @@ and not a rewrite.
 | # | Limitation | Consequence |
 |---|---|---|
 | L1 | No semantic retrieval | Can't answer "what do I believe about X"; only exact-string grep |
-| L2 | No provenance model | A claim in `rag.md` cannot be traced to any source. Nothing distinguishes source fact from model inference — the exact failure Principle 10 forbids |
+| L2 | No provenance model | A claim in `rag.md` cannot be traced to any source. Nothing distinguishes source fact from model inference, the exact failure Principle 10 forbids |
 | L3 | No change analysis | New information is merged by a human deciding, in the moment, what to overwrite. Superseded understanding is recoverable only by reading Git diffs |
 | L4 | No contradiction handling | Two docs can disagree indefinitely; nothing detects it |
 | L5 | No non-Markdown ingestion | PDFs, papers, repos, and web pages cannot enter Forge except by a human reading and rewriting them |
 | L6 | Enforcement is entirely manual | Every rule in the Constitution is advisory. Measured drift: 145 broken links, 42% of files missing metadata, all 283 `related:` fields malformed |
 | L7 | Indexes drift | `_index.md` files and README counts go stale silently (§6.4) |
 | L8 | No confidence or uncertainty representation | Everything reads as equally certain. Principle 12 unsatisfied |
-| L9 | Scaling ceiling | The pattern that produced 620 files does not survive 10,000 heterogeneous sources — a human is in the loop for every write |
+| L9 | Scaling ceiling | The pattern that produced 620 files does not survive 10,000 heterogeneous sources, a human is in the loop for every write |
 
 ---
 
 ## 6. Technical Debt (concrete, measured)
 
-### 6.1 `Systems/` is an orphaned legacy folder — **highest-signal debt**
+### 6.1 `Systems/` is an orphaned legacy folder: **highest-signal debt**
 
 `Systems/` contains exactly one file, `_index.md`, which describes eight
 subfolders (`Prompt-Library/`, `Playbooks/`, `Templates/`,
 `Competitive-Programming/`, `Career/`, `Project-System/`, `Docs/`,
-`Resources/`) that **no longer live there** — they were moved to
+`Resources/`) that **no longer live there**. They were moved to
 `Technologies/`, `Courses/`, `Career/`, and `Resources/`. Every relative
 link in that file is broken.
 
 This is a fossil of a prior reorganization. `CLAUDE.md` records that
 broken `../../Systems/Docs/...` links were already repaired *elsewhere*
-in a previous session, but the source of those links — this stub — was
+in a previous session, but the source of those links. This stub: was
 never removed or rewritten.
 
 **Recommendation:** delete `Systems/` or rewrite `_index.md` as an
-explicit tombstone pointing at the new locations. Not done in this pass
-— it is content surgery outside the audit's scope, and the audit's job
+explicit tombstone pointing at the new locations. Not done in this pass. It is content surgery outside the audit's scope, and the audit's job
 is to report it.
 
 ### 6.2 All 283 `related:` frontmatter fields are malformed
@@ -320,13 +319,13 @@ related: [[[DFS]], [[BFS]], [[Graph Traversal]]]
 #  -> [[['DFS']], [['BFS']], [['Graph Traversal']]]
 ```
 
-Of 362 frontmatter blocks, **68 fail `yaml.safe_load` outright** — a
+Of 362 frontmatter blocks, **68 fail `yaml.safe_load` outright**: a
 strict ingester would reject those files entirely. The other 215 parse
 into nested string lists that are not usable as relationships without
 custom repair.
 
 Meanwhile `Documentation Standards.md` explicitly promises "Dataview
-Compatibility — keep metadata fields simple scalars or lists." That
+Compatibility, keep metadata fields simple scalars or lists." That
 promise is broken in every file that makes it.
 
 **Recommendation:** a deterministic one-shot migration script
@@ -355,7 +354,7 @@ implementation.
 |---|---|---|
 | "70+" detailed problems | `README.md` | 85 |
 | "21 templates" | `ROADMAP.md` | 25 |
-| "10 authoritative … manuals" | `ROADMAP.md` | 11 |
+| "10 authoritative ... manuals" | `ROADMAP.md` | 11 |
 
 `CLAUDE.md` already flags this as a recurring pattern. It recurs
 because nothing checks it. This is the clearest possible argument for
@@ -370,7 +369,7 @@ this repo eventually goes stale.**
 | Rule | `CONVENTIONS.md` | `DSA/Documentation Standards.md` |
 |---|---|---|
 | Filenames | `kebab-case.md` | Title Case, e.g. `Binary Search.md` |
-| Tags | namespaced `#status/`, `#type/`, `#stack/`, max 3 | `dsa/pattern`, `dsa/algorithm`, … |
+| Tags | namespaced `#status/`, `#type/`, `#stack/`, max 3 | `dsa/pattern`, `dsa/algorithm`, ... |
 | Frontmatter | minimal, "only when it carries real metadata" | mandatory on every page |
 
 Measured filename reality: 329 Title-Case-with-spaces, 214 kebab-case,
@@ -385,7 +384,7 @@ normalize them explicitly. Flagged as an open decision (§8).
 
 329 files contain spaces. Harmless in Obsidian; a persistent source of
 bugs in shell tooling (this audit hit it immediately). Any scripts must
-be space-safe by construction — no unquoted `for f in $(find ...)`.
+be space-safe by construction, no unquoted `for f in $(find ...)`.
 
 ### 6.6 Root-directory clutter
 
@@ -393,7 +392,7 @@ Six root files are historical session artifacts, not knowledge:
 `DSA_IMPLEMENTATION_PLAN.md`, `FORGE_COMPLETION_STATUS.md`,
 `FORGE_SESSION_2_SUMMARY.md`, `FORGE_SESSION_3_FINAL_SUMMARY.md`,
 `IMPROVEMENTS_SUMMARY.md`, `GITHUB_SETUP_CHECKLIST.md` (~1,400 lines).
-They describe work already done. They belong in `Archive/` — which is
+They describe work already done. They belong in `Archive/`, which is
 currently empty. Low priority; noted for completeness.
 
 ### 6.7 Empty structural folders
@@ -414,7 +413,7 @@ Ordered by how damaging it would be to break them.
 | # | Preserve | Why |
 |---|---|---|
 | P1 | **Every existing `.md` file, at its current path** | Non-negotiable per the brief. 4,131 internal links and all external GitHub links depend on paths |
-| P2 | **Markdown as the human source of truth** | `WORKFLOW.md`'s core promise. The graph/vector stores must be *derived and rebuildable*, never authoritative — see ADR-001 |
+| P2 | **Markdown as the human source of truth** | `WORKFLOW.md`'s core promise. The graph/vector stores must be *derived and rebuildable*, never authoritative, see ADR-001 |
 | P3 | **Obsidian-vanilla compatibility** | No plugin-only constructs. Content must stay readable in any editor |
 | P4 | **Git as the history substrate** | Already provides attribution/timestamps; don't duplicate it in a database |
 | P5 | **The canonical-home rule** | The corpus's defining invariant and the engine's core dedup requirement |
@@ -433,25 +432,25 @@ Ordered by how damaging it would be to break them.
 | M2 | Extend frontmatter to the 258 unmetadata'd files | **Medium** | Additive only; never rewrite prose. Generated fields must be namespaced (e.g. `forge_*`) so hand-authored values are never clobbered |
 | M3 | Repair 145 unresolved wikilinks | Medium | Only auto-fix exact-normalization matches; everything else is a report for a human, since a broken link may mean "page not written yet" |
 | M4 | Introduce derived stores (vector/graph/relational) | Low | Fully rebuildable from Markdown; `.gitignore`d; deleting them loses nothing |
-| M5 | Introduce engine source code into the repo | **High** | Adding `engine/` and `docs/` pollutes the Obsidian vault root. **Open decision — see below** |
+| M5 | Introduce engine source code into the repo | **High** | Adding `engine/` and `docs/` pollutes the Obsidian vault root. **Open decision, see below** |
 | M6 | Write generated knowledge back into the vault | **Highest** | Directly risks Principles 10/11. Must be segregated, provenance-stamped, and human-approved. **Open decision** |
 | M7 | Retire or tombstone `Systems/` | Low | One stub file, links already broken |
 | M8 | Reconcile the two convention systems | Medium | Prefer per-namespace vocabularies over a forced global rewrite |
 
 ### Open decisions requiring human approval
 
-**D1 — Repository layout (blocks all implementation).** The repo root
+**D1, Repository layout (blocks all implementation).** The repo root
 *is* the Obsidian vault. Adding `engine/`, `tests/`, and `docs/` at the
 root means Obsidian indexes engineering docs as vault notes and they
 appear in graph view and quick-switcher. Options:
 
-- **(a) Monorepo + Obsidian exclusion filters** — least disruptive to
+- **(a) Monorepo + Obsidian exclusion filters.** Least disruptive to
   existing paths; requires vault config that is gitignored, so it must
   be documented in `.obsidian-config/`. *Recommended.*
-- **(b) Move the vault under `vault/`** — cleanest separation, but
+- **(b) Move the vault under `vault/`.** Cleanest separation, but
   rewrites all 621 paths and breaks every external link. Violates P1's
   spirit.
-- **(c) Separate engine repository** — cleanest of all, but splits the
+- **(c) Separate engine repository.** Cleanest of all, but splits the
   corpus from the code that maintains it and complicates local-first
   setup.
 
@@ -459,17 +458,17 @@ appear in graph view and quick-switcher. Options:
 needed to deliver the required documentation. That choice is reversible
 and does not commit the engine's location.*
 
-**D2 — Write-back policy.** Does the engine ever write into the vault,
+**D2, Write-back policy.** Does the engine ever write into the vault,
 or does generated knowledge live only in derived stores and surface
 through read-only interfaces? This is the highest-stakes decision in
 the project and is deliberately left open. See ADR-001.
 
-**D3 — Convention reconciliation.** Normalize DSA to repo-wide
+**D3, Convention reconciliation.** Normalize DSA to repo-wide
 conventions, formally bless the DSA dialect, or make the model
 namespace-aware? Recommended: namespace-aware, because it costs no
 content churn.
 
-**D4 — Scope of the corpus as a knowledge source.** Is the existing
+**D4, Scope of the corpus as a knowledge source.** Is the existing
 vault (a) an ingestion source treated like any other, (b) privileged
 "user assertion" ground truth, or (c) both, per folder? Affects
 provenance tiering directly. Recommended: (c), with `Technologies/Docs/`

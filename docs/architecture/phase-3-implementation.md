@@ -1,9 +1,9 @@
-# Phase 3 — Knowledge Activation & Retrieval
+# Phase 3: Knowledge Activation & Retrieval
 
 *What was built, how it behaves, and what it deliberately refuses to do.
 Describes the implementation as it exists.*
 
-**Status:** implemented · **Tests:** 595 passing, 89% coverage · **LLM required:** no
+**Status:** implemented, **Tests:** 595 passing, 89% coverage, **LLM required:** no
 **Validate:** `bash scripts/validate_phase3.sh` (17/17)
 
 ---
@@ -12,25 +12,25 @@ Describes the implementation as it exists.*
 
 Phase 2 could *propose* knowledge. Phase 3 closes the loop: an approved
 proposal becomes canonical knowledge that can be traversed, cited, and
-retrieved — and every step of that path is reversible, idempotent, and
+retrieved, and every step of that path is reversible, idempotent, and
 traceable back to a page of a source document.
 
 Delivered:
 
-- **Proposal activation** — `APPROVED → ACTIVATED`, creating canonical
+- **Proposal activation**, `APPROVED → ACTIVATED`, creating canonical
   Concepts and Claims with evidence links, provenance, and revisions
-- **Deterministic idempotency** — approve, activate, re-index, activate again;
+- **Deterministic idempotency.** Approve, activate, re-index, activate again;
   nothing duplicates
 - **Concept identity states** and a **persisted user decision file** for the
   known vault collisions (Heap, Binary Search, Trie)
 - **Evidence-gated relationship activation** over a five-type vocabulary
 - **A SQLite knowledge graph** with bounded traversal, and measurements that
   justify not adopting a graph database
-- **Graph integrity diagnostics** — nine codes, report-only
+- **Graph integrity diagnostics.** Nine codes, report-only
 - **A labelled retrieval evaluation set** (24 queries / 48 labels) and a
   metrics harness (Recall@5/@10, Precision@5, MRR)
 - **A measured lexical / semantic / hybrid comparison** with a swept fusion
-  weight — and the honest conclusion that **hybrid was rejected**
+  weight, and the honest conclusion that **hybrid was rejected**
 - **Batch proposal review** with a guard on ambiguous proposals
 
 Not built, deliberately: contradiction detection, synthesis, autonomous
@@ -67,13 +67,13 @@ research, LangGraph, Neo4j, Qdrant, web frontend, Obsidian plugin, MCP.
 Four outcomes, and **none of them is silent**. `ActivationOutcome` is
 `CREATED | ALREADY_ACTIVE | REFUSED | FAILED`, and a report carries the reason
 string for every one. A proposal that fails to persist is never reported as
-activated — it stays `APPROVED` so the same command retries it once the cause
+activated. It stays `APPROVED` so the same command retries it once the cause
 is fixed.
 
 **Every activated entity keeps its origin.** `Concept.origin_proposal_id`,
 `Concept.origin_span_ids`, and `Claim.origin_proposal_id` are what let
 `forge concept <name>` answer *"which proposal created this?"* and *"which
-source span caused this claim to exist?"* — the two questions the brief names.
+source span caused this claim to exist?"*, the two questions the brief names.
 
 ### Idempotency, concretely
 
@@ -82,15 +82,15 @@ Identity is derived, not allocated: `Concept.make_id` is a BLAKE2b digest over
 the same primary key. Activating twice hits the `ALREADY_ACTIVE` path.
 
 The test that matters is `test_activation.py::TestIdempotency`, which runs the
-exact cycle the brief specifies — *approve, approve again, re-index, activate
-again* — and asserts zero duplicate concepts, claims, evidence links, and
+exact cycle the brief specifies: *approve, approve again, re-index, activate
+again*, and asserts zero duplicate concepts, claims, evidence links, and
 revisions. Re-indexing between activations is the important part: it proves
 identity survives a full rebuild of derived state.
 
 ### Provenance on activated entities
 
 An activated Concept or Claim inherits `MODEL_INFERENCE` from the proposal that
-produced it — activation is a *transcription* of a decision, not a new source
+produced it, activation is a *transcription* of a decision, not a new source
 of truth, so it may not upgrade the tier.
 
 One subtlety worth recording. The `EvidenceLink` created alongside a Claim
@@ -99,7 +99,7 @@ provenance. This looks inconsistent and is not: the link asserts only "this
 quote appears in this span", which the activator verifies in code by string
 comparison before writing it. The provenance floor rule from Phase 1 correctly
 rejected the first attempt, where the link claimed `QUOTES` on model
-provenance — the rule caught a real modelling error rather than being worked
+provenance: the rule caught a real modelling error rather than being worked
 around.
 
 ---
@@ -114,7 +114,7 @@ states and the place where a human records the answer.
 | `EXACT_MATCH` | The name matches a canonical concept exactly. |
 | `ALIAS_MATCH` | The name is a user-registered alias. |
 | `RESOLVED_BY_USER` | A collision the user has explicitly decided. |
-| `NEW` | Nothing known — a genuinely new concept. |
+| `NEW` | Nothing known, a genuinely new concept. |
 | `AMBIGUOUS` | Several canonical homes; **Forge refuses to pick**. |
 
 There is deliberately no `MERGED`.
@@ -142,9 +142,9 @@ aliases: {}
 ```
 
 `forge identity scaffold` generates it from collisions **actually present in
-the vault** — currently four: `Binary Search`, `Heap`, `Trie`, and
-`weekly-review` — and leaves every one undecided. It suggests a namespace
-from the containing folder — `01_Patterns` → `pattern` — because the corpus
+the vault**, currently four: `Binary Search`, `Heap`, `Trie`, and
+`weekly-review`, and leaves every one undecided. It suggests a namespace
+from the containing folder, `01_Patterns` → `pattern`, because the corpus
 already encodes the distinction there. It does not invent vocabulary, and
 re-scaffolding preserves existing decisions rather than resetting them.
 
@@ -181,13 +181,12 @@ untyped mesh, so the gate is deliberately strict:
   friends require judgement, so a `DETERMINISTIC` derivation carrying one is a
   `ProvenanceViolation`.
 
-Measured on the demo corpus: **3 candidates considered, 1 created, 2 rejected**
-— both rejections for having only a single shared span. That ratio is the
+Measured on the demo corpus: **3 candidates considered, 1 created, 2 rejected**. Both rejections for having only a single shared span. That ratio is the
 feature working.
 
 ---
 
-## 5. The graph — and why SQLite is enough
+## 5. The graph: and why SQLite is enough
 
 The graph is an indexed adjacency table (`claim_links`) plus bounded traversal
 in `forge/graph/graph.py`. Every walk takes a depth limit **and** a node
@@ -195,7 +194,7 @@ budget, neither of which can be disabled: `get_related_concepts` clamps to
 `DEFAULT_MAX_DEPTH = 3`, `find_path` caps at 6, and both stop at
 `DEFAULT_NODE_BUDGET = 500` nodes.
 
-`find_path` returning `None` means *"no path within this bound"* — deliberately
+`find_path` returning `None` means *"no path within this bound"*, deliberately
 not *"no path"*, which a bounded search cannot establish. The CLI prints
 exactly that: `no path within 3 hops (this does not prove none exists)`.
 
@@ -207,10 +206,10 @@ measures the operations the product actually performs:
 
 | Graph | Nodes | Edges | Neighbour lookup | Bounded path (d≤3) | Depth-3 neighbourhood |
 |---|---:|---:|---:|---:|---:|
-| Demo (real) | 3–4 | 1 | 0.03 ms | 0.06 ms | — |
+| Demo (real) | 3-4 | 1 | 0.03 ms | 0.06 ms | - |
 | Synthetic | 5,000 | 19,991 | **0.24 ms** | **17.0 ms** | 14.5 ms (budget-capped at 408) |
 
-At 5,000 concepts — roughly eight times the vault's document count — with a
+At 5,000 concepts: roughly eight times the vault's document count: with a
 branching factor of 8.0, neighbour lookup is a quarter of a millisecond and a
 depth-3 path search is 17 ms. **No graph database is justified.** The condition
 that would change that is stated in
@@ -218,7 +217,7 @@ that would change that is stated in
 
 ### Integrity diagnostics
 
-Nine codes, all deterministic, all **report-only** — the same discipline as the
+Nine codes, all deterministic, all **report-only**: the same discipline as the
 Phase 1 frontmatter diagnostics, for the same reason: an automatic repair to a
 knowledge graph is an unreviewed change to what the user believes.
 
@@ -254,19 +253,19 @@ short version:
 | semantic | 0.301 | 0.581 | 0.342 | regression |
 | hybrid (w=0.25 / 0.5 / 0.75) | 0.378 / 0.364 / 0.279 | 0.544 / 0.517 / 0.449 | 0.337 / 0.337 / 0.336 | regression at every weight |
 
-*(Re-measured after the Phase 0–4 branches were merged, which added seven
+*(Re-measured after the Phase 0-4 branches were merged, which added seven
 technology docs to the corpus and moved lexical R@10 from 0.650 to 0.608
 without any retrieval code changing. The verdict is unchanged; the mechanism
 is discussed in the baseline document.)*
 
-Fusion weight was **swept, not chosen** — `DEFAULT_FUSION_WEIGHTS =
+Fusion weight was **swept, not chosen**: `DEFAULT_FUSION_WEIGHTS =
 (0.0, 0.25, 0.5, 0.75, 1.0)`, with the endpoints as anchors that must reproduce
 the pure methods. An earlier run of the same sweep had w=0.25 beating lexical
-on R@5 while losing on R@10 — reporting one metric, or picking one weight a
+on R@5 while losing on R@10, reporting one metric, or picking one weight a
 priori, would have manufactured a false win out of it.
 
-The semantic row was produced by `HashingEmbeddingProvider` — a hashed
-bag-of-features vector, **explicitly not a neural embedding** — because no
+The semantic row was produced by `HashingEmbeddingProvider`, a hashed
+bag-of-features vector, **explicitly not a neural embedding**, because no
 model could be downloaded in this environment. That limitation, and exactly
 what it does and does not license anyone to conclude, is documented in
 [`../research/local-model-capability-spike.md`](../research/local-model-capability-spike.md)
@@ -285,7 +284,7 @@ and in §4 of the retrieval baseline.
   ambiguous semantic proposal is approving a decision nobody made, so it takes
   an explicit flag and exits 2 otherwise.
 
-Safety class stays derived from provenance and evidence — it is never
+Safety class stays derived from provenance and evidence. It is never
 something a model asserts about its own output.
 
 ---
@@ -309,8 +308,7 @@ before and after.
 Schema v2 → **v3**, migrated in place:
 
 - `concepts` gained `namespace`, `origin_proposal_id`, `origin_span_ids`
-- `UNIQUE(canonical_name)` became `UNIQUE(canonical_name, IFNULL(namespace,''))`
-  — the old constraint made namespaced concepts impossible
+- `UNIQUE(canonical_name)` became `UNIQUE(canonical_name, IFNULL(namespace,''))`: the old constraint made namespaced concepts impossible
 - `claims` gained `origin_proposal_id`
 - `proposals` gained `activated_entity_type`, `activated_entity_id`,
   `activated_at`
@@ -335,7 +333,7 @@ will not add a column to a table that already exists.
   measurement compensates, but it is synthetic.
 - **Relationship discovery is co-occurrence only.** `PART_OF`, `DEPENDS_ON`,
   `IMPLEMENTS`, and `EXPLAINS` are supported by the model and the graph but
-  have no automatic discovery path — they are created by explicit decision.
+  have no automatic discovery path. They are created by explicit decision.
 - **`find_path` bounds are conservative.** Depth 3 by default, hard-capped at
   6. On a sparse graph, most pairs return "no path within the bound".
 
@@ -343,8 +341,8 @@ will not add a column to a table that already exists.
 
 ## Related
 
-- [`phase-2-implementation.md`](phase-2-implementation.md) — ingestion and the proposal system
-- [`../research/retrieval-baseline.md`](../research/retrieval-baseline.md) — the full retrieval measurement
-- [`../research/local-model-capability-spike.md`](../research/local-model-capability-spike.md) — why no neural model was available
-- [`../knowledge-model/canonical-model.md`](../knowledge-model/canonical-model.md) — the entity model being activated into
-- [`../cli.md`](../cli.md) — command reference
+- [`phase-2-implementation.md`](phase-2-implementation.md), ingestion and the proposal system
+- [`../research/retrieval-baseline.md`](../research/retrieval-baseline.md), the full retrieval measurement
+- [`../research/local-model-capability-spike.md`](../research/local-model-capability-spike.md), why no neural model was available
+- [`../knowledge-model/canonical-model.md`](../knowledge-model/canonical-model.md), the entity model being activated into
+- [`../cli.md`](../cli.md), command reference

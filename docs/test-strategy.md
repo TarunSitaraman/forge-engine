@@ -14,7 +14,7 @@ pytest --cov=forge --cov-report=term      # coverage
 
 **1. The suite runs offline with no model.** `MockProvider` is the default.
 If the suite needed Ollama it would be skipped in CI and would rot. Anything
-genuinely needing a live model is marked `requires_model` and skipped — nothing
+genuinely needing a live model is marked `requires_model` and skipped. Nothing
 currently is.
 
 **2. Real corpus over synthetic fixtures.** Integration tests run against the
@@ -24,7 +24,7 @@ that link resolution copes with three real stem collisions, or that a truncated
 PDF fails cleanly. Ideal inputs prove very little.
 
 **3. Fixtures reproduce real defect shapes verbatim.** Where a small vault is
-needed, its files carry the exact malformed strings found in the corpus —
+needed, its files carry the exact malformed strings found in the corpus:
 copied, not invented:
 
 ```yaml
@@ -55,15 +55,15 @@ FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,114 passed
 ```
 
 `FORGE_TEST_VAULT` takes a checkout of that vault. It is deliberately **not**
-`FORGE_VAULT_PATH`: these tests assert against that specific corpus — file
-counts, particular paths, the recorded collision decisions — so aiming them at
+`FORGE_VAULT_PATH`: these tests assert against that specific corpus, file
+counts, particular paths, the recorded collision decisions, so aiming them at
 some other vault would fail on content rather than on a defect, and the two
 variables must not be confusable. A path that is set but is not a vault raises
 rather than skipping: the caller asked for something specific, and silently
 testing nothing is how coverage disappears.
 
 Skipping is the honest default, not a weakened suite. What it costs is real
-though — these are the tests that validate the engine on material that actually
+though. These are the tests that validate the engine on material that actually
 drifted, so run them with the vault before trusting a change to indexing, link
 resolution, or diagnostics.
 
@@ -107,7 +107,7 @@ and "made no model calls" is assertable anywhere.
 |---|---|
 | Corpus unchanged | `test_indexing_does_not_modify_the_vault` (git porcelain diff), `test_no_markdown_file_mtime_changes`, `test_cli_never_writes_to_the_vault` (byte comparison) |
 | Deterministic indexing | `test_same_corpus_produces_same_index` (fingerprint equality), `test_discovery_order_is_stable` |
-| Deterministic indexing *across platforms* | Not a test — **observed**. The same commit indexed on Windows (CRLF checkout, ASUS) and Linux (LF) produced the identical fingerprint `600dd093…` over 642 files, 2026-08-17. `text_hash` normalizes CRLF/CR to LF before hashing for exactly this reason, so a checkout's line endings are not a content change. Worth re-checking whenever hashing or discovery changes: a platform-dependent fingerprint would make derived state non-shareable and provenance non-comparable between machines. |
+| Deterministic indexing *across platforms* | Not a test, **observed**. The same commit indexed on Windows (CRLF checkout, ASUS) and Linux (LF) produced the identical fingerprint `600dd093…` over 642 files, 2026-08-17. `text_hash` normalizes CRLF/CR to LF before hashing for exactly this reason, so a checkout's line endings are not a content change. Worth re-checking whenever hashing or discovery changes: a platform-dependent fingerprint would make derived state non-shareable and provenance non-comparable between machines. |
 | Unresolved links reported | `test_unresolved_links_are_reported` |
 | Malformed frontmatter reported | `test_frontmatter_defects_are_found`, `test_every_parse_error_has_a_verified_repair` |
 | Zero LLM calls on re-index | `test_reindexing_unchanged_corpus_costs_zero_llm_calls` |
@@ -136,7 +136,7 @@ hashes.
 **Stem collisions.** `Heap`, `Binary Search`, and `Trie` each exist twice in
 the real corpus (pattern vs algorithm/data-structure), producing 180 of the 282
 unresolved link occurrences. The tests assert these are classified `AMBIGUOUS`
-with `resolved_path is None` — the engine must never pick one of two canonical
+with `resolved_path is None`, the engine must never pick one of two canonical
 homes on the user's behalf.
 
 **Code-fence hazard, on real data:**
@@ -153,7 +153,7 @@ def test_python_literals_do_not_become_links(real_index):
 | Bug | Test |
 |---|---|
 | `%20` compared against the filesystem without decoding (Phase 0 false positive) | `test_url_encoded_link_resolves` |
-| `](../personal-agent/)` directory links reported broken — 62 false positives | `test_directory_link_is_not_broken` |
+| `](../personal-agent/)` directory links reported broken, 62 false positives | `test_directory_link_is_not_broken` |
 | CRLF vs LF hashing as a content change | `test_crlf_and_lf_hash_identically` |
 | Deterministic-id separator collision `("a","bc")` vs `("ab","c")` | `test_deterministic_id_separator_is_unambiguous` |
 | Spike schemas accepting `{}` as success (would inflate every result) | `test_schema_violations_are_recorded_not_hidden` |
@@ -168,11 +168,11 @@ def test_python_literals_do_not_become_links(real_index):
   tested against a dead port, which is the state most developers hit first; its
   success path is covered by the spike harness against the mock. This is the
   suite's largest genuine gap and is stated rather than papered over.
-- **Concept/claim extraction *quality*.** The extraction path is fully tested for correctness (schemas, grounding, provenance, failure modes) against a scripted provider, but whether a real local model extracts *good* concepts is unmeasured — no model was reachable here.
+- **Concept/claim extraction *quality*.** The extraction path is fully tested for correctness (schemas, grounding, provenance, failure modes) against a scripted provider, but whether a real local model extracts *good* concepts is unmeasured, no model was reachable here.
 - **Performance.** The corpus indexes in ~0.7s. A threshold test would be noise
   at this size.
 - **`logging.py` internals** (57% covered). Configuration plumbing; its one
-  real bug — a captured `sys.stderr` surviving into a closed stream — was found
+  real bug, a captured `sys.stderr` surviving into a closed stream, was found
   by the CLI tests and fixed at the root.
 
 ---
@@ -227,7 +227,7 @@ ones a future change is most likely to break quietly:
   the implementation currently returns. A measuring instrument that agrees with
   itself measures nothing.
 - **Degradation is asserted as hard as the happy path.** A missing embedding
-  model must produce an explicit, reported absence — `test_semantic_is_skipped_with_an_explicit_note_when_unavailable`
+  model must produce an explicit, reported absence: `test_semantic_is_skipped_with_an_explicit_note_when_unavailable`
   fails if the runner silently falls back and looks successful.
 - **Diagnostics never repair.** `test_integrity_check_repairs_nothing` counts
   entities before and after a check that finds problems.
@@ -257,7 +257,7 @@ Four properties are asserted repeatedly rather than once:
   claim that decays silently if nothing checks it.
 - **Ungrounded output is rejected, never repaired.** Two shapes are tested: an
   invented span id, and a *real* span the model was not shown. The second is
-  the subtle one — citing real-but-unshown evidence is still fabrication with
+  the subtle one, citing real-but-unshown evidence is still fabrication with
   respect to the question asked.
 - **A failure never becomes an empty success.** Three provider failures, each
   asserted not to report success.
@@ -266,7 +266,7 @@ Four properties are asserted repeatedly rather than once:
 
 **CI is fully offline.** Every model call goes through `MockProvider` over the
 real `LLMProvider` interface, and the cloud provider's HTTP is stubbed with
-`httpx.MockTransport` — no test touches a network.
+`httpx.MockTransport`: no test touches a network.
 
 ### Phase 4 regression tests for bugs found during development
 
@@ -283,8 +283,8 @@ real `LLMProvider` interface, and the cloud provider's HTTP is stubbed with
 ## Coverage
 
 89% overall across 737 tests. `llm/ollama.py` and `embeddings/ollama_embeddings.py`
-are lowest because their success paths need a live server; `domain/` — where the
-invariants live — is 98–100%.
+are lowest because their success paths need a live server; `domain/`, where the
+invariants live, is 98-100%.
 
 ---
 

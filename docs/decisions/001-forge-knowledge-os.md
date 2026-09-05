@@ -1,18 +1,18 @@
-# ADR-001 — Evolve Forge into a Knowledge Operating System
+# ADR-001: Evolve Forge into a Knowledge Operating System
 
-- **Status:** **Accepted** — D1 and D2 approved 2026-08-12; Phase 1 implemented against this ADR. D3–D5 remain open.
+- **Status:** **Accepted**, D1 and D2 approved 2026-08-12; Phase 1 implemented against this ADR. D3-D5 remain open.
 - **Date:** 2026-08-12
 - **Deciders:** repository owner (pending)
 - **Context commit:** `bb88c35`
 - **Supersedes:** nothing
-- **Related:** [current-state audit](../architecture/forge-current-state.md) · [target architecture](../architecture/target-architecture.md) · [canonical model](../knowledge-model/canonical-model.md) · [roadmap](../roadmap.md)
+- **Related:** [current-state audit](../architecture/forge-current-state.md), [target architecture](../architecture/target-architecture.md), [canonical model](../knowledge-model/canonical-model.md), [roadmap](../roadmap.md)
 
 ---
 
 ## 1. Context
 
 Forge is a 620-file, ~48,700-line curated Markdown knowledge base with
-**no application code** — no manifests, no tests, no CI (audit §1). Its
+**no application code.** No manifests, no tests, no CI (audit §1). Its
 "AI-maintained" property is real but entirely human-triggered: Claude
 Code sessions editing files by hand, steered by written standards and a
 79-prompt library.
@@ -23,14 +23,14 @@ MCP as interchangeable interfaces.
 
 ### What makes this decision non-obvious
 
-The corpus already encodes the right invariants — one canonical home per
+The corpus already encodes the right invariants. One canonical home per
 concept, typed relationships, mandatory metadata, a 12-point validation
 checklist. And the audit measured that a disciplined author, following
 their own written rules, still accumulated:
 
 - **145 unresolved wikilinks** (~7% of the link graph),
 - **42% of files with no machine-readable metadata**,
-- **283 malformed `related:` fields** — 68 of which fail YAML parsing
+- **283 malformed `related:` fields**: 68 of which fail YAML parsing
   outright,
 - **published counts stale in three separate files**.
 
@@ -53,7 +53,7 @@ vector, and graph stores are **derived and rebuildable**. Deleting all
 derived stores and re-running ingestion must reproduce them.
 
 *Exception:* original source bytes (PDFs, fetched pages) are retained
-content-addressed in a blob store — they cannot be regenerated.
+content-addressed in a blob store. They cannot be regenerated.
 
 ### 2.2 The existing corpus is preserved absolutely
 
@@ -87,7 +87,7 @@ path. The full test suite runs offline with no model.
 
 ### 2.7 LangGraph, scoped
 
-Four workflows only — ingestion/evolution, contradiction resolution,
+Four workflows only, ingestion/evolution, contradiction resolution,
 re-synthesis, corpus backfill. Nodes named for operations, never
 personas. Retrieval stays a plain composed pipeline.
 
@@ -97,9 +97,9 @@ personas. Retrieval stays a plain composed pipeline.
 
 | Option | Verdict |
 |---|---|
-| **A. Do nothing** — keep the manual workflow | Rejected. Measured drift shows the approach has already exceeded what discipline can hold, and it cannot ingest PDFs, papers, or repos at all |
+| **A. Do nothing**, keep the manual workflow | Rejected. Measured drift shows the approach has already exceeded what discipline can hold, and it cannot ingest PDFs, papers, or repos at all |
 | **B. Obsidian plugins / Dataview** | Rejected. Cannot express provenance tiers, confidence, or contradiction; violates the existing minimal-plugin and Markdown-only policies; the root roadmap already flags Dataview as unadopted |
-| **C. Off-the-shelf RAG over the vault** | Rejected. Delivers retrieval, not evolution. Fails Principles 3, 10, 11, 12 — and is precisely the "generic RAG chatbot" boundary |
+| **C. Off-the-shelf RAG over the vault** | Rejected. Delivers retrieval, not evolution. Fails Principles 3, 10, 11, 12, and is precisely the "generic RAG chatbot" boundary |
 | **D. Rewrite the vault into a database-native app** | Rejected. Destroys the Git-first, Obsidian-compatible, Markdown-only guarantees; violates the brief's preservation requirement |
 | **E. Engine alongside the corpus, Markdown authoritative** | **Chosen** |
 
@@ -113,10 +113,10 @@ adding capabilities none of the others can.
 ### Positive
 
 - The vault keeps working exactly as today with the engine switched off.
-- The user's knowledge survives Forge's deletion — plain Markdown, in Git.
+- The user's knowledge survives Forge's deletion, plain Markdown, in Git.
 - Schema iteration is cheap: change the model, rebuild the index.
 - The corpus provides ground truth for evaluation (~500 named concepts,
-  ~4,100 human-authored relationships) — an unusually strong starting
+  ~4,100 human-authored relationships): an unusually strong starting
   position.
 - Invariants the corpus states become mechanically enforceable.
 
@@ -126,11 +126,11 @@ adding capabilities none of the others can.
   Accepted: it is the cost of the capability.
 - **Dual representation.** Markdown and derived stores can diverge; the
   rebuild path is the reconciliation mechanism.
-- **Local model quality is unproven** for contradiction detection — the
+- **Local model quality is unproven** for contradiction detection, the
   project's largest technical unknown (technology decisions §4.4).
   Mitigated by spiking it in Phase 1.
 - **Root-directory pollution.** `docs/` and any `engine/` appear in the
-  Obsidian vault — see §6.1.
+  Obsidian vault, see §6.1.
 - **Derived state that Markdown cannot express is at risk on rebuild.**
   Contradictions, confidence, and revision history are exactly that.
   This is the tension that makes §6.2 unavoidable.
@@ -164,9 +164,9 @@ adding capabilities none of the others can.
 ## 6. Decisions
 
 D1 and D2 were **approved on 2026-08-12** and are recorded below as resolved.
-D3–D5 remain open.
+D3-D5 remain open.
 
-### 6.1 D1 — Repository layout — **APPROVED: option (a), monorepo**
+### 6.1 D1: Repository layout, **APPROVED: option (a), monorepo**
 
 > The repository root remains the Obsidian vault. Existing Markdown paths are
 > immutable unless an explicit migration is approved. The engine lives
@@ -184,16 +184,16 @@ placeholder that goes stale. It arrives at Phase 4 with the first service.
 ### 6.1.1 D1 options as considered *(blocked all implementation)*
 
 The repo root **is** the Obsidian vault. Adding `engine/` and `docs/`
-means Obsidian indexes engineering docs as vault notes — they appear in
+means Obsidian indexes engineering docs as vault notes. They appear in
 quick-switcher and graph view.
 
 | Option | Trade-off |
 |---|---|
-| **(a) Monorepo + Obsidian exclusion filters** — *recommended* | Least disruptive; all 621 paths stable. Requires vault config, which is gitignored, so it must be documented in `.obsidian-config/` |
+| **(a) Monorepo + Obsidian exclusion filters**, *recommended* | Least disruptive; all 621 paths stable. Requires vault config, which is gitignored, so it must be documented in `.obsidian-config/` |
 | (b) Move vault under `vault/` | Cleanest separation; rewrites every path and breaks external links. Violates preservation point P1 |
 | (c) Separate engine repository | Cleanest of all; splits the corpus from the code that maintains it and complicates local-first setup |
 
-### 6.2 D2 — Write-back policy — **APPROVED: segregated write-back**
+### 6.2 D2: Write-back policy, **APPROVED: segregated write-back**
 
 > The corpus remains the canonical human-readable source of truth. The engine
 > may read it freely and must not silently modify it. AI-generated changes
@@ -219,9 +219,9 @@ Does the engine ever write into the vault?
 
 | Option | Trade-off |
 |---|---|
-| **(a) Read-only** — generated knowledge lives only in derived stores | Zero risk to existing content; but everything the engine learns is invisible in Obsidian, and lost on rebuild |
-| **(b) Segregated write-back** — a dedicated directory, provenance-stamped frontmatter, generated files never mixed with hand-authored ones | Knowledge is visible and durable in Markdown; risk is contained by segregation |
-| **(c) In-place enrichment** — engine adds frontmatter/links to existing files | **Highest value, highest risk.** Directly threatens Principles 10 and 11 |
+| **(a) Read-only**, generated knowledge lives only in derived stores | Zero risk to existing content; but everything the engine learns is invisible in Obsidian, and lost on rebuild |
+| **(b) Segregated write-back**, a dedicated directory, provenance-stamped frontmatter, generated files never mixed with hand-authored ones | Knowledge is visible and durable in Markdown; risk is contained by segregation |
+| **(c) In-place enrichment**, engine adds frontmatter/links to existing files | **Highest value, highest risk.** Directly threatens Principles 10 and 11 |
 
 *Recommendation: **(b)**, with (c) only for additive, namespaced
 frontmatter fields (`forge_*`) that can never clobber hand-authored
@@ -231,39 +231,39 @@ This is deliberately left open because it determines whether
 `Concept.vault_path` is read-only or bidirectional, and because it is
 the decision most likely to be regretted if made hastily.
 
-### 6.3 D3 — Convention reconciliation
+### 6.3 D3: Convention reconciliation
 
 `CONVENTIONS.md` and `DSA/Documentation Standards.md` contradict each
 other on filenames, tags, and frontmatter (audit §6.5), and both are in
-active use. *Recommendation: namespace-aware vocabularies — costs no
+active use. *Recommendation: namespace-aware vocabularies, costs no
 content churn.*
 
-### 6.4 D4 — Corpus provenance tier
+### 6.4 D4: Corpus provenance tier
 
 Is the existing vault an ordinary ingestion source, privileged
 `USER_ASSERTION` ground truth, or both by folder? *Recommendation: both
-by folder — `Technologies/Docs/` and `Projects/` as user assertions,
+by folder, `Technologies/Docs/` and `Projects/` as user assertions,
 `Resources/` as pointers to external sources to ingest.*
 
-### 6.5 D5 — Graph store
+### 6.5 D5: Graph store
 
 Relational adjacency vs Neo4j. Lowest-confidence recommendation in the
 technology decisions (§5.3). *Recommendation: defer to a measurement at
-the Phase-4 gate — adopt Neo4j only if queries routinely exceed 3 hops
+the Phase-4 gate, adopt Neo4j only if queries routinely exceed 3 hops
 or need path-finding.*
 
 Phase 1 deferred it as recommended: storage sits behind protocols in
 `forge/storage/base.py` with a SQLite implementation. No graph or vector
 database was introduced.
 
-### 6.6 D6 — Truncated-wikilink frontmatter *(new, raised by Phase 1)*
+### 6.6 D6: Truncated-wikilink frontmatter *(new, raised by Phase 1)*
 
 Implementation found a **third** malformed-frontmatter shape the Phase 0 audit
 did not characterize: 18 files whose final wikilink is truncated to one closing
 bracket (`related: [[A]], [[B]`). Diagnosed as `FM008` with verified repairs,
 none applied.
 
-No decision is required to proceed — it is handled — but it is recorded here
+No decision is required to proceed. It is handled, but it is recorded here
 because it revises the audit's "two defect shapes" finding, and because the
 same authoring slip may exist in files that happen to still parse.
 
@@ -271,12 +271,12 @@ same authoring slip may exist in files that happen to still parse.
 
 ## 7. What this ADR does not decide
 
-- Claim granularity (canonical model Q1) — needs tuning against the
+- Claim granularity (canonical model Q1), needs tuning against the
   corpus.
 - Concept identity thresholds (Q2).
-- Confidence arithmetic (Q4) — recommended: none in Phase 1; store and
+- Confidence arithmetic (Q4), recommended: none in Phase 1; store and
   display evidence counts rather than fabricate a posterior.
-- Contradiction sensitivity (Q6) — needs a labeled evaluation set first.
+- Contradiction sensitivity (Q6), needs a labeled evaluation set first.
 - Any interface design beyond the layering rule.
 
 ---

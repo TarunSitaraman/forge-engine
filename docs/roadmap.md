@@ -1,10 +1,10 @@
-# Forge Knowledge OS — Roadmap
+# Forge Knowledge OS: Roadmap
 
 *Phased implementation plan for the Forge engine, with an explicit exit gate per phase.*
 
 **Scope note:** this roadmap covers the **engine**. The vault repository
 keeps its own `ROADMAP.md` for the Markdown vault's content plans, which
-remains valid — the two are separate tracks and should not be merged.
+remains valid: the two are separate tracks and should not be merged.
 
 ---
 
@@ -14,14 +14,14 @@ remains valid — the two are separate tracks and should not be merged.
   gate is a verifiable statement.
 - The [boundary checklist](./product/competitive-boundary.md#boundary-review-checklist)
   runs at every gate.
-- Phases 1–5 are strictly ordered — each builds on the last. Phases 6–8
+- Phases 1-5 are strictly ordered, each builds on the last. Phases 6-8
   are interface work and can reorder or run in parallel.
 - **Phase 10 does not start before Phase 1 is stable.** No polish on an
   unstable model.
 
 ---
 
-## Phase 0 — Repository audit & architecture *(complete)*
+## Phase 0: Repository audit & architecture *(complete)*
 
 **Delivered:** [current-state audit](./architecture/forge-current-state.md),
 [vision](./product/vision.md),
@@ -35,11 +35,11 @@ remains valid — the two are separate tracks and should not be merged.
 **Gate: passed.** The audit exists; no implementation has begun.
 
 **Blocking on human decision before Phase 1:**
-D1 (repository layout) and D2 (write-back policy) — audit §8, ADR-001.
+D1 (repository layout) and D2 (write-back policy), audit §8, ADR-001.
 
 ---
 
-## Phase 1 — Canonical knowledge model
+## Phase 1: Canonical knowledge model
 
 The foundation. Everything else is built on this, so it is the phase
 most worth slowing down for.
@@ -49,11 +49,11 @@ most worth slowing down for.
   `Concept`, `Claim`, `EvidenceLink`, `ClaimLink`, `Provenance`,
   `Revision`.
 - Provenance tiers + **floor rule** enforced at write time.
-- Revision log — append-only, from the first write.
+- Revision log, append-only, from the first write.
 - Persistence (SQLite) + migrations.
 - Provider abstraction + `MockProvider`.
 - Config with startup validation.
-- **Frontmatter repair migration** — the 283 malformed `related:` fields
+- **Frontmatter repair migration.** The 283 malformed `related:` fields
   (audit §6.2). First code committed, because nothing downstream can
   trust frontmatter until it lands.
 - Spike: local-model claim extraction and contradiction detection
@@ -71,7 +71,7 @@ most worth slowing down for.
 
 ---
 
-## Phase 2 — Source ingestion infrastructure *(complete)*
+## Phase 2: Source ingestion infrastructure *(complete)*
 
 **Delivered:** PDF (`pypdfium2`) and Markdown source adapters behind one
 acquisition protocol; deterministic structure-aware chunking into spans
@@ -81,17 +81,17 @@ check; concept candidate matching that never merges; a proposal system with
 approval state, safety classification and flag-gated reversible write-back;
 lexical retrieval with filters and optional semantic re-rank.
 
-**Gate: passed** — `bash scripts/validate_phase2.sh` (16/16). See
+**Gate: passed** by `bash scripts/validate_phase2.sh` (16/16). See
 [phase-2-implementation.md](./architecture/phase-2-implementation.md).
 
 **Deviation from the original scope:** the LLM-extraction, concept-matching and
-proposal work listed below under Phases 4–5 was pulled forward, because
+proposal work listed below under Phases 4-5 was pulled forward, because
 ingesting external sources without provenance-carrying candidates and a human
 approval gate would have meant building the unsafe version first.
 
 **Original scope**
 - Source registry: hashing, change detection, dedup.
-- Markdown parser (**code-fence-aware** — audit §6.3), PDF parser,
+- Markdown parser (**code-fence-aware**, audit §6.3), PDF parser,
   blob store for originals.
 - Structure-aware chunking → spans.
 - Corpus backfill workflow (W4), resumable, per-file failure isolation.
@@ -107,10 +107,10 @@ approval gate would have meant building the unsafe version first.
 
 ---
 
-## Phase 3 — Knowledge activation & retrieval *(complete)*
+## Phase 3: Knowledge activation & retrieval *(complete)*
 
-Scope shifted during planning: activation — turning approved proposals into
-canonical knowledge — turned out to be the missing link, and embeddings became
+Scope shifted during planning: activation, turning approved proposals into
+canonical knowledge, turned out to be the missing link, and embeddings became
 a *measurement* rather than a deliverable.
 
 **Delivered**
@@ -131,7 +131,7 @@ a *measurement* rather than a deliverable.
 - [x] **Retrieval works with the LLM entirely disabled**
 - [x] Re-embedding is detectable when the model changes (vectors are keyed by
       model id, so a model change invalidates rather than mixes)
-- [x] Hybrid retrieval adopted **only if measured better** — it was not.
+- [x] Hybrid retrieval adopted **only if measured better**. It was not.
       Lexical R@10 = 0.608 beat semantic (0.581) and every swept fusion weight
       (0.544 / 0.517 / 0.449). See
       [retrieval baseline](./research/retrieval-baseline.md).
@@ -144,7 +144,7 @@ is the first thing to do when one is reachable.
 
 ---
 
-## Phase 4 — Agentic knowledge evolution *(complete)*
+## Phase 4: Agentic knowledge evolution *(complete)*
 
 The plan had Phase 4 as "knowledge graph population" and Phase 5 as "LangGraph
 workflow". Those were swapped in execution, for a reason worth recording: the
@@ -160,10 +160,10 @@ that is a bigger pile of facts nobody is maintaining.
   and zero model calls
 - Grounded semantic assessment: five classifications, no `CONTRADICTS`,
   citations verified against real stored spans, ungrounded output rejected
-- Three evolution proposal types — corroborate, refine (supersede,
+- Three evolution proposal types: corroborate, refine (supersede,
   non-destructively), flag as disputed (never retract)
 - Checkpointing and resume across a real process restart
-- A provider-agnostic layer: local Ollama, remote Ollama, cloud, mock — with
+- A provider-agnostic layer: local Ollama, remote Ollama, cloud, mock: with
   no silent downgrade for knowledge mutation
 
 **Gate**
@@ -178,19 +178,19 @@ that is a bigger pile of facts nobody is maintaining.
 - [x] Ollama, remote Ollama, and cloud all work through one abstraction
 - [x] No provider is required for deterministic operation
 - [x] Assessments cached; provider/model/prompt/schema changes invalidate
-- [x] Duplicate execution is safe — 0 new entities, 0 model calls
+- [x] Duplicate execution is safe, 0 new entities, 0 model calls
 - [x] CI is fully offline
-- [x] **Real-model evaluation, local** — run 2026-08-14 on Qwen3 8B / RTX
+- [x] **Real-model evaluation, local**: run 2026-08-14 on Qwen3 8B / RTX
       4050: 5/5 classifications, 1.00 structured-output validity, 1.00
       grounding, 0 false-positive conflicts. A passing smoke test, not a
       characterisation. See
       [provider availability](./research/provider-availability.md) §6.
-- [x] **Real-model evaluation, cloud** — run 2026-09-03 against
+- [x] **Real-model evaluation, cloud**: run 2026-09-03 against
       `openai/gpt-oss-120b` on Groq, 21 cases. Structured-output validity
       1.00, grounding 1.00, classification 0.76. The average hides the
       finding: SUPPORTS, REFINES and IRRELEVANT are each 100%, while
       **INSUFFICIENT_EVIDENCE is 2/6** and accounts for four of the five
-      failures — the model reaches for a nearby label instead of declining.
+      failures, the model reaches for a nearby label instead of declining.
       One of those four read a mechanism as support for an outcome and produced
       a `CLAIM_EVIDENCE` proposal, which is the error shape a provenance
       floor cannot catch: the citation is real, the reasoning is not. See
@@ -204,7 +204,7 @@ deterministic retrieval improvements the Phase 3 miss analysis identified
 
 ---
 
-## Phase 5 — Real-model validation and graph population
+## Phase 5: Real-model validation and graph population
 
 Phase 4 delivered the workflow this phase was originally scoped to build, so
 Phase 5 becomes the two things Phase 4 could not do: **prove the pipeline works
@@ -212,13 +212,13 @@ with a real model**, and populate the graph at corpus scale.
 
 **Scope**
 - Expand the assessment set well beyond 5 cases. The local smoke test passed
-  5/5, which is consistent with a model that is right 60% of the time — the
+  5/5, which is consistent with a model that is right 60% of the time: the
   set is now the binding constraint on what can be claimed, not the model.
 - Measure the **false-positive conflict rate** properly. Zero false positives
   on two adversarial cases is encouraging and is not a rate. This needs enough
   IRRELEVANT and INSUFFICIENT_EVIDENCE cases to put a real bound on it.
-- Run the same set against a cloud model. Report as two rows, never averaged —
-  they are different instruments.
+- Run the same set against a cloud model. Report as two rows, never averaged.
+  They are different instruments.
 - Act on the latency finding: 63 s/case locally, one call over the 120 s
   timeout. Raise the default timeout, and measure whether a larger assessment
   batch degrades accuracy, since per-call overhead now dominates.
@@ -233,13 +233,13 @@ with a real model**, and populate the graph at corpus scale.
   relationship, not only a claim.
 
 **Gate**
-- [x] Assessment metrics measured on a real model — cloud, 2026-09-03,
+- [x] Assessment metrics measured on a real model, cloud, 2026-09-03,
       21 cases against `openai/gpt-oss-120b`. **The local half is dropped
       rather than pending:** the 2026-08-14 Qwen3 8B result came from an
       RTX 4050 machine no longer in use, and current work runs against Groq.
       Two models on one hosted provider is the comparison available; a local
       row would be a different instrument and is not required to close this.
-- [x] False-positive conflict rate measured — **2 of 18 non-conflict cases,
+- [x] False-positive conflict rate measured, **2 of 18 non-conflict cases,
       11.1%** on the fitted set, *unchanged* by the 0.2.0 prompt fix that took
       classification 0.76 → 0.86: one false conflict was fixed and a different
       one created. **1 of 16 (6.2%) on the held-out set**, where the REFINES
@@ -259,7 +259,7 @@ with a real model**, and populate the graph at corpus scale.
 - [ ] Concept extraction scored against the ~500 filename-derived concepts
 - [ ] Retrieval improvements measured against the Phase 3 labelled set
 
-*A structural corroboration pass exists but is off by default* — a second
+*A structural corroboration pass exists but is off by default*, a second
 question over any SUPPORTS/REFINES, measured 2026-09-05 at 13/18 with and
 13/18 without on the held-out set (50% precision, 33% recall on the failures
 it targets). Three attempts at this class have now failed, so the constraint
@@ -273,7 +273,7 @@ false-positive rate is measured.
 
 ---
 
-## Phase 6 — Knowledge exploration interface
+## Phase 6: Knowledge exploration interface
 
 **Scope**
 - FastAPI read endpoints; graph explorer; concept → claims → evidence →
@@ -282,12 +282,12 @@ false-positive rate is measured.
 **Gate**
 - [ ] From any claim, reach the exact source span in one interaction
 - [ ] Generated content is **visually distinguishable** from source
-      evidence — a UI requirement derived from Principle 10
+      evidence, a UI requirement derived from Principle 10
 - [ ] The model is comprehensible with no chat interface present
 
 ---
 
-## Phase 7 — Obsidian integration
+## Phase 7: Obsidian integration
 
 **Scope**
 - Plugin surfacing concepts, claims, contradictions, and related
@@ -302,7 +302,7 @@ false-positive rate is measured.
 
 ---
 
-## Phase 8 — MCP interface
+## Phase 8: MCP interface
 
 **Scope**
 - MCP server exposing retrieval and knowledge-model queries as tools;
@@ -311,12 +311,12 @@ false-positive rate is measured.
 **Gate**
 - [ ] An external agent can query the model and receive provenance with
       every result
-- [ ] Identical semantics to the HTTP API — no capability lives only in
+- [ ] Identical semantics to the HTTP API, no capability lives only in
       one interface
 
 ---
 
-## Phase 9 — Research intelligence
+## Phase 9: Research intelligence
 
 Where the vision's questions become answerable.
 
@@ -334,7 +334,7 @@ Where the vision's questions become answerable.
 
 ---
 
-## Phase 10 — Polish, testing, documentation, release
+## Phase 10: Polish, testing, documentation, release
 
 **Scope**
 - Coverage, performance, error-message quality, deployment docs,
@@ -348,13 +348,13 @@ Where the vision's questions become answerable.
 
 ---
 
-## MVP — the vertical slice that proves the thesis
+## MVP: the vertical slice that proves the thesis
 
 Delivered by the **end of Phase 5**. This is the acceptance test for
 the entire foundation:
 
 1. Add a PDF.
-2. Forge extracts content — deterministically.
+2. Forge extracts content, deterministically.
 3. Forge identifies concepts using a local model.
 4. Forge finds related existing concepts.
 5. Forge identifies relationships.
@@ -367,12 +367,12 @@ the entire foundation:
 12. Forge detects the overlap.
 13. **Forge updates the graph rather than creating duplicate notes.**
 
-**Steps 11–13 are the MVP.** Steps 1–10 are a competent RAG pipeline
+**Steps 11-13 are the MVP.** Steps 1-10 are a competent RAG pipeline
 that many tools already deliver; the second document is where Forge
 either maintains understanding or merely stores information. A
 demonstration that stops at step 10 has not demonstrated the product.
 
-Steps 8–10 need a viewer, which formally belongs to Phase 6 — a minimal
+Steps 8-10 need a viewer, which formally belongs to Phase 6: a minimal
 read-only graph view is pulled forward into Phase 5 for exactly this
 reason, and nothing more.
 
@@ -382,9 +382,9 @@ reason, and nothing more.
 
 | Risk | Handling |
 |---|---|
-| Phase 1 feels slow with nothing demoable | Correct and intentional. Provenance and history cannot be retrofitted; a system that starts logging revisions at Phase 9 has no history for Phases 1–8 |
+| Phase 1 feels slow with nothing demoable | Correct and intentional. Provenance and history cannot be retrofitted; a system that starts logging revisions at Phase 9 has no history for Phases 1-8 |
 | Local model quality blocks Phase 5 | Spiked in Phase 1, not discovered in Phase 5 |
-| Interfaces tempt early attention | Phases 6–8 sit behind the model deliberately |
+| Interfaces tempt early attention | Phases 6-8 sit behind the model deliberately |
 | Store choices block progress | Everything is behind protocols; only Neo4j is a real gate (Phase 4) |
 | Scope creep toward chatbot | Boundary checklist at every gate |
 
@@ -392,7 +392,7 @@ reason, and nothing more.
 
 ## Related
 
-- [Vision](./product/vision.md) · [Positioning](./product/product-positioning.md) · [Competitive boundary](./product/competitive-boundary.md)
-- [Current-state audit](./architecture/forge-current-state.md) · [Target architecture](./architecture/target-architecture.md) · [Technology decisions](./architecture/technology-decisions.md)
+- [Vision](./product/vision.md), [Positioning](./product/product-positioning.md), [Competitive boundary](./product/competitive-boundary.md)
+- [Current-state audit](./architecture/forge-current-state.md), [Target architecture](./architecture/target-architecture.md), [Technology decisions](./architecture/technology-decisions.md)
 - [Canonical knowledge model](./knowledge-model/canonical-model.md)
 - [ADR-001](./decisions/001-forge-knowledge-os.md)

@@ -1,4 +1,4 @@
-# Forge — Product Positioning
+# Forge: Product Positioning
 
 *Where Forge sits in the stack, what owns the intelligence, and how to tell when a feature is being built in the wrong layer.*
 
@@ -55,7 +55,7 @@ Three consequences, each of which changes what gets built:
 **1. The model outlives the interfaces.** Interfaces are fashion; the
 knowledge model is the asset. A user who spends two years feeding Forge
 should be able to throw away every UI and still own everything valuable.
-This is also why the Markdown vault stays authoritative — see
+This is also why the Markdown vault stays authoritative, see
 [ADR-001](../decisions/001-forge-knowledge-os.md).
 
 **2. Multiple simultaneous consumers, none privileged.** The MCP server
@@ -77,7 +77,7 @@ faster than they can organize it**, and whose existing system is a
 graveyard of good notes they can no longer retrieve or reconcile.
 
 The concrete instance is this repository's owner: 620 files, ~48,700
-lines, curated with real discipline — and 145 broken links, 42% of
+lines, curated with real discipline, and 145 broken links, 42% of
 files with no metadata, and no way to answer "does anything I've
 written contradict this?"
 
@@ -91,7 +91,7 @@ to their documents (see [competitive boundary](./competitive-boundary.md)).
 
 ---
 
-## What Forge competes with — and what it actually competes on
+## What Forge competes with: and what it actually competes on
 
 | Category | Their core operation | Forge's difference |
 |---|---|---|
@@ -110,7 +110,7 @@ wager.
 
 ## What makes it defensible
 
-Not the stack — LangGraph, Qdrant, and Neo4j are commodities. The
+Not the stack, LangGraph, Qdrant, and Neo4j are commodities. The
 defensible parts are the ones that are tedious and unglamorous:
 
 1. **The provenance model.** Five distinct tiers (source fact,
@@ -120,8 +120,7 @@ defensible parts are the ones that are tedious and unglamorous:
 2. **Non-destructive evolution.** Superseded understanding is retained,
    with the evidence that caused the change.
 3. **Determinism discipline.** Most of the pipeline is ordinary
-   software. That makes Forge cheap, fast, testable, and offline-capable
-   — properties that LLM-centric competitors structurally cannot match.
+   software. That makes Forge cheap, fast, testable, and offline-capable: properties that LLM-centric competitors structurally cannot match.
 4. **The accumulated model itself.** Switching cost grows with every
    ingested source, and the model is the user's, in plain Markdown.
 
@@ -131,14 +130,14 @@ defensible parts are the ones that are tedious and unglamorous:
 
 Deferred deliberately, so that the core gets built:
 
-Autonomous research agents · browser automation · automatic paper
-downloading · YouTube ingestion · multi-agent debate · autonomous
-writing · autonomous task execution · social integrations · enterprise
-collaboration · billing · cloud multi-tenancy · complex auth · mobile
+Autonomous research agents, browser automation, automatic paper
+downloading, YouTube ingestion, multi-agent debate, autonomous
+writing, autonomous task execution, social integrations, enterprise
+collaboration, billing, cloud multi-tenancy, complex auth, mobile
 apps.
 
 Each is a plausible future extension. Each would also, if built first,
-consume the effort that the provenance and evolution model needs — and
+consume the effort that the provenance and evolution model needs, and
 those are the parts that cannot be retrofitted.
 
 ---

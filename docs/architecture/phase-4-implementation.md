@@ -1,16 +1,16 @@
-# Phase 4 — Agentic Knowledge Evolution Engine
+# Phase 4: Agentic Knowledge Evolution Engine
 
 *What was built, how it behaves, and what it deliberately refuses to do.
 Describes the implementation as it exists.*
 
-**Status:** implemented · **Tests:** 737 passing · **LLM required:** no (CI is offline)
+**Status:** implemented, **Tests:** 737 passing, **LLM required:** no (CI is offline)
 **Validate:** `bash scripts/validate_phase4.sh`
 
 ---
 
 ## 1. Why Phase 4 exists
 
-Phases 1–3 built a system that could take knowledge *in*:
+Phases 1-3 built a system that could take knowledge *in*:
 
 ```
 SOURCE -> INGEST -> EXTRACT -> PROPOSE -> APPROVE -> ACTIVATE -> CANONICAL KNOWLEDGE
@@ -42,8 +42,8 @@ stop itself:
 |---|---|
 | Observe new evidence | `register_evidence` |
 | Inspect existing knowledge | `identify_affected_concepts`, `retrieve_related_claims` |
-| Reason about the relationship | `assess_evidence` — the only model call |
-| Decide what should happen | `classify_impact` — deterministic policy |
+| Reason about the relationship | `assess_evidence`, the only model call |
+| Decide what should happen | `classify_impact`, deterministic policy |
 | Propose an action | `generate_proposals` |
 | **Stop for a human when policy requires it** | `await_human_review` |
 | Resume from persisted state | LangGraph checkpoint + `EvolutionService.resume` |
@@ -132,7 +132,7 @@ person.
 Note how many edges reach `finalize_workflow` directly: "this evidence does not
 affect anything you know" is the common case, and it must cost nothing. On
 unrelated evidence the run ends after three deterministic nodes having made
-**zero** model calls — asserted in
+**zero** model calls, asserted in
 `test_unrelated_evidence_never_reaches_the_model`.
 
 ---
@@ -142,12 +142,12 @@ unrelated evidence the run ends after three deterministic nodes having made
 `EvolutionState` is a `TypedDict`, checkpointed after every node. Two rules
 shape it:
 
-**It must serialize.** No services, connections, or domain objects — anything
+**It must serialize.** No services, connections, or domain objects: anything
 that cannot round-trip breaks the first resume.
 
 **It must not carry the corpus.** State holds *identifiers*; nodes resolve them
 against the store when they need content. Embedding span text and claim objects
-would checkpoint megabytes per step and, worse, go stale — a resumed run would
+would checkpoint megabytes per step and, worse, go stale: a resumed run would
 act on a snapshot of knowledge rather than knowledge as it now is.
 
 | Group | Fields |
@@ -183,8 +183,8 @@ orchestrator uninstalled.
 ## 6. Deterministic narrowing
 
 **The LLM is never handed the corpus and asked what is relevant.** It is handed
-a small, already-justified candidate set. That is a cost decision — scanning 600
-documents per call is unaffordable — but mostly a groundedness decision: a model
+a small, already-justified candidate set. That is a cost decision, scanning 600
+documents per call is unaffordable, but mostly a groundedness decision: a model
 asked "what does this affect?" answers fluently and unverifiably, while "does
 this bear on *this* claim?" can be checked.
 
@@ -204,7 +204,7 @@ Embeddings are **not** consulted by default: Phase 3 measured them as a
 retrieval regression ([`../research/retrieval-baseline.md`](../research/retrieval-baseline.md)),
 and switching them on here without new evidence would contradict a measurement.
 
-Claim retrieval is bounded twice — per concept and overall — because forty
+Claim retrieval is bounded twice, per concept and overall, because forty
 claims in one prompt produces forty shallow judgements. `SUPERSEDED` and
 `RETRACTED` claims are excluded; `DISPUTED` ones are deliberately kept, since a
 claim flagged as doubtful is still live knowledge that later evidence may
@@ -219,7 +219,7 @@ than requested in the prompt:
 
 **1. Grounding.** Every cited span id must be one actually shown to the model
 *and* present in the store. A citation to anything else means the assessment is
-rejected — never repaired. Repairing a hallucinated citation would mean
+rejected, never repaired. Repairing a hallucinated citation would mean
 fabricating the evidence for a knowledge change. Both failure shapes are
 tested: an invented id, and a real id the model was not shown.
 
@@ -236,7 +236,7 @@ tested: an invented id, and a real id the model was not shown.
 There is deliberately **no `CONTRADICTS`**. A false contradiction costs more
 trust than a missed one: the first makes a user distrust everything Forge
 asserts, the second only leaves them where they were. `INSUFFICIENT_EVIDENCE`
-is a first-class outcome, not a failure — a model forced to choose among
+is a first-class outcome, not a failure: a model forced to choose among
 substantive options will pick one, so giving it an honest way to decline is
 what keeps the others meaningful.
 
@@ -267,7 +267,7 @@ a single possible disagreement always reaches a human.
 | `POTENTIAL_CONFLICT` | any assessment conflicts |
 | `REFINES` | else any refines |
 | `SUPPORTS` | else any supports |
-| `NEW_KNOWLEDGE` | no existing claim was even related — a finding, not a non-event |
+| `NEW_KNOWLEDGE` | no existing claim was even related, a finding, not a non-event |
 | `NO_MATERIAL_CHANGE` | claims existed, none affected |
 
 **No confidence scores.** A number a model emits about its own certainty is not
@@ -279,7 +279,7 @@ is not.
 ## 9. Proposals and activation
 
 Model reasoning never mutates canonical knowledge. Assessments become proposals
-in the **existing** Phase 2/3 proposal system — not a parallel one, so there is
+in the **existing** Phase 2/3 proposal system, not a parallel one, so there is
 one review queue and one approval path.
 
 | Assessment | Proposal | On activation |
@@ -287,7 +287,7 @@ one review queue and one approval path.
 | `SUPPORTS` | `CLAIM_EVIDENCE` (model_generated) | Attaches an `INFERS_FROM` link. Statement untouched. |
 | `REFINES` | `CLAIM_REFINEMENT` (model_generated) | New claim; old one **superseded**, retained, `SUPERSEDE` revision. |
 | `POTENTIAL_CONFLICT` | `CLAIM_CONFLICT` (**ambiguous**) | Claim marked `DISPUTED`, evidence attached. **Never retracted, never rewritten.** |
-| `IRRELEVANT` / `INSUFFICIENT_EVIDENCE` | none | — |
+| `IRRELEVANT` / `INSUFFICIENT_EVIDENCE` | none | - |
 
 Conflicts are classified `AMBIGUOUS`, which makes Phase 3's batch-approval
 guard refuse to bulk-approve them without an explicit flag. That guard was
@@ -305,7 +305,7 @@ constraint applies here unchanged.
 `await_human_review` calls LangGraph's `interrupt()`. The run persists and the
 process may exit.
 
-Approval happens through `forge proposals approve` — the one approval
+Approval happens through `forge proposals approve`, the one approval
 mechanism. On resume the node re-reads each proposal's **actual stored status**
 rather than trusting the resume payload, so a resume cannot smuggle in a
 decision nobody recorded.
@@ -344,7 +344,7 @@ cannot practically host an 8B model. A GPU laptop can, but is not always on. So:
 **Credentials are never stored.** Configuration names an environment variable;
 the key is read at call time and never written to config, the database,
 provenance, or logs. `health()` reports a credential's presence without
-revealing it — tested.
+revealing it, tested.
 
 ### Failure behaviour
 
@@ -378,7 +378,7 @@ evidence content hash + claim id + processor version
 Changing any component recomputes. Note `model_id` carries the *provider*: two
 providers serving the same model name are still two different things.
 
-**Only `assess_evidence` spends a call** — asserted by node-level accounting,
+**Only `assess_evidence` spends a call.** Asserted by node-level accounting,
 not by inspection. Narrowing, retrieval, impact classification, proposal
 construction, and activation are all deterministic and all verified to make
 zero calls.
@@ -446,8 +446,8 @@ all cost.
 
 ## Related
 
-- [`phase-3-implementation.md`](phase-3-implementation.md) — activation, identity, graph, retrieval
-- [`../research/provider-availability.md`](../research/provider-availability.md) — what could and could not be measured
-- [`../research/retrieval-baseline.md`](../research/retrieval-baseline.md) — why embeddings are off by default
-- [`../knowledge-model/canonical-model.md`](../knowledge-model/canonical-model.md) — the entities being evolved
-- [`../cli.md`](../cli.md) — command reference
+- [`phase-3-implementation.md`](phase-3-implementation.md), activation, identity, graph, retrieval
+- [`../research/provider-availability.md`](../research/provider-availability.md): what could and could not be measured
+- [`../research/retrieval-baseline.md`](../research/retrieval-baseline.md), why embeddings are off by default
+- [`../knowledge-model/canonical-model.md`](../knowledge-model/canonical-model.md), the entities being evolved
+- [`../cli.md`](../cli.md), command reference

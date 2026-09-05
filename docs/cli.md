@@ -4,7 +4,7 @@
 
 **Commands are read-only with respect to the Markdown vault**, with one
 explicit exception: `forge proposals approve --apply`. Everything else writes
-only to `.forge/`, which is derived state and can be deleted at any time —
+only to `.forge/`, which is derived state and can be deleted at any time:
 `forge index` rebuilds it.
 
 ---
@@ -25,7 +25,7 @@ Run that from this repository's root; `FORGE_VAULT_PATH` is your vault
 checkout, for the reason in **How the vault is located** below.
 
 > **Pasting into zsh (the macOS default):** `INTERACTIVE_COMMENTS` is **off** by
-> default, so a `#` typed at an interactive prompt is *not* a comment — zsh
+> default, so a `#` typed at an interactive prompt is *not* a comment: zsh
 > reports `command not found: #`, or silently passes it and everything after it
 > as arguments to the command before it. The **setup** blocks in this document
 > are therefore written without trailing comments. The command-reference blocks
@@ -38,17 +38,17 @@ checkout, for the reason in **How the vault is located** below.
 Python 3.10+. No model, no database server, and no API key is required for
 anything below except `forge model-test`.
 
-### macOS — `forge` as a global command
+### macOS: `forge` as a global command
 
-macOS ships a `python3` below Forge's floor — 3.8.2 on 10.15 Catalina,
-3.9.x on later versions — which cannot load the
+macOS ships a `python3` below Forge's floor, 3.8.2 on 10.15 Catalina,
+3.9.x on later versions: which cannot load the
 domain models (they use PEP 604 unions that pydantic evaluates at runtime). You
 need a newer interpreter, and you want `forge` on your `PATH` without activating
 a virtualenv first.
 
 **Get Python from python.org, not Homebrew.** Download the *macOS 64-bit
 universal2 installer* for 3.12 or 3.13 from
-<https://www.python.org/downloads/macos/> and run the `.pkg` — a prebuilt
+<https://www.python.org/downloads/macos/> and run the `.pkg`, a prebuilt
 binary, about two minutes, no build step.
 
 Once a Python version goes security-only its later patches are **source-only**,
@@ -75,7 +75,7 @@ cd ~
 Skipping that last step is the most common cause of `pip` failing with SSL
 errors later: python.org builds ship without CA certificates wired up.
 
-> **Verified on macOS 10.15.8 Catalina (Intel) with Python 3.12.10** — the
+> **Verified on macOS 10.15.8 Catalina (Intel) with Python 3.12.10**, the
 > oldest configuration this has been run on. Homebrew on that machine had no
 > bottles and fell back to source builds; the python.org path took minutes.
 
@@ -86,7 +86,7 @@ python3.12 -m pipx ensurepath
 
 `ensurepath` puts `~/.local/bin` on `PATH`.
 
-Reload the shell so that `PATH` takes effect. Run this **on its own** — `exec`
+Reload the shell so that `PATH` takes effect. Run this **on its own**, `exec`
 replaces the shell process and silently discards anything pasted after it:
 
 ```bash
@@ -99,11 +99,10 @@ pipx install --editable ".[dev]"
 forge --help
 ```
 
-That path is **this repository, not the vault** — the vault has no
+That path is **this repository, not the vault**: the vault has no
 `pyproject.toml` since the split, so installing from it fails.
 
-The vault is a separate checkout. Clone it too, and tell the engine where it is
-— this export is not optional, for the reason under **Why `--editable`** below:
+The vault is a separate checkout. Clone it too, and tell the engine where it is. This export is not optional, for the reason under **Why `--editable`** below:
 
 ```bash
 git clone https://github.com/TarunSitaraman/forge.git ~/forge
@@ -115,7 +114,7 @@ Then, on its own line, `exec $SHELL -l`.
 **Why not Homebrew.** It is fine on a current machine, and if you already run it
 `brew install python@3.12 pipx` works. But on an older Intel Mac there is often
 no prebuilt bottle for the OS version, and Homebrew silently falls back to
-compiling from source — including chains like `git → cmake → …`, each built
+compiling from source: including chains like `git → cmake → …`, each built
 locally. That can run for hours on modest hardware, with no error to tell you
 something went wrong. It is not worth adopting Homebrew just for this.
 
@@ -133,7 +132,7 @@ so edits to `engine/` take effect immediately with no reinstall.
 An editable install puts `forge/config.py` inside *this* repository. While the
 engine lived in the vault those were the same directory and resolving next to
 the module was a feature; afterwards it resolved to the engine's own checkout
-every time. That rule was removed on 2026-09-01 — it made `forge index` with no
+every time. That rule was removed on 2026-09-01. It made `forge index` with no
 `FORGE_VAULT_PATH` silently index the engine's own `docs/` and print a success
 line. Forge now looks only upward from your working directory, so set
 `FORGE_VAULT_PATH` once and it works from anywhere.
@@ -153,14 +152,14 @@ If that prints a path ending in `forge-engine`, the export did not take.
 forge --install-completion
 ```
 
-Then, on its own line again, `exec $SHELL -l` — after which `forge <TAB>`
+Then, on its own line again, `exec $SHELL -l`: after which `forge <TAB>`
 completes subcommands and flags.
 
 **Running the test suite and the scripts under a pipx install.** `pipx` puts the
 dependencies in its own isolated environment, so `python -m pytest` and
 `python scripts/...` against your *system* interpreter fail with
-`ModuleNotFoundError` (`pytest`, `structlog`, …). That is the isolation working
-as intended, not a broken install — reach for the venv's interpreter instead:
+`ModuleNotFoundError` (`pytest`, `structlog`, ...). That is the isolation working
+as intended, not a broken install: reach for the venv's interpreter instead:
 
 ```bash
 PY="$(pipx environment --value PIPX_LOCAL_VENVS)/forge-engine/bin/python"
@@ -175,7 +174,7 @@ $PY = "$venv\forge-engine\Scripts\python.exe"
 & $PY scripts\assessment_eval.py --provider ollama
 ```
 
-The `forge` command itself needs none of this — it already runs inside that
+The `forge` command itself needs none of this. It already runs inside that
 environment. This applies only to invoking Python directly. If you would rather
 have one interpreter for everything, install into a plain virtualenv
 (`python -m venv .venv && . .venv/bin/activate && pip install -e ".[dev]"`)
@@ -183,7 +182,7 @@ instead of pipx, and accept that `forge` then works only with that venv active.
 
 **A model, if you want the LLM-backed commands.** Everything except
 `forge model-test`, `forge evolve`, and extraction runs without one. The
-provider is per-machine configuration — see the next section.
+provider is per-machine configuration, see the next section.
 
 ### Where settings live
 
@@ -200,7 +199,7 @@ $EDITOR ~/.config/forge/forge.env
 forge status                              # shows which file was loaded
 ```
 
-On Windows the same path resolves under your user profile —
+On Windows the same path resolves under your user profile,
 `%USERPROFILE%\.config\forge\forge.env`:
 
 ```powershell
@@ -222,12 +221,12 @@ FORGE_LLM_PROVIDER=mock forge status
 
 The format is `KEY=value`, one per line, with `#` comments, blank lines, a
 leading `export `, and surrounding quotes all accepted. There is deliberately no
-interpolation and no command substitution — a settings file that can execute is
+interpolation and no command substitution, a settings file that can execute is
 a settings file that can surprise you, and this one holds a credential. A
 malformed line fails at startup naming the file and line number.
 
 **Loading the file never mutates the environment.** Values are resolved through
-it, not exported into it, so nothing here leaks into processes Forge spawns —
+it, not exported into it, so nothing here leaks into processes Forge spawns,
 and the key in particular is fetched at call time and never lands in
 `os.environ`. `.gitignore` covers `forge.env` so a stray copy inside the repo
 cannot be committed.
@@ -236,13 +235,13 @@ cannot be committed.
 
 **No paid API is required, and none is assumed.** Nothing in the engine branches
 on which provider answered; only the recorded provenance differs, and it always
-records *which* provider and model produced a result — so results from two
+records *which* provider and model produced a result, so results from two
 different models are never silently compared.
 
 The intended setup is two tiers: the GPU box does the real work, and a hosted
 open-weights endpoint covers the Mac when that box is off.
 
-#### Tier 1 — the ASUS, from anywhere
+#### Tier 1: the ASUS, from anywhere
 
 The ASUS is the default provider and needs no configuration at all beyond the
 model:
@@ -257,10 +256,10 @@ export FORGE_LLM_TIMEOUT=600
 the reference hardware, but one adversarial case has exceeded both the 120 s
 default *and* a raised 300 s. A timeout costs its full value before the retry
 even begins, so setting it too low is far more expensive than setting it too
-high — see [provider availability](./research/provider-availability.md) §7.
+high: see [provider availability](./research/provider-availability.md) §7.
 
-`FORGE_OLLAMA_URL` points at any reachable host — nothing assumes the model runs
-locally — so the Mac can drive it over the LAN:
+`FORGE_OLLAMA_URL` points at any reachable host. Nothing assumes the model runs
+locally, so the Mac can drive it over the LAN:
 
 ```bash
 export FORGE_OLLAMA_URL=http://<asus-hostname>:11434
@@ -268,7 +267,7 @@ export FORGE_OLLAMA_URL=http://<asus-hostname>:11434
 
 To reach it off the LAN, put both machines on a private network (Tailscale or
 equivalent) and use the private hostname. **Do not expose port 11434 to the
-public internet** — Ollama has no authentication, so anything that can reach it
+public internet**, Ollama has no authentication, so anything that can reach it
 can use it.
 
 Ollama binds to loopback by default, so the GPU box must be told to listen on
@@ -279,7 +278,7 @@ here is Windows** (ASUS laptop, RTX 4050 ~6 GB VRAM, 16 GB RAM):
 [Environment]::SetEnvironmentVariable("OLLAMA_HOST", "0.0.0.0:11434", "User")
 ```
 
-Then quit Ollama from the system tray and relaunch it — the variable is read at
+Then quit Ollama from the system tray and relaunch it, the variable is read at
 startup. On Linux the equivalent is `OLLAMA_HOST=0.0.0.0:11434 ollama serve`, or
 the same variable in the systemd unit.
 
@@ -289,13 +288,13 @@ Verify from the box itself, then from the other machine:
 curl.exe http://localhost:11434            # -> Ollama is running
 ```
 
-This tier is the one with a measurement behind it (Qwen3 8B, 5/5 — see below),
+This tier is the one with a measurement behind it (Qwen3 8B, 5/5: see below),
 which is a reason to prefer it, not just a convenience.
 
-#### Tier 2 — a hosted open-weights endpoint, when the ASUS is off
+#### Tier 2: a hosted open-weights endpoint, when the ASUS is off
 
-The cloud provider speaks two wire formats, and the second one —
-`FORGE_CLOUD_VENDOR=openai` — is the de-facto shape for essentially every hosted
+The cloud provider speaks two wire formats, and the second one:
+`FORGE_CLOUD_VENDOR=openai`: is the de-facto shape for essentially every hosted
 open-weights service (Groq, OpenRouter, Together, Cerebras, Fireworks) as well
 as self-hosted servers (vLLM, llama.cpp, LM Studio). Pointing Forge at one is
 configuration, not a code change.
@@ -315,12 +314,12 @@ Known presets: `groq`, `openrouter`, `together`, `cerebras`, `fireworks`,
 `lmstudio`, `llama-cpp`, `vllm`. An unknown name fails at startup with the list
 rather than silently falling back to a different host.
 
-**You always choose the model.** A preset supplies an endpoint, never a model —
+**You always choose the model.** A preset supplies an endpoint, never a model:
 omitting `FORGE_CLOUD_MODEL` is a startup error naming that variable, not a
 guess. And a preset is a *default*, not a mode: every field it fills stays
 individually overridable, and any other host works without one by setting
 `FORGE_CLOUD_VENDOR=openai` plus `FORGE_CLOUD_BASE_URL` (the root that has
-`/v1/chat/completions` beneath it — include any vendor path prefix, no trailing
+`/v1/chat/completions` beneath it, include any vendor path prefix, no trailing
 `/v1`).
 
 Presets are a convenience against a typo, not an integration: third-party
@@ -328,7 +327,7 @@ endpoints can change, and the explicit variables are always authoritative.
 
 Three things worth knowing about this path:
 
-- **Output ceilings are lower than a frontier model's.** Presets set 4096–8192;
+- **Output ceilings are lower than a frontier model's.** Presets set 4096-8192;
   the bare default is 16000, sized for a 128K-output model. Gateways reject an
   over-large request rather than clamping it, and the 400 body is surfaced in
   the error. Override with `FORGE_CLOUD_MAX_TOKENS`.
@@ -339,7 +338,7 @@ Three things worth knowing about this path:
 - **JSON mode is requested where the schema is known**
   (`response_format: {"type": "json_object"}`), and Forge validates the result
   regardless. A response that will not validate against the schema raises rather
-  than becoming a degraded write — the same contract as every other provider.
+  than becoming a degraded write, the same contract as every other provider.
 
 Anthropic remains supported as a third option (`FORGE_CLOUD_VENDOR=anthropic`,
 the default when no preset is set) if a key ever exists; nothing requires it.
@@ -347,7 +346,7 @@ the default when no preset is set) if a key ever exists; nothing requires it.
 #### Re-measure after any provider change
 
 **A quality result belongs to a model, not to Forge.** The one real-model
-measurement on record — 5/5 on the assessment set, 2026-08-14 — is Qwen3 8B via
+measurement on record: 5/5 on the assessment set, 2026-08-14: is Qwen3 8B via
 Ollama and describes *only* that. Moving the Mac to a hosted open-weights model
 does not inherit it, and the two must not be pooled.
 
@@ -359,8 +358,8 @@ python3 scripts/assessment_eval.py --provider cloud --json    # or --provider ol
 forge model-test --repetitions 3 --note "host: <name>, model: <id>"
 ```
 
-`assessment_eval.py` drives the production assessor and proposer — only the
-provider changes between modes — and `forge model-test` writes its results to
+`assessment_eval.py` drives the production assessor and proposer, only the
+provider changes between modes, and `forge model-test` writes its results to
 [`research/local-model-capability-spike.md`](./research/local-model-capability-spike.md),
 recording which provider and model produced them. Both refuse to invent a number
 when the provider is unreachable; they report the unavailability instead.
@@ -381,17 +380,17 @@ either as a rate.
 |---|---|
 | `zsh: command not found: forge` | `~/.local/bin` is not on `PATH`. Run `pipx ensurepath`, then `exec $SHELL -l`. |
 | `error: externally-managed-environment` | You ran `pip install` against Homebrew Python. Use pipx as above, or a venv. |
-| `configuration error: could not locate a Forge vault` | `FORGE_VAULT_PATH` is unset and you are not standing in a vault. `export FORGE_VAULT_PATH=~/forge`. Reinstalling with `--editable` does **not** fix this since the split — it pins to the engine, not the vault. |
+| `configuration error: could not locate a Forge vault` | `FORGE_VAULT_PATH` is unset and you are not standing in a vault. `export FORGE_VAULT_PATH=~/forge`. Reinstalling with `--editable` does **not** fix this since the split, it pins to the engine, not the vault. |
 | `forge status` reports a vault ending in `forge-engine` | Automatic resolution found the engine checkout, which is what it now does. Set `FORGE_VAULT_PATH` to your notes and re-run. |
 | `forge index` reports collisions as AMBIGUOUS that you already decided | Fixed 2026-09-01; update the engine. The identity config was read relative to the working directory rather than the vault, so running from anywhere but the vault root silently ignored `config/concept-identity.yaml`. |
 | `pydantic` / `TypeError` on import | Python 3.9 or older. Check with `python3 -V`; reinstall against a newer one: `pipx install --python "$(python3.12 -c 'import sys; print(sys.executable)')" --editable ".[dev]"`. |
-| `installer: ... NSInvalidArgumentException ... nil string parameter` | macOS privacy (TCC) is blocking access to the folder the `.pkg` is in — `~/Downloads` is protected, and `sudo installer` running as root gets denied. Use `open <pkg>` and click through the GUI installer instead. |
+| `installer: ... NSInvalidArgumentException ... nil string parameter` | macOS privacy (TCC) is blocking access to the folder the `.pkg` is in, `~/Downloads` is protected, and `sudo installer` running as root gets denied. Use `open <pkg>` and click through the GUI installer instead. |
 | `FileNotFoundError` from `os.getcwd()` in *any* Python command | Your shell's working directory is a TCC-protected folder (`~/Downloads`, `~/Desktop`, `~/Documents`) the interpreter has no permission for, so it cannot resolve its own cwd and dies before running anything. `cd ~` and retry. Grant Terminal Full Disk Access only if you actually need to work from those folders. |
-| `WARNING: Install Certificates failed` | Same cause as the row above — run it from `~`. Leaving it unfixed makes every later `pip` call fail on SSL. |
-| A pasted block stops silently after `exec $SHELL -l` | `exec` replaces the shell process and discards the rest of the buffered input, so the following lines never ran — no error, just a prompt. Paste it on its own. |
+| `WARNING: Install Certificates failed` | Same cause as the row above, run it from `~`. Leaving it unfixed makes every later `pip` call fail on SSL. |
+| A pasted block stops silently after `exec $SHELL -l` | `exec` replaces the shell process and discards the rest of the buffered input, so the following lines never ran, no error, just a prompt. Paste it on its own. |
 | `No module named pytest` | pipx installed the `[dev]` extras into its own venv, not your system Python. Run `"$(pipx environment --value PIPX_LOCAL_VENVS)/forge-engine/bin/python" -m pytest tests -q`. |
-| `brew install` sits on `./bootstrap --prefix=...` for a very long time | No prebuilt bottle for your macOS version, so Homebrew is compiling from source. Not hung, but it can take hours on older hardware. Interrupting is safe — partial builds are discarded. Use the python.org installer instead. |
-| Ollama `UNAVAILABLE` in `forge status` | Expected before a model host is configured — every deterministic command still works without one. If you did configure one, check it is running and reachable: `curl <host>:11434`. |
+| `brew install` sits on `./bootstrap --prefix=...` for a very long time | No prebuilt bottle for your macOS version, so Homebrew is compiling from source. Not hung, but it can take hours on older hardware. Interrupting is safe, partial builds are discarded. Use the python.org installer instead. |
+| Ollama `UNAVAILABLE` in `forge status` | Expected before a model host is configured, every deterministic command still works without one. If you did configure one, check it is running and reachable: `curl <host>:11434`. |
 
 To upgrade after pulling new commits, an editable install needs nothing. To
 rebuild it anyway: `pipx reinstall forge-engine`. To remove it entirely:
@@ -409,27 +408,27 @@ Environment variables, all optional:
 | `FORGE_VAULT_PATH` | see below | Vault to index |
 | `FORGE_STATE_DIR` | `<vault>/.forge` | Derived state |
 | `FORGE_LLM_PROVIDER` | `ollama` | `ollama`, `cloud`, or `mock` |
-| `FORGE_OLLAMA_URL` | `http://localhost:11434` | Ollama endpoint — local or LAN |
+| `FORGE_OLLAMA_URL` | `http://localhost:11434` | Ollama endpoint, local or LAN |
 | `FORGE_OLLAMA_THINK` | unset | Tri-state reasoning toggle; unset leaves the model's default |
 | `FORGE_MODEL_DEFAULT` | `llama3.1:8b` | Model for all roles (Ollama) |
-| `FORGE_MODEL_EXTRACTION` / `_ANALYSIS` / `_RESOLUTION` / `_SYNTHESIS` | — | Per-role override (Ollama) |
-| `FORGE_CLOUD_PRESET` | — | `groq`, `openrouter`, `together`, `cerebras`, `fireworks`, `lmstudio`, `llama-cpp`, `vllm`. Fills the four fields below; you still set the model |
-| `FORGE_CLOUD_VENDOR` | `anthropic` | `anthropic` or `openai` — a wire format, not a company. `openai` is the shape every open-weights host speaks |
+| `FORGE_MODEL_EXTRACTION` / `_ANALYSIS` / `_RESOLUTION` / `_SYNTHESIS` | - | Per-role override (Ollama) |
+| `FORGE_CLOUD_PRESET` | - | `groq`, `openrouter`, `together`, `cerebras`, `fireworks`, `lmstudio`, `llama-cpp`, `vllm`. Fills the four fields below; you still set the model |
+| `FORGE_CLOUD_VENDOR` | `anthropic` | `anthropic` or `openai`, a wire format, not a company. `openai` is the shape every open-weights host speaks |
 | `FORGE_CLOUD_MODEL` | `claude-sonnet-5` | Model for every role on the cloud provider |
 | `FORGE_CLOUD_API_KEY_ENV` | `ANTHROPIC_API_KEY` | **Name** of the variable holding the key |
 | `FORGE_CLOUD_BASE_URL` | `https://api.anthropic.com` | API root; for `openai`, the path above `/v1/chat/completions` |
-| `FORGE_CLOUD_MAX_TOKENS` | `16000` | Output cap. **Lower to 4096–8192 for open-weights models** |
+| `FORGE_CLOUD_MAX_TOKENS` | `16000` | Output cap. **Lower to 4096-8192 for open-weights models** |
 | `FORGE_LLM_TIMEOUT` / `FORGE_LLM_MAX_RETRIES` | `120` / `2` | Per-call timeout and retries |
 | `FORGE_LOG_LEVEL` / `FORGE_LOG_FORMAT` | `INFO` / `console` | `console` or `json` |
 
 **No API key is ever configuration.** `FORGE_CLOUD_API_KEY_ENV` names the
 variable to read; the key itself is read at call time and never written to
-config, the store, provenance, or logs — a key in a YAML file is a key in Git.
+config, the store, provenance, or logs: a key in a YAML file is a key in Git.
 Configuration is validated at startup: a bad vault path or an unbound model role
 fails immediately rather than mid-run.
 
 The cloud provider binds one model to every role, so the per-role
-`FORGE_MODEL_*` variables apply to Ollama only — which is deliberate, since
+`FORGE_MODEL_*` variables apply to Ollama only: which is deliberate, since
 their `llama3.1:8b` default is not a valid cloud model.
 
 ### How the vault is located
@@ -440,7 +439,7 @@ a directory containing `.git`, in this order:
 1. **Upward from the current directory.** If you are standing in your vault,
    that is the vault. This is the only automatic rule.
 
-A second rule — *next to the installed engine* — was removed on 2026-09-01. It
+A second rule, *next to the installed engine*, was removed on 2026-09-01. It
 pinned the CLI to its checkout from any directory, which was right while the
 engine lived inside the vault and wrong the moment it did not: under an editable
 install it matched the engine's own repository every time, so the engine indexed
@@ -451,7 +450,7 @@ a subset of the second, so the rule is gone rather than narrowed.
 If neither finds one, Forge **fails with exit code 2** and tells you to set
 `FORGE_VAULT_PATH`. It does not fall back to the current directory: doing so
 meant `forge index` in an arbitrary directory would index that directory, write
-a `.forge/` into it, and print a success line — silently operating on the wrong
+a `.forge/` into it, and print a success line: silently operating on the wrong
 thing instead of reporting that it could not find the right one.
 
 ---
@@ -474,8 +473,8 @@ forge shell
 forge ›
 ```
 
-**A slash command is a Forge command.** The shell keeps no registry of its own —
-it dispatches into the same typer group the CLI uses, so every command above
+**A slash command is a Forge command.** The shell keeps no registry of its own.
+It dispatches into the same typer group the CLI uses, so every command above
 has a slash form, including any added later, and every option works unchanged:
 
 ```
@@ -499,11 +498,11 @@ whole rather than split, so apostrophes and question marks survive.
 A command that fails ends the command, not the session: usage errors, an
 unreachable provider and unknown commands are all reported and the prompt
 returns. `/shell` is refused rather than nested, and is not offered in `/help`
-or completion — listing a command the shell will not run is a promise it breaks.
+or completion: listing a command the shell will not run is a promise it breaks.
 
 **The header does not probe the provider.** It reports what is configured, which
 costs nothing. Reachability is a network round trip, and a header that stalls on
-a timeout every redraw is worse than one that says only what it knows for free —
+a timeout every redraw is worse than one that says only what it knows for free,
 run `/status` for the checked version. The header also flags a stale index: when
 the file count on disk and the indexed count differ, it shows both.
 
@@ -527,7 +526,7 @@ forge tui
 UI is not load-bearing for indexing a vault. The core install stays minimal and
 `forge shell` offers every command with nothing beyond the standard library and
 what typer already brings. Without the extra, `forge tui` prints the install
-line and exits 2 — never a traceback.
+line and exits 2: never a traceback.
 
 | | |
 |---|---|
@@ -541,7 +540,7 @@ line and exits 2 — never a traceback.
 
 **The quick bar.** Typing `/` offers commands with a one-line description of
 each. A bare `/` shows the ones a session actually reaches for rather than an
-alphabetical list of everything — sorted A–Z, `activate` comes first, which is
+alphabetical list of everything, sorted A-Z, `activate` comes first, which is
 nobody's common case. Typing filters: prefix matches lead, substring matches
 follow, so `eval` finds `retrieval-eval` which a prefix-only match would hide.
 The bar closes at the first space, because by then the command is chosen and a
@@ -563,17 +562,17 @@ reporting on itself. It flags a stale index the same way the shell does.
 **A running command is always visible.** The status line switches to
 `● running <command> · 12s · esc to interrupt` for as long as it takes, and a
 command that finishes having printed nothing says `(no output)`. Without that,
-a slow command and a hung one look identical — which is exactly what a cloud
+a slow command and a hung one look identical: which is exactly what a cloud
 provider and a multi-minute `FORGE_LLM_TIMEOUT` produce.
 
 **A second command while one is running is refused**, not queued and not
 silently substituted. The worker is exclusive, so starting another would cancel
-the first; the transcript says `still running <command> (12s) — esc to
+the first; the transcript says `still running <command> (12s), esc to
 interrupt` instead. Wait, or interrupt.
 
 **Commands run on a worker thread and stream.** A long index or extraction run
 shows its progress as it happens rather than freezing the interface and dumping
-at the end. Both stdout and stderr are captured — a structlog retry warning
+at the end. Both stdout and stderr are captured, a structlog retry warning
 belongs in the transcript, not scrawled across the alternate screen where it
 corrupts the layout until a redraw.
 
@@ -634,7 +633,7 @@ llm provider   : ollama (UNAVAILABLE)
 `concepts=0 claims=0` is expected in Phase 1. Indexing describes the corpus; it
 does not assert anything about it. Extraction is Phase 2+.
 
-An unreachable provider is reported, never raised — status must work when
+An unreachable provider is reported, never raised: status must work when
 nothing is installed.
 
 ---
@@ -658,7 +657,7 @@ hashes, per-folder breakdown, and filename-style distribution.
 
 ## `forge diagnostics`
 
-Report metadata, link, and convention problems. **Reports only — nothing is
+Report metadata, link, and convention problems. **Reports only. Nothing is
 modified.**
 
 ```bash
@@ -705,7 +704,7 @@ forge inspect README.md --json
 
 Shows hash, size, frontmatter state and keys, tags, recovered `related:` links,
 heading count, code blocks, link counts, diagnostics, repair proposals as a
-diff, unresolved links with candidates, and — with `--spans` — the derived
+diff, unresolved links with candidates, and: with `--spans`: the derived
 span breakdown with heading paths.
 
 Useful for seeing a defect and its proposed fix side by side:
@@ -739,7 +738,7 @@ Writes `docs/research/local-model-capability-spike.md`.
 
 **Exits non-zero when no model is reachable**, and the generated document says
 so plainly rather than reporting an empty success. Contradiction detection is
-deliberately not tested — it is not a required Phase 1 capability.
+deliberately not tested. It is not a required Phase 1 capability.
 
 Requires Ollama:
 
@@ -754,7 +753,7 @@ forge model-test
 
 ## `forge ingest <path>`
 
-Ingest a PDF or Markdown file — or every supported file under a directory —
+Ingest a PDF or Markdown file, or every supported file under a directory,
 into the canonical knowledge model.
 
 ```bash
@@ -775,7 +774,7 @@ forge ingest paper.pdf --json
 LLM calls: 0  cache: {'hits': 0, 'misses': 0, 'writes': 0}
 ```
 
-Deterministic by default — **no model is required**. `--extract` adds concept
+Deterministic by default, **no model is required**. `--extract` adds concept
 and claim candidates and needs a local Ollama; without one, ingestion still
 succeeds and reports `skipped_no_provider`.
 
@@ -817,7 +816,7 @@ forge concepts rag
 forge documents --json
 ```
 
-`concepts` is empty in Phase 2 by design — extraction produces *proposals*, not
+`concepts` is empty in Phase 2 by design, extraction produces *proposals*, not
 concepts. The command says so rather than looking broken.
 
 ---
@@ -838,8 +837,8 @@ forge proposals approve-all --safety deterministic_verified          # dry run
 forge proposals approve-all --safety deterministic_verified --no-dry-run
 ```
 
-**Batch approval is guarded twice.** `approve-all` is a dry run by default —
-it prints what *would* be approved and decides nothing until `--no-dry-run`.
+**Batch approval is guarded twice.** `approve-all` is a dry run by default.
+It prints what *would* be approved and decides nothing until `--no-dry-run`.
 And it refuses ambiguous proposals outright:
 
 ```
@@ -851,11 +850,11 @@ $ echo $?
 ```
 
 Bulk-approving an ambiguous semantic proposal is approving a decision nobody
-made. Safety class stays derived from provenance and evidence — a model cannot
+made. Safety class stays derived from provenance and evidence, a model cannot
 assert it about its own output.
 
 `show` prints the change as a diff, the reason, its origin (deterministic vs
-which model), the evidence spans with citations, and — for ambiguous concepts —
+which model), the evidence spans with citations, and: for ambiguous concepts:
 every candidate with no selection made.
 
 **Approval is not application.** By default `approve` records the decision and
@@ -907,7 +906,7 @@ Four outcomes, none of them silent:
 
 `failed` leaves the proposal `APPROVED` so the same command retries it, and
 exits non-zero. Activation is idempotent: running it twice creates nothing the
-second time. **Nothing is written to Markdown** — canonical knowledge lives in
+second time. **Nothing is written to Markdown**, canonical knowledge lives in
 the derived store.
 
 ---
@@ -933,8 +932,8 @@ $ forge concept Heap
   pattern/Heap          (pattern)
 ```
 
-`claim` walks the chain the other way — claim → evidence → span → page →
-document → source — with the citation and trust tier at each step.
+`claim` walks the chain the other way, claim → evidence → span → page →
+document → source, with the citation and trust tier at each step.
 
 ---
 
@@ -973,7 +972,7 @@ no path within 3 hops (this does not prove none exists)
 ```
 
 `stats` prints the measurements that decide whether a graph database is ever
-justified — node and edge counts, branching factor, and query latency in
+justified, node and edge counts, branching factor, and query latency in
 milliseconds.
 
 ---
@@ -1006,7 +1005,7 @@ forge embeddings build --provider hashing   # deterministic, no download
 forge embeddings build --provider ollama    # requires a local Ollama
 ```
 
-`hashing` is a lexical-statistical vectorizer, **not** a neural embedding — it
+`hashing` is a lexical-statistical vectorizer, **not** a neural embedding. It
 exists so the embedding pathway can be measured without a model download. See
 [the retrieval baseline](./research/retrieval-baseline.md).
 
@@ -1041,7 +1040,7 @@ resolve are reported as `label_rot` rather than silently lowering recall.
 
 ## `forge diagnostics graph`
 
-Structural integrity of the knowledge graph — nine codes, **report only**.
+Structural integrity of the knowledge graph, nine codes, **report only**.
 
 ```bash
 forge diagnostics graph --json
@@ -1055,7 +1054,7 @@ an unreviewed change to what the user believes.
 ## `forge evolve <source>`
 
 Evaluate how an ingested source's evidence affects existing knowledge. This is
-the Phase 4 command — the one that makes Forge evaluate rather than only store.
+the Phase 4 command, the one that makes Forge evaluate rather than only store.
 
 ```bash
 forge evolve paper-b.pdf          # id, vault locator, or bare filename
@@ -1131,7 +1130,7 @@ cost      : 1 llm call(s), 0 cache hit(s), 13.67ms
 ```
 
 `resume` continues a paused run after you have decided its proposals. Resuming
-with nothing decided pauses again — a resume is not consent. If the configured
+with nothing decided pauses again, a resume is not consent. If the configured
 provider differs from the one that assessed the run, resume refuses until you
 pass `--allow-provider-change`, because mixing judgements from two models with
 no way to tell them apart is exactly the ambiguity provenance exists to
@@ -1184,7 +1183,7 @@ substitutes a different model for a knowledge-mutation decision.
 
 ## What the CLI will not do
 
-No command *requires* a paid API, deletes a note, or writes to the vault — with
+No command *requires* a paid API, deletes a note, or writes to the vault: with
 exactly one exception: `forge proposals approve --apply`, which requires an
 approved, deterministically-verified proposal, backs the file up first, records
 a revision, and touches only the single line named in the proposal.

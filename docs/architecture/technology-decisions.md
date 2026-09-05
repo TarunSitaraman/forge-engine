@@ -1,14 +1,14 @@
-# Forge — Technology Decisions
+# Forge: Technology Decisions
 
 *Each candidate technology evaluated against the audited repository, with a recommendation, a deferral trigger where applicable, and an honest confidence level.*
 
-**Status:** proposed · **Depends on:** [current-state audit](./forge-current-state.md), [target architecture](./target-architecture.md)
+**Status:** proposed, **Depends on:** [current-state audit](./forge-current-state.md), [target architecture](./target-architecture.md)
 
 ---
 
 ## 0. The constraint the audit imposes
 
-The repository contains **zero application code** — no manifests, no
+The repository contains **zero application code**, no manifests, no
 dependencies, no CI, no tests. There is therefore **no existing
 implementation to preserve or migrate**, and the "existing repository
 has priority over these defaults" rule resolves cleanly: it applies to
@@ -19,7 +19,7 @@ stack, which is genuinely greenfield.
 That freedom makes the main risk **over-provisioning**. The natural
 failure here is standing up Postgres + Qdrant + Neo4j + Docker Compose
 in week one and spending the project's early energy on infrastructure
-plumbing instead of the provenance and evolution model — which is the
+plumbing instead of the provenance and evolution model, which is the
 part that actually cannot be retrofitted.
 
 Two rules follow:
@@ -35,7 +35,7 @@ Two rules follow:
 | Quantity | Estimate |
 |---|---|
 | Existing corpus | 620 files, 48,737 lines |
-| Expected spans from corpus | ~8,000–15,000 (heading-level chunking) |
+| Expected spans from corpus | ~8,000-15,000 (heading-level chunking) |
 | Concepts bootstrappable from filenames | ~500 |
 | Existing link edges | ~4,100 |
 | Concurrent writers | **1** |
@@ -54,13 +54,13 @@ the classic mistake.
 |---|---|---|
 | Language | **Python 3.12+** | High |
 | API | **FastAPI** | High |
-| Orchestration | **LangGraph** (Phase 5, W1–W4 only) | High |
-| LangChain | **Selective** — loaders/splitters only, not as a framework | Medium |
+| Orchestration | **LangGraph** (Phase 5, W1-W4 only) | High |
+| LangChain | **Selective**, loaders/splitters only, not as a framework | Medium |
 | Local inference | **Ollama** | High |
 | Embeddings | **Local, via provider abstraction**; model by hardware tier | Medium |
 | Relational | **SQLite now → Postgres on trigger** | High |
 | Vector | **SQLite-based (sqlite-vec/LanceDB) → Qdrant on trigger** | Medium |
-| Graph | **Relational adjacency → Neo4j on trigger** | **Low — see §5** |
+| Graph | **Relational adjacency → Neo4j on trigger** | **Low, see §5** |
 | PDF | **pypdfium2 + pdfplumber**; PyMuPDF only if licensing accepted | Medium |
 | Frontend | **CLI first**, web UI (Next.js/TS) at Phase 6 | High |
 | Obsidian | **TypeScript plugin**, Phase 7 | High |
@@ -86,12 +86,12 @@ convenience.
 
 ## 3. Orchestration
 
-**LangGraph — adopted, scoped to four workflows** (target architecture
+**LangGraph, adopted, scoped to four workflows** (target architecture
 §5): ingestion/evolution, contradiction resolution, re-synthesis,
 corpus backfill. Justified by checkpointing, human-in-the-loop
 interrupts, typed state, and replay.
 
-**LangChain — selective use only.** Its document loaders and text
+**LangChain, selective use only.** Its document loaders and text
 splitters are worth reusing. Its chains, agents, and retriever
 abstractions are not: they hide control flow and make provenance
 tracking harder, which is directly hostile to Principle 10.
@@ -102,13 +102,13 @@ tracking harder, which is directly hostile to Principle 10.
 > fighting it at every boundary.
 
 **Confidence: high** for LangGraph, **medium** for the LangChain
-boundary — the line may need to move once the parsers are real.
+boundary: the line may need to move once the parsers are real.
 
 ---
 
 ## 4. LLM and embeddings
 
-### 4.1 Ollama — adopted as default and CI target
+### 4.1 Ollama: adopted as default and CI target
 
 Satisfies Principle 9 directly: no paid API on any core path. Also the
 lowest-friction local runtime, with an OpenAI-compatible endpoint that
@@ -125,22 +125,22 @@ Configuration binds *roles* to models; business logic references roles.
 |---|---|---|
 | `extraction` | Claims from spans; structured output | Medium |
 | `analysis` | Change analysis, contradiction detection | **Hard** |
-| `resolution` | Concept matching among candidates | Easy–medium |
+| `resolution` | Concept matching among candidates | Easy-medium |
 | `synthesis` | Aggregate generation | Medium |
 | `embedding` | Vectors | N/A |
 
-### 4.3 Hardware is unknown — tiers, not a pick
+### 4.3 Hardware is unknown: tiers, not a pick
 
 The repository records nothing about available hardware, so a single
 recommendation would be a guess. Three tiers instead:
 
 | Tier | Generation | Embedding |
 |---|---|---|
-| Modest (≤8 GB VRAM / Apple silicon 16 GB) | 7–8B instruct, quantized | `bge-small-en-v1.5` (384d) |
-| Comfortable (12–24 GB) | 12–14B instruct | `bge-base-en-v1.5` / `nomic-embed-text` (768d) |
-| Generous (≥32 GB) | 27–32B instruct | `bge-large` / `nomic-embed-text` |
+| Modest (≤8 GB VRAM / Apple silicon 16 GB) | 7-8B instruct, quantized | `bge-small-en-v1.5` (384d) |
+| Comfortable (12-24 GB) | 12-14B instruct | `bge-base-en-v1.5` / `nomic-embed-text` (768d) |
+| Generous (≥32 GB) | 27-32B instruct | `bge-large` / `nomic-embed-text` |
 
-**Embedding dimension is a schema-affecting choice** — changing it
+**Embedding dimension is a schema-affecting choice.** Changing it
 requires re-embedding every span. Store `embedding_model` and
 `dimensions` alongside vectors from day one so re-embedding is a
 detectable, scriptable migration rather than silent corruption.
@@ -148,13 +148,13 @@ detectable, scriptable migration rather than silent corruption.
 ### 4.4 The open risk
 
 **`analysis` is the hard role and the one most likely to disappoint on
-local models.** Judging whether two claims genuinely contradict —
-rather than differ in scope or vocabulary — is subtle reasoning.
+local models.** Judging whether two claims genuinely contradict,
+rather than differ in scope or vocabulary, is subtle reasoning.
 
 Mitigation: spike this specific capability early (Phase 1/3), against
 real pairs drawn from the existing corpus, before committing to
 thresholds. Design so that weak performance yields *fewer detections*,
-not *wrong ones* — a conservative detector that misses contradictions is
+not *wrong ones*: a conservative detector that misses contradictions is
 recoverable; one that manufactures them destroys trust in the model.
 
 **Confidence: medium.** This is the largest technical unknown in the
@@ -164,9 +164,9 @@ project, and no amount of architecture removes it.
 
 ## 5. Storage
 
-### 5.1 Relational — SQLite first
+### 5.1 Relational: SQLite first
 
-**Recommended: SQLite for Phases 1–5; Postgres when triggered.**
+**Recommended: SQLite for Phases 1-5; Postgres when triggered.**
 
 One writer, one laptop, ~15k spans. SQLite gives zero-setup local-first
 operation, a single-file database that is trivially backed up and
@@ -179,9 +179,9 @@ multi-user, or `pgvector` consolidation becomes attractive.
 *Both are SQL behind the same protocol; the migration is real but
 bounded.*
 
-### 5.2 Vector — SQLite-based first, Qdrant on trigger
+### 5.2 Vector: SQLite-based first, Qdrant on trigger
 
-**Recommended: `sqlite-vec` or LanceDB for Phases 3–5.**
+**Recommended: `sqlite-vec` or LanceDB for Phases 3-5.**
 
 At ~15k vectors, brute-force cosine similarity takes milliseconds. An
 HNSW index solves a problem this dataset does not have, and Qdrant adds
@@ -194,7 +194,7 @@ latency becomes a real complaint, or multi-tenancy arrives.
 **Confidence: medium.** The trigger is clear, and the protocol boundary
 keeps the switch cheap.
 
-### 5.3 Graph — the genuinely contested decision
+### 5.3 Graph: the genuinely contested decision
 
 **Recommended for Phase 4: relational adjacency tables with recursive
 CTEs, behind a `GraphStore` protocol. Re-evaluate Neo4j at the Phase-4
@@ -209,10 +209,10 @@ Honest case for each:
 |---|---|
 | No extra service; local-first stays trivial | Cypher is dramatically better for multi-hop and path queries |
 | One consistency boundary, one backup, one transaction | Purpose-built traversal performance |
-| ~4k edges is nothing; CTEs are fast at this size | Native graph algorithms (centrality, community detection) — directly relevant to gap detection |
+| ~4k edges is nothing; CTEs are fast at this size | Native graph algorithms (centrality, community detection), directly relevant to gap detection |
 | Reified edges (`ClaimLink`, `EvidenceLink`) are *tables*, which is the natural relational shape | Idiomatic for the property-graph model the canonical model describes |
 
-The real argument for Neo4j is not scale — it is **query expressiveness**.
+The real argument for Neo4j is not scale. It is **query expressiveness**.
 Phase-9 questions ("which concepts connect this unresolved question to
 evidence I already have?") are natural in Cypher and painful in
 recursive SQL. The real argument against is that adding a JVM service to
@@ -221,7 +221,7 @@ that a second store means two things to keep consistent.
 
 **Deciding factor, to be measured rather than argued:** if Phase-4
 queries routinely exceed 3 hops or need path-finding, adopt Neo4j. If
-they are mostly 1–2 hop neighborhood lookups, relational wins on
+they are mostly 1-2 hop neighborhood lookups, relational wins on
 simplicity. **That is measurable at the Phase-4 gate, and the decision
 should be deferred to that measurement rather than made now.**
 
@@ -240,7 +240,7 @@ must never be asked to extract text from a PDF.
 
 | Format | Library | Note |
 |---|---|---|
-| Markdown | `markdown-it-py` + custom frontmatter | **Must strip fenced/inline code before link extraction** — audit §6.3; 240 code blocks contain `[[...]]` literals |
+| Markdown | `markdown-it-py` + custom frontmatter | **Must strip fenced/inline code before link extraction**, audit §6.3; 240 code blocks contain `[[...]]` literals |
 | PDF text | `pypdfium2` | Apache/BSD-licensed, fast, reliable text + layout |
 | PDF tables | `pdfplumber` | Better table extraction when needed |
 | Repos | `GitPython` + `tree-sitter` | Structure-aware code chunking |
@@ -266,7 +266,7 @@ to exercise ingestion and is the interface that keeps working when
 everything else is half-built.
 
 **Web UI at Phase 6.** Next.js + TypeScript. The audit found **no
-existing Forge interface** — "existing Forge interface if suitable" from
+existing Forge interface**, "existing Forge interface if suitable" from
 the brief's candidate stack does not apply, since Obsidian is a
 third-party editor, not a Forge UI. The Phase-6 need is graph
 visualization and provenance inspection, which is genuinely a web
@@ -274,7 +274,7 @@ problem.
 
 Graph rendering: evaluate at Phase 6. Cytoscape.js and Sigma.js are the
 realistic candidates; D3 offers control at a much higher cost. Not
-decided here — it depends on how the graph explorer's interaction model
+decided here. It depends on how the graph explorer's interaction model
 lands.
 
 **Obsidian plugin at Phase 7.** TypeScript, Obsidian plugin API,
@@ -295,7 +295,7 @@ run. Before that, local processes only: SQLite file, host Ollama, no
 containers.
 
 Compose services at Phase 4+: `forge-api`, `forge-worker`, `ollama`
-(optional — host-native is often better for GPU access), plus whichever
+(optional: host-native is often better for GPU access), plus whichever
 stores have been promoted.
 
 **No cloud dependency in any profile.** Cloud providers are opt-in
@@ -311,7 +311,7 @@ configuration, never infrastructure.
 | Type checking | `mypy --strict` or `pyright`, enforced in CI |
 | Lint/format | `ruff` |
 | Fixtures | Golden files for parsers/chunkers; recorded LLM responses for pipeline tests |
-| Mock LLM | `MockProvider` — deterministic, offline, **the CI default** |
+| Mock LLM | `MockProvider`, deterministic, offline, **the CI default** |
 | Logging | `structlog`, JSON, `run_id`-correlated |
 | Tracing | OpenTelemetry; a span per LangGraph node |
 | Eval | Labeled set drawn from the existing corpus (§10) |
@@ -325,7 +325,7 @@ Ollama, it will be skipped, and the pipeline will rot.
 
 Worth stating as a decision rather than an afterthought: the 620-file
 vault is the **primary evaluation dataset**, because it comes with
-ground truth the engine can be scored against —
+ground truth the engine can be scored against:
 
 - ~500 concepts with human-assigned canonical names (filenames);
 - ~4,100 human-authored relationships (wikilinks);
@@ -363,7 +363,7 @@ corpus's discipline.
 |---|---|---|
 | Postgres | Concurrent writers / multi-user API | Phase 6 |
 | Qdrant | >500k vectors or filtered-search latency | Phase 5 |
-| **Neo4j** | **Queries routinely >3 hops or needing path-finding** | **Phase 4 — needs human decision** |
+| **Neo4j** | **Queries routinely >3 hops or needing path-finding** | **Phase 4, needs human decision** |
 | Reranker model | Retrieval precision measured as insufficient | Phase 3 |
 | Graph viz library | Interaction model settled | Phase 6 |
 | PyMuPDF | User accepts AGPL | Phase 2 |

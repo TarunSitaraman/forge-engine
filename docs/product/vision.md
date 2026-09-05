@@ -1,4 +1,4 @@
-# Forge — Vision
+# Forge: Vision
 
 *What Forge is becoming, and the constraints that decide whether a given change belongs in it.*
 
@@ -12,7 +12,7 @@
 Every note-taking tool ever built optimizes the same operation: *put
 information in, get the same information back out*. Storage is solved.
 Search is solved. Neither produces understanding, because understanding
-is not a retrieval result — it is a **model that changes when new
+is not a retrieval result. It is a **model that changes when new
 evidence arrives**.
 
 The gap Forge targets is specific. Today, when you read a paper that
@@ -27,7 +27,7 @@ happens:
    nothing says which is current.
 
 All three are failures, and all three are what the *existing* Forge
-corpus does today — 620 files with no mechanism to detect that any two
+corpus does today: 620 files with no mechanism to detect that any two
 of them disagree.
 
 Forge's job is to make the fourth outcome the default: the new evidence
@@ -41,7 +41,7 @@ been challenged.
 ## What Forge is
 
 **An AI-native knowledge infrastructure layer**: the engine that turns
-scattered sources into a traceable, evolving model of understanding —
+scattered sources into a traceable, evolving model of understanding,
 and exposes that model through whatever interface you prefer.
 
 ```
@@ -71,7 +71,7 @@ and exposes that model through whatever interface you prefer.
 ```
 
 The intelligence lives in the core. Obsidian, the web UI, the CLI, and
-MCP are **interchangeable views onto one model** — not four products.
+MCP are **interchangeable views onto one model**: not four products.
 If a capability only works in one of them, it was built in the wrong
 layer.
 
@@ -83,7 +83,7 @@ differentiator; a graph you can *trust, question, and watch change* is.
 ## The twelve constraints
 
 These are architectural constraints, not aspirations. Each one is
-falsifiable — the "violated when" column is the test.
+falsifiable, the "violated when" column is the test.
 
 | # | Principle | Violated when |
 |---|---|---|
@@ -108,7 +108,7 @@ parser, and the result usually looks right. The discipline is
 mechanical: PDF extraction → parser. Chunking → algorithm. Dedup →
 similarity + metadata. Traversal → query. Hashing → hash. Source
 identity → metadata. An LLM earns a call only when the task is
-genuinely semantic — naming a concept, judging whether two statements
+genuinely semantic, naming a concept, judging whether two statements
 conflict, deciding whether B refines A.
 
 **Principle 11 (never silently overwrite)** is the one that
@@ -177,7 +177,7 @@ Note what each one requires:
 
 None of these are on the MVP path. All of them constrain it: **if the
 Phase-1 knowledge model cannot in principle express these, the model is
-wrong** — which is exactly why the model is designed before the
+wrong**: which is exactly why the model is designed before the
 pipeline is built.
 
 ---
@@ -190,13 +190,13 @@ That corpus is not legacy to be migrated away from. It is:
 
 - **the first ingestion source**, and a far better evaluation set than
   synthetic fixtures;
-- **an existing specification of the invariants** — the Forge
+- **an existing specification of the invariants.** The Forge
   Engineering Constitution, `CONVENTIONS.md`, and the Validation
   Checklist already define canonical homes, typed relationships, and a
   12-point quality gate;
 - **an existing proof of the problem**. The audit measured 145 broken
   links, 42% of files with no metadata, and 283 malformed relationship
-  fields — all in a repository whose written rules forbid exactly those
+  fields: all in a repository whose written rules forbid exactly those
   things.
 
 That last point is the honest argument for this whole project. The
@@ -207,7 +207,7 @@ what the corpus currently maintains by intention.
 **Success is not "Forge has a graph database."** Success is: a year
 from now, the user asks what they believe about something they studied
 six months ago, and gets an answer with sources, dissent, confidence,
-and a record of how that belief changed — without ever having filed a
+and a record of how that belief changed: without ever having filed a
 note by hand.
 
 ---

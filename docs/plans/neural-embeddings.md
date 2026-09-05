@@ -1,4 +1,4 @@
-# Plan — Neural embeddings, and the fuzzy_concept ceiling
+# Plan: Neural embeddings, and the fuzzy_concept ceiling
 
 *Written 2026-09-02 for an implementing agent working on a machine with
 network access. Every number below was measured, not estimated; the commands
@@ -8,8 +8,8 @@ that produced them are given so each can be reproduced before it is trusted.*
 
 ## 0. Why this work exists
 
-Forge has an embedding pathway that is fully built — storage, cache
-invalidation, fusion, evaluation — and has **never been run with a neural
+Forge has an embedding pathway that is fully built, storage, cache
+invalidation, fusion, evaluation, and has **never been run with a neural
 model**. The provider it has been measured with, `hashing-v1-256c`, says of
 itself in `engine/forge/embeddings/hashing.py`:
 
@@ -29,7 +29,7 @@ closes.**
 ## 1. The measurements this starts from
 
 Reproduce these first. If they do not match, stop and find out why before
-changing anything — everything downstream is a delta against them.
+changing anything. Everything downstream is a delta against them.
 
 ```bash
 export FORGE_VAULT_PATH=/path/to/forge
@@ -73,8 +73,8 @@ Per-category recall is where the real signal is. `--json` gives it:
 | **fuzzy_concept** | **0.300** | **0.300** | **0.300** | **0.300** |
 
 **`fuzzy_concept` R@10 is 0.300 under every method and every fusion weight.**
-Hybrid moves hits from ranks 6–10 up into the top 5 — R@5 triples, 0.100 to
-0.300 — but it never retrieves a document lexical did not already have. It
+Hybrid moves hits from ranks 6-10 up into the top 5, R@5 triples, 0.100 to
+0.300, but it never retrieves a document lexical did not already have. It
 reorders; it does not discover.
 
 That is precisely the behaviour the hashing provider's own docstring predicts.
@@ -86,7 +86,7 @@ user would say it, never using the page's exact title."
 > ceiling. Nothing else measured so far can.**
 
 **How it fails:** if `nomic-embed-text` leaves `fuzzy_concept` R@10 at or
-near 0.300, then vocabulary is not the bottleneck — the relevant documents
+near 0.300, then vocabulary is not the bottleneck: the relevant documents
 are absent from the candidate set for some other reason (chunking, retrieval
 depth, or labels naming documents the index does not contain). In that case
 **stop and diagnose rather than trying more models**; §6 says how.
@@ -99,7 +99,7 @@ and a negative one is worth publishing.
 **This cannot be done in the engine's build sandbox.** `huggingface.co` and
 `ollama.com` both return 403 at the proxy, verified 2026-09-02. `pypi.org` and
 GitHub release assets *are* reachable, which is how the spaCy model in §6 was
-obtained — so if a transformer encoder is ever published as a GitHub release
+obtained, so if a transformer encoder is ever published as a GitHub release
 wheel, that route works. Until then this needs a machine with open network
 access.
 
@@ -111,7 +111,7 @@ ollama pull nomic-embed-text # 274 MB, 768 dims
 ollama list                  # confirm it is there
 ```
 
-Verify the engine can see it before building anything — this is the check
+Verify the engine can see it before building anything. This is the check
 that fails informatively rather than 8,000 silent zero-vectors later:
 
 ```bash
@@ -124,7 +124,7 @@ from the first response rather than hardcoding it.
 
 ## 4. Tasks
 
-### Task 1 — Make the embedding model selectable *(required; ~30 min)*
+### Task 1: Make the embedding model selectable *(required; ~30 min)*
 
 `engine/forge/cli/phase3.py:46` hardcodes the model:
 
@@ -139,21 +139,21 @@ def _embedding_provider(settings: Any, name: str):
 
 `OllamaEmbeddingProvider` accepts a `model` argument and defaults to
 `nomic-embed-text`. Nothing can override it, so **comparing two embedding
-models is currently impossible** — which is why Task 3 exists and why this
+models is currently impossible**: which is why Task 3 exists and why this
 comes first.
 
 - Thread an `embed_model: str | None` parameter through `_embedding_provider`.
 - Add `--embed-model` to `forge embeddings build`, `forge embeddings status`
-  and `forge retrieval-eval`. Default `None` — keep the provider's own
+  and `forge retrieval-eval`. Default `None`, keep the provider's own
   default so existing invocations behave identically.
 - Unit test: passing `--embed-model X` constructs a provider whose
   `model_id` contains `X`. No network needed; assert on the constructed
   object.
 
 **Do not** change `DEFAULT_EMBED_MODEL`. The default stays `nomic-embed-text`
-until a measurement says otherwise — that is the decision Task 3 produces.
+until a measurement says otherwise. That is the decision Task 3 produces.
 
-### Task 2 — Build neural vectors and measure *(the main event; ~1 h)*
+### Task 2: Build neural vectors and measure *(the main event; ~1 h)*
 
 ```bash
 forge embeddings build --provider ollama --embed-model nomic-embed-text
@@ -167,7 +167,7 @@ Expect the build to take minutes, not seconds: 8,133 spans at batch size 16.
 
 Record, for every method: R@5, R@10, P@5, MRR, misses, latency, **and the
 per-category breakdown** from the JSON. The per-category table is the
-deliverable — the headline numbers will move for uninteresting reasons and
+deliverable, the headline numbers will move for uninteresting reasons and
 the category rows are what test the hypothesis.
 
 **Vectors are namespaced by `model_id`, so this does not destroy the hashing
@@ -175,22 +175,22 @@ baseline.** `hashing-v1-256c` and `nomic-embed-text+prefixed` coexist in the
 store; `forge embeddings status` lists what is present. You can re-run either
 comparison at any time without rebuilding. Do not "clean up" the old vectors.
 
-### Task 3 — Compare embedding models *(~1 h, only after Task 2)*
+### Task 3: Compare embedding models *(~1 h, only after Task 2)*
 
 Only if Task 2 shows neural embeddings help. Same protocol, one build and one
 eval per model:
 
 | Model | Dims | Size | Note |
 |---|---:|---:|---|
-| `nomic-embed-text` | 768 | 274 MB | Baseline. Needs task prefixes — already handled. |
+| `nomic-embed-text` | 768 | 274 MB | Baseline. Needs task prefixes, already handled. |
 | `mxbai-embed-large` | 1024 | 670 MB | Generally stronger on retrieval benchmarks. |
 | `bge-m3` | 1024 | 2.2 GB | Strong, much heavier. Try last. |
 
-Report as separate rows. **Never average across models — they are different
+Report as separate rows. **Never average across models. They are different
 instruments**, the same rule the assessment work already follows for local
 vs cloud.
 
-### Task 4 — Fix `forge ask`, which cannot use neural vectors at all *(bug; ~15 min)*
+### Task 4: Fix `forge ask`, which cannot use neural vectors at all *(bug; ~15 min)*
 
 `engine/forge/cli/phase3.py:520`:
 
@@ -213,20 +213,20 @@ cannot benefit from it.
 Worth doing regardless of the Task 2 outcome: a hardcoded dependency that no
 flag can reach is a defect on its own terms.
 
-### Task 5 — Cross-encoder re-ranking *(~half day; independent of 1–4)*
+### Task 5: Cross-encoder re-ranking *(~half day; independent of 1-4)*
 
 The standard modern stack, and it should be **cheaper** than the current
 623 ms hybrid rather than more expensive, because it scores a fixed 30
 candidates instead of comparing against every stored vector.
 
 - Retrieve top-30 lexically (8.3 ms).
-- Re-rank those 30 with a cross-encoder — `BAAI/bge-reranker-base` or
+- Re-rank those 30 with a cross-encoder, `BAAI/bge-reranker-base` or
   `cross-encoder/ms-marco-MiniLM-L-6-v2` via `sentence-transformers`.
 - Add it as a `rerank` method in `RetrievalEvaluator`, alongside `title` and
   `hybrid`. Follow the pattern added in commit `02fdfdf`: sweep it, give it a
   no-op anchor, and assert the anchor reproduces the baseline exactly.
 - Add `sentence-transformers` as an **optional extra**, never a core
-  dependency — the same rule `agent` and `tui` follow. `forge index` on a
+  dependency: the same rule `agent` and `tui` follow. `forge index` on a
   fresh clone must not pull PyTorch.
 
 A cross-encoder can only re-rank what retrieval already found, so **it cannot
@@ -244,7 +244,7 @@ building a number that means nothing.
 
 **Report negative results as prominently as positive ones.**
 `docs/research/retrieval-baseline.md` is the record. It already carries two
-findings that reversed prior conclusions — embeddings rejected then accepted,
+findings that reversed prior conclusions, embeddings rejected then accepted,
 and a shipped title boost measured as a regression. A third reversal is
 normal and belongs there in the same voice.
 
@@ -256,7 +256,7 @@ everything else.
 **The vault is read-only to the engine.** Nothing here writes to it. Derived
 state lives in `.forge/` and is rebuildable.
 
-## 6. The diagnostic in §6 has already been run — read this before starting
+## 6. The diagnostic in §6 has already been run: read this before starting
 
 This section originally said what to check *if* the hypothesis failed. Two of
 those checks have since been done, and they change the plan. Full write-up in
@@ -264,8 +264,8 @@ those checks have since been done, and they change the plan. Full write-up in
 
 **A third method was tried and failed.** `SpacyEmbeddingProvider` (mean-pooled
 300-d `en_core_web_md` vectors) is in the tree, wired to `--provider spacy`,
-and measured. It is far worse than hashing — semantic alone misses 15 of 24
-queries — because mean-pooling static vectors over a span averages it toward
+and measured. It is far worse than hashing, semantic alone misses 15 of 24
+queries, because mean-pooling static vectors over a span averages it toward
 the corpus mean. It left `fuzzy_concept` R@10 at 0.300, the third method to do
 so. **Do not spend time on static word vectors.**
 
@@ -284,7 +284,7 @@ document is present in the candidate set:
 | `DSA/01_Patterns/Union Find.md` | 231 |
 
 Nothing is missing; everything is mis-ranked. **Indexing and chunking are
-exonerated** — do not go looking there. BM25 puts these 100–200 positions too
+exonerated**, do not go looking there. BM25 puts these 100-200 positions too
 low because the queries share almost no vocabulary with their targets, which is
 what `fuzzy_concept` was designed to do.
 
@@ -293,7 +293,7 @@ what `fuzzy_concept` was designed to do.
 1. **Task 5 (cross-encoder) will not break the ceiling and should be
    re-scoped.** A re-ranker only reorders what it is handed, and four targets
    sit below rank 30. Re-ranking the top 30 cannot surface a document at rank
-   231. Expect it to improve MRR and P@5 — worth having — but do not expect
+   231. Expect it to improve MRR and P@5, worth having, but do not expect
    R@10 to move, and do not treat a flat R@10 as a bug. If you want it to have
    a chance at the ceiling, the shortlist has to be ~250 deep, and scoring 250
    candidates per query is a different cost proposition that needs measuring
@@ -307,7 +307,7 @@ what `fuzzy_concept` was designed to do.
    R@5 or R@10. Depth is a symptom.
 
 The encouraging part of the negative result: even in a bad instrument, the
-fuzzy-specific signal survived — semantic-alone raised `fuzzy_concept` R@5 from
+fuzzy-specific signal survived: semantic-alone raised `fuzzy_concept` R@5 from
 0.100 to 0.200, and `hybrid(w=0.75)` reached 0.300, the best fuzzy R@5
 measured, while wrecking every other category. The signal is real and the
 instrument was too blunt.
@@ -322,7 +322,7 @@ instrument was too blunt.
 - [ ] `docs/research/retrieval-baseline.md` updated with a dated section,
       the exact command, the corpus size it was measured on, and the verdict
 - [ ] `forge ask` no longer hardcodes the hashing provider
-- [ ] `python -m pytest tests` green — 1,076 passed, 42 skipped at
+- [ ] `python -m pytest tests` green, 1,076 passed, 42 skipped at
       commit `02fdfdf`; recount rather than quoting this
 - [ ] Hashing vectors still in the store, so the comparison stays reproducible
 
@@ -331,11 +331,11 @@ instrument was too blunt.
 Both are recorded in `docs/research/retrieval-baseline.md` and are the
 owner's calls, not the implementing agent's:
 
-1. **`TITLE_BOOST`** — the answering service passes 1.25; measured as a
+1. **`TITLE_BOOST`.** The answering service passes 1.25; measured as a
    regression at every value (−0.0625 R@10, −0.200 on `fuzzy_concept`). It
    was measured on *document recall* and used for *span selection*, so the
    evidence is suggestive rather than decisive for that path.
-2. **Hybrid as the retrieval default** — best recall available, at ~75× the
+2. **Hybrid as the retrieval default.** Best recall available, at ~75× the
    latency. Neural embeddings change both sides of that trade, so re-open it
    only after Task 2.
 
@@ -344,7 +344,7 @@ owner's calls, not the implementing agent's:
 - **Do not fine-tune a language model on this corpus.** ~78K tokens is
   roughly 0.0008% of GPT-2 small's training data. It is enough to shift
   style, not to install knowledge, and a fine-tune teaches a model that a
-  *shape* of statement is likely rather than that it is *true* — producing
+  *shape* of statement is likely rather than that it is *true*, producing
   confident, unattributable claims. That is the exact failure the provenance
   floor exists to prevent.
 - **Do not train a GNN on the concept graph.** ~500 concepts and 4,703 edges

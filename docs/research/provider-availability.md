@@ -1,13 +1,13 @@
-# Provider Availability — What Was and Was Not Measured
+# Provider Availability: What Was and Was Not Measured
 
 *Phase 4. A record of which inference providers could actually be exercised in
 this environment, what that permits us to claim, and what it does not.*
 
-**Update, 2026-08-14 — the local path has now been measured.** Qwen3 8B on an
+**Update, 2026-08-14: the local path has now been measured.** Qwen3 8B on an
 RTX 4050 scored 5/5 on the assessment set with perfect structured-output
 validity and perfect grounding. Details in §6. The cloud path remains
 unmeasured. The original Phase 4 finding is preserved below because the
-distinction it draws — measured pipeline vs unmeasured model — is the reason
+distinction it draws, measured pipeline vs unmeasured model, is the reason
 the measurement was worth making, and because a document that quietly rewrites
 its own history is worth less than one that shows its work.
 
@@ -34,9 +34,9 @@ exists so the absence is as visible as any measurement would have been.
 
 | Provider | Configured | Network reachable | Credential present | Inference run |
 |---|---|---|---|---|
-| Ollama (local) | yes | **no** — nothing listening on `localhost:11434` | n/a | **no** |
-| Ollama (remote / ASUS) | yes | **no** — host is not on this network | n/a | **no** |
-| Cloud (Anthropic) | yes | **yes** | **no** — `ANTHROPIC_API_KEY` unset | **no** |
+| Ollama (local) | yes | **no**, nothing listening on `localhost:11434` | n/a | **no** |
+| Ollama (remote / ASUS) | yes | **no**, host is not on this network | n/a | **no** |
+| Cloud (Anthropic) | yes | **yes** | **no**, `ANTHROPIC_API_KEY` unset | **no** |
 | Mock / scripted | yes | n/a | n/a | yes (all tests, demo, eval) |
 
 ### Transcript
@@ -58,7 +58,7 @@ $ curl -sS -m 10 -o /dev/null -w "%{http_code}\n" https://api.anthropic.com/v1/m
 
 This is where Phase 4 differs from Phase 3. In Phase 3 the network itself was
 blocked, so nothing about the transport could be checked. Here the network path
-to the cloud provider works, and only the credential is missing — which permits
+to the cloud provider works, and only the credential is missing: which permits
 a real, limited verification.
 
 Driving the production `CloudProvider` against the **live** API with a
@@ -79,20 +79,20 @@ Three things this genuinely establishes, none of which are simulated:
    malformed body, wrong path, or missing `anthropic-version` header would have
    produced the latter.
 3. **The provider classifies the failure correctly.** A 401 becomes
-   `ProviderUnavailable` and is *not* retried — verified against the live
+   `ProviderUnavailable` and is *not* retried, verified against the live
    endpoint, not only against the stub transport in the unit tests.
 
 What it does **not** establish: that a real completion succeeds, how long one
 takes, whether the model returns schema-valid JSON, or whether its
 classifications are any good.
 
-**Correction, 2026-08-17 — inference 2 above was wrong, and the 401 concealed
+**Correction, 2026-08-17: inference 2 above was wrong, and the 401 concealed
 it.** The request shape was *not* well-formed. The payload forwarded
 `temperature: 0.0` (Forge asks for deterministic sampling everywhere), and
 current Anthropic models reject non-default sampling parameters: `temperature`,
 `top_p`, and `top_k` return `400 invalid_request_error` on Opus 4.7 and later,
 and on the configured `claude-sonnet-5` any non-default value does the same. So
-**every** cloud call would have failed — not for want of a credential, but on
+**every** cloud call would have failed, not for want of a credential, but on
 the body. Authentication is checked before body validation, so a 401 tells you
 nothing about the payload, and the original inference read more into it than the
 probe could support.
@@ -100,7 +100,7 @@ probe could support.
 The parameter has been removed from the Anthropic payload and the omission is
 asserted in `tests/unit/test_providers.py`. Two things worth keeping from this:
 
-- The probe was still worth running — it correctly established the network path
+- The probe was still worth running. It correctly established the network path
   and the failure classification. The error was in what was concluded about the
   *third* thing, not in the method.
 - **A 401 probe cannot validate a request body.** Any future "the shape is
@@ -124,14 +124,14 @@ understood reason: it has never completed a call.
 | Workflow interrupts, checkpoints, and resumes | **Measured** (incl. process restart) |
 | Provider unavailability is explicit | **Measured** |
 | Cloud request shape is accepted by the real API | **Partially measured** (§3) |
-| A real model returns schema-valid JSON in practice | **MEASURED** — 5/5, see §6 |
-| Real assessment latency | **MEASURED, high variance** — typical 40-60 s, worst case >300 s, see §6 and §7 |
-| Real classification accuracy | **MEASURED** — 5/5 on two independent runs, see §6 and §7 |
+| A real model returns schema-valid JSON in practice | **MEASURED**, 5/5, see §6 |
+| Real assessment latency | **MEASURED, high variance**, typical 40-60 s, worst case >300 s, see §6 and §7 |
+| Real classification accuracy | **MEASURED**, 5/5 on two independent runs, see §6 and §7 |
 | False-positive conflict rate | **0 of 2 adversarial cases** with reasoning on; **1 of 2 with reasoning off**, see §8 |
-| Extraction quality | **Unmeasured, and no eval exists** — `forge/evaluation/data/` covers assessment and retrieval only |
+| Extraction quality | **Unmeasured, and no eval exists**, `forge/evaluation/data/` covers assessment and retrieval only |
 
 The false-positive row was the single largest open risk carried out of Phase 4.
-It is now partially answered — see §6 — but two adversarial cases cannot
+It is now partially answered, see §6, but two adversarial cases cannot
 establish a rate, so it remains the thing most worth measuring next. §8 is why
 that matters concretely: a configuration change that looked like a pure latency
 win flipped one of those two cases, and a 2-case set is the only thing standing
@@ -143,7 +143,7 @@ between that and going unnoticed.
 
 Both paths are one command each. The evaluation set and harness already exist
 and are exercised in CI against the scripted provider, so nothing new needs to
-be built — only run.
+be built: only run.
 
 **Local model (the free, self-hosted path):**
 
@@ -191,9 +191,9 @@ python3 -c "import os; print(bool(os.environ.get('ANTHROPIC_API_KEY')))"
 
 ## Related
 
-- [`local-model-capability-spike.md`](local-model-capability-spike.md) — Phase 1 local-model probe
-- [`retrieval-baseline.md`](retrieval-baseline.md) — the same discipline applied to retrieval, where measurement *was* possible
-- [`../architecture/phase-4-implementation.md`](../architecture/phase-4-implementation.md) — the pipeline these providers serve
+- [`local-model-capability-spike.md`](local-model-capability-spike.md), Phase 1 local-model probe
+- [`retrieval-baseline.md`](retrieval-baseline.md), the same discipline applied to retrieval, where measurement *was* possible
+- [`../architecture/phase-4-implementation.md`](../architecture/phase-4-implementation.md), the pipeline these providers serve
 
 ---
 
@@ -217,24 +217,24 @@ provider: ollama / qwen3:8b
 ### What this establishes
 
 **Structured output survives a local 8B model.** 5/5 responses validated
-against the strict schema on the first attempt — no repair retries. The Phase 1
+against the strict schema on the first attempt, no repair retries. The Phase 1
 capability spike specifically worried that local models would ignore JSON
 schemas often enough to make strict validation impractical. On this model and
 this task, it did not happen.
 
 **Grounding held.** Every cited span id resolved to a span that was actually
 shown. Zero hallucinated citations across five cases. The rejection path
-therefore never fired — which is the *good* outcome, and distinguishable from
+therefore never fired, which is the *good* outcome, and distinguishable from
 "the check is broken" because the unit tests exercise the rejection path
 directly.
 
 **Both adversarial cases classified correctly.** These are the two cases the
 set was designed around:
 
-- `irrelevant-same-domain` — same technology, different property (retrieval
+- `irrelevant-same-domain`, same technology, different property (retrieval
   *latency* vs a claim about factual *accuracy*). A model pattern-matching on
   shared vocabulary flags this. Qwen3 did not.
-- `insufficient-partial-overlap` — touches the topic without settling it. A
+- `insufficient-partial-overlap`, touches the topic without settling it. A
   model forced toward a substantive label reaches for SUPPORTS or
   POTENTIAL_CONFLICT. Qwen3 declined correctly.
 
@@ -275,7 +275,7 @@ consequences:
   chosen to protect quality; at this latency the per-call overhead argues for
   measuring whether a larger batch degrades accuracy at all.
 
-## 7. Second run (2026-08-19) — quality holds, one case blows the timeout
+## 7. Second run (2026-08-19): quality holds, one case blows the timeout
 
 Re-run on the same machine after the CLI, cloud-provider, and config work, to
 check whether any of it changed behaviour on the Ollama path. **Same command,
@@ -293,7 +293,7 @@ ollama/qwen3:8b   valid=1.00 grounded=1.00 class=1.00 proposal=1.00 cache=1.00  
 
 **5/5 again, every metric 1.00.** Two independent runs now agree, which is the
 narrow thing this establishes: the engine changes between them did not alter
-classification on this path. It is still ten case-runs of one model — not a
+classification on this path. It is still ten case-runs of one model, not a
 rate.
 
 **The mean latency is misleading and should not be quoted on its own.** It reads
@@ -308,7 +308,7 @@ It is not. Per-case wall times, derived from the log's completion timestamps:
 | `insufficient-partial-overlap` | 55 s |
 
 Three of the four measurable cases ran *faster* than the earlier 63 s mean. One
-case consumed 300 s — exactly `FORGE_LLM_TIMEOUT` — timed out, retried, and
+case consumed 300 s, exactly `FORGE_LLM_TIMEOUT`, timed out, retried, and
 finished ~45 s later. That single outlier accounts for essentially the entire
 increase in the mean.
 
@@ -322,7 +322,7 @@ Two things follow, and they point in opposite directions:
 - **A five-case mean cannot absorb an outlier.** With n=5, one timeout moves the
   headline number by 78% while typical performance improves. Report the
   distribution, or at least the timeout count, alongside any mean from this
-  set — a single number here describes neither run well.
+  set: a single number here describes neither run well.
 
 Not established: why that case is the slow one every time, whether it is the
 prompt length or the adversarial content, and whether the improvement in the
@@ -340,7 +340,7 @@ python scripts\assessment_eval.py --provider ollama
 
 ---
 
-## 8. Reasoning off (2026-08-19) — 5.1× faster, and it breaks the case that matters
+## 8. Reasoning off (2026-08-19): 5.1× faster, and it breaks the case that matters
 
 `extraction-cost.md` §2 asked for exactly one experiment: run the same
 assessment set with Qwen3's reasoning disabled, on the theory that the ~7×
@@ -374,7 +374,7 @@ Two honest numbers, because the means are not comparable to each other:
 
 The 5.1× is inflated from the *think-on* side: §7's mean carries a 345 s
 timeout-and-retry outlier. Per-case wall times with reasoning off were 22 / 18 /
-15 / 20 s — no outlier at all, which is itself a finding: the case that blew
+15 / 20 s, no outlier at all, which is itself a finding: the case that blew
 both the 120 s and the 300 s timeout was the adversarial one, and without a
 reasoning phase it simply does not take long. **2.5× is the number to plan
 with**; 5.1× is what the two report lines say and is the wrong one to quote.
@@ -382,7 +382,7 @@ with**; 5.1× is what the two report lines say and is the wrong one to quote.
 ### The accuracy cost lands on the worst possible case
 
 Accuracy fell from 5/5 to 4/5, and the one that broke is
-`insufficient-partial-overlap` — evidence that *partially* overlaps an existing
+`insufficient-partial-overlap`: evidence that *partially* overlaps an existing
 claim without contradicting it. With reasoning off the model called it
 `POTENTIAL_CONFLICT` and emitted a `CLAIM_CONFLICT` proposal.
 
@@ -390,7 +390,7 @@ That is a **false-positive conflict**: precisely the failure mode §4 names as
 "the single largest open risk carried out of Phase 4." Think-on classified this
 same case correctly on both 2026-08-14 and 2026-08-19. One of the two
 adversarial cases in the set now fails, and it fails by manufacturing a
-conflict that is not there — the direction that costs human review attention and
+conflict that is not there: the direction that costs human review attention and
 erodes trust in every proposal the engine raises.
 
 Structured-output validity and grounding both held at 1.00, so this is not the
@@ -407,14 +407,14 @@ conflict on a 5-case set where only two cases probe that behaviour at all.
 **Unmeasured for extraction, and currently unmeasurable.** The experiment was
 motivated by extraction cost but was run on the *assessment* set, because
 `forge/evaluation/data/` contains only `assessment-v1.yaml` and
-`retrieval-v1.yaml` — there is no extraction-quality eval. Extraction asks a
+`retrieval-v1.yaml`. There is no extraction-quality eval. Extraction asks a
 different question (pull concepts and claims out of a span, with every quote
 grounded) and reasoning may well matter less there. Nothing here licenses that
 guess in either direction.
 
 So the honest state is: reasoning-off is disqualified on the task we can
 measure, and untested on the task we wanted it for. Building an
-extraction-quality eval is the prerequisite for revisiting it — and until that
+extraction-quality eval is the prerequisite for revisiting it, and until that
 exists, running the vault with `+nothink` risks spending a full extraction pass
 whose output nothing can grade, with a cache key that guarantees redoing it if
 the answer turns out to be no.
@@ -435,12 +435,12 @@ python scripts\assessment_eval.py --provider ollama
 ## 9. `+nothink` ran an entire extraction unnoticed (2026-08-20)
 
 §8 measured reasoning-off, rejected it, and recorded that its effect on
-*extraction* was unmeasured. It was not unmeasured — it was governing extraction
+*extraction* was unmeasured. It was not unmeasured. It was governing extraction
 the whole time, and nothing said so.
 
 `FORGE_OLLAMA_THINK=0` was exported into a PowerShell session for the §8
-experiment and stayed there. The next day's full `Technologies/Docs` run —
-5.66 h, 416 calls, 2,169 proposals — ran with reasoning off. The tell only
+experiment and stayed there. The next day's full `Technologies/Docs` run,
+5.66 h, 416 calls, 2,169 proposals: ran with reasoning off. The tell only
 surfaced by accident, in a cache-hit log line:
 
 ```
@@ -461,15 +461,15 @@ says plainly when reasoning is off. Three tests pin it.
 
 **The cost numbers make more sense now.** The run measured 49 s/call over
 ~1,100-char spans. §8 measured reasoning-off as ~2.5× faster on typical cases,
-which puts a think-on equivalent near 120 s/call — and the 228 s/call figure
+which puts a think-on equivalent near 120 s/call, and the 228 s/call figure
 from the earlier structural-span sample is roughly double that for roughly
 double the span size. Three measurements that looked mutually inconsistent are
 consistent once mode and span size are both accounted for.
 
 **The quality assessment of that run is confounded.** A 25+25 sample put claims
 at ~60-70% usable and concepts at ~35-40%, and that was attributed to the
-extraction prompt. The prompt was genuinely underspecified — it never said what
-qualifies as a concept — so the `0.3.0` rewrite stands on its own. But the
+extraction prompt. The prompt was genuinely underspecified. It never said what
+qualifies as a concept, so the `0.3.0` rewrite stands on its own. But the
 *magnitude* cannot be attributed cleanly: some share of that junk may be
 reasoning-off, which §8 already showed degrades classification. **Do not quote
 "~35-40% concept precision" as a property of the prompt.** It is a property of

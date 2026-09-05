@@ -1,8 +1,8 @@
-# Forge — Target Architecture
+# Forge: Target Architecture
 
 *The engine that maintains the knowledge model: components, data flow, workflow orchestration, and the boundaries that keep the design honest.*
 
-**Status:** proposed · **Depends on:** [current-state audit](./forge-current-state.md), [canonical model](../knowledge-model/canonical-model.md)
+**Status:** proposed, **Depends on:** [current-state audit](./forge-current-state.md), [canonical model](../knowledge-model/canonical-model.md)
 
 ---
 
@@ -22,7 +22,7 @@ This single decision buys almost everything the constraints demand:
 | Preservation of the existing repo (audit P1/P2) | The vault keeps working with no engine running |
 | Local-first (Principle 9) | No hosted service holds anything unique |
 | Escape hatch | The user's knowledge survives Forge's deletion |
-| Cheap schema iteration | Change the model, rebuild the index — no migration |
+| Cheap schema iteration | Change the model, rebuild the index, no migration |
 | Obsidian compatibility (audit P3) | Nothing plugin-only or DB-only |
 
 The cost is real and worth naming: **derived state must be
@@ -31,7 +31,7 @@ Markdown cannot express is at risk on rebuild.** Contradictions,
 confidence, and revision history are exactly that kind of state. This
 is what makes the write-back question
 ([ADR-001](../decisions/001-forge-knowledge-os.md)) unavoidable rather
-than a detail — and until it is answered, the engine must treat derived
+than a detail, and until it is answered, the engine must treat derived
 stores as *durable but rebuildable-with-loss*, and back them up rather
 than assume they are disposable.
 
@@ -81,11 +81,10 @@ than assume they are disposable.
 | **Retrieval engine** | Hybrid search (lexical + vector + graph), reranking | No (rerank optional) |
 | **Evolution engine** | Change analysis, contradiction detection, supersession, staleness | Selectively |
 | **Provenance ledger** | Tier enforcement, lineage, revision log, floor rule | No |
-| **Provider abstraction** | Model selection, retries, caching, structured output | — |
+| **Provider abstraction** | Model selection, retries, caching, structured output | - |
 
 Note the shape: **four of seven core components need no LLM at all**,
-and the provenance ledger — the component that guarantees Principle 10
-— is entirely deterministic. That is the intended distribution.
+and the provenance ledger: the component that guarantees Principle 10, is entirely deterministic. That is the intended distribution.
 
 ---
 
@@ -97,7 +96,7 @@ and the provenance ledger — the component that guarantees Principle 10
 | **Relational** | Sources, documents, spans, revisions, run state, config | yes | SQLite → Postgres |
 | **Vector** | Span + concept embeddings | yes | see [technology decisions](./technology-decisions.md) |
 | **Graph** | Concepts, claims, typed edges | yes | see technology decisions |
-| **Blob** | Original PDFs and fetched artifacts | **no — originals** | local dir, content-addressed |
+| **Blob** | Original PDFs and fetched artifacts | **no, originals** | local dir, content-addressed |
 
 **The blob store is the one exception to "everything is rebuildable."**
 Original source bytes cannot be regenerated, so they are retained
@@ -150,14 +149,14 @@ Deterministic stages first; the LLM enters only at stage 5.
 
 Five mechanisms, in order of impact:
 
-1. **Hash short-circuit** — unchanged source costs zero tokens.
-2. **Span-level caching** — only changed spans are re-embedded and
+1. **Hash short-circuit.** Unchanged source costs zero tokens.
+2. **Span-level caching.** Only changed spans are re-embedded and
    re-extracted; editing one section of a 300-line doc reprocesses one
    section.
-3. **Deterministic candidate narrowing** — the LLM compares against ~10
+3. **Deterministic candidate narrowing.** The LLM compares against ~10
    candidates, never the full concept graph. This is what makes cost
    scale with *change size*, not corpus size.
-4. **Exact-match bypass** — an alias hit resolves a concept with no
+4. **Exact-match bypass.** An alias hit resolves a concept with no
    model call.
 5. **Response caching** keyed on `(prompt_version, model_id, input_hash)`.
 
@@ -174,7 +173,7 @@ benefit.
 
 ### 5.1 Uses LangGraph
 
-**W1 — Ingestion & Evolution** *(the primary workflow, Phase 5)*
+**W1, Ingestion & Evolution** *(the primary workflow, Phase 5)*
 
 Typed state carried through every node:
 
@@ -194,13 +193,9 @@ class IngestionState(TypedDict):
     run_id: str
 ```
 
-Nodes — each with one responsibility, named for what it does:
+Nodes, each with one responsibility, named for what it does:
 
-`SourceIdentificationNode` · `ParseNode` · `ChunkNode` · `EmbedNode` ·
-`CandidateMatchNode` · `ClaimExtractionNode` · `ConceptResolutionNode` ·
-`RelationshipDiscoveryNode` · `ChangeAnalysisNode` ·
-`ContradictionAnalysisNode` · `ApprovalGateNode` ·
-`KnowledgeUpdateNode` · `SynthesisStalenessNode`
+`SourceIdentificationNode`, `ParseNode`, `ChunkNode`, `EmbedNode`, `CandidateMatchNode`, `ClaimExtractionNode`, `ConceptResolutionNode`, `RelationshipDiscoveryNode`, `ChangeAnalysisNode`, `ContradictionAnalysisNode`, `ApprovalGateNode`, `KnowledgeUpdateNode`, `SynthesisStalenessNode`
 
 Conditional routing:
 
@@ -213,23 +208,22 @@ Conditional routing:
 
 Why LangGraph specifically: **checkpointing** (a 500-page PDF must
 resume, not restart), **human-in-the-loop interrupts** (contradiction
-and merge approval — Principle 11's enforcement point), **typed state**,
+and merge approval: Principle 11's enforcement point), **typed state**,
 and **replayability** for debugging.
 
-**W2 — Contradiction Resolution** *(Phase 5+)* — inherently long-lived
+**W2, Contradiction Resolution** *(Phase 5+)*, inherently long-lived
 and human-gated; may wait days for a decision. Checkpointing is the
 whole point.
 
-**W3 — Re-synthesis** *(Phase 6+)* — batch, resumable, partially
+**W3, Re-synthesis** *(Phase 6+)*, batch, resumable, partially
 failing; regenerates syntheses marked stale.
 
-**W4 — Corpus Backfill** *(Phase 2)* — 620 files, resumable, with
+**W4, Corpus Backfill** *(Phase 2)*, 620 files, resumable, with
 per-file failure isolation.
 
 ### 5.2 Does **not** use LangGraph
 
-Parsing · chunking · hashing · embedding · vector search · graph queries
-· the HTTP API · retrieval · CRUD.
+Parsing, chunking, hashing, embedding, vector search, graph queries, the HTTP API, retrieval, CRUD.
 
 These are ordinary functions. Wrapping them in a graph would add state
 machinery to code that has no state, and would make them harder to test.
@@ -237,7 +231,7 @@ machinery to code that has no state, and would make them harder to test.
 **Retrieval deliberately stays a plain composed pipeline** until there
 is a real need for conditional multi-hop reasoning. Making retrieval a
 graph on day one is the single most common way this kind of system
-acquires ceremony without capability — and would push Forge toward the
+acquires ceremony without capability, and would push Forge toward the
 "generic RAG chatbot" boundary.
 
 ### 5.3 Agent naming discipline
@@ -304,7 +298,7 @@ Rules:
   required for any core path (Principle 9).
 - **`MockProvider` returns deterministic fixtures**, so the full
   pipeline is testable offline with no model.
-- **Model names never appear in business logic** — only in
+- **Model names never appear in business logic.** Only in
   configuration, referenced by *role* (`extraction`, `analysis`,
   `embedding`), so a node asks for the extraction model, not for a
   specific checkpoint.
@@ -321,7 +315,7 @@ Rules:
 
 ## 8. Proposed module layout
 
-Assumes ADR-001 option (a) — engine alongside the vault. See audit §8/D1.
+Assumes ADR-001 option (a), engine alongside the vault. See audit §8/D1.
 
 ```
 engine/
@@ -374,7 +368,7 @@ justified rather than speculative.
 **The corpus is the evaluation asset.** 620 files of curated
 engineering knowledge, with a known concept vocabulary (32 patterns, 30
 algorithms, 18 data structures, 11 technologies), is a far better test
-set than anything synthetic — and it comes with ground-truth canonical
+set than anything synthetic, and it comes with ground-truth canonical
 names already assigned.
 
 ---
@@ -392,7 +386,7 @@ graph-store     >  per technology-decisions.md
 postgres       /
 ```
 
-Phase-3 development should run with **no containers at all** — SQLite,
+Phase-3 development should run with **no containers at all**, SQLite,
 a local vector index, and host Ollama. Compose arrives when the store
 choices are settled (Phase 4+), not before. Requiring a five-service
 Compose stack to iterate on a chunking algorithm is friction with no
@@ -404,7 +398,7 @@ payoff.
 
 | # | Risk | Mitigation |
 |---|---|---|
-| R1 | **Local models underperform at claim extraction and contradiction detection** — the two hardest semantic tasks, on the weakest models | Spike early (Phase 1/3). Design so quality degrades gracefully: fewer claims, not wrong ones. Provider abstraction allows opt-in stronger models |
+| R1 | **Local models underperform at claim extraction and contradiction detection**, the two hardest semantic tasks, on the weakest models | Spike early (Phase 1/3). Design so quality degrades gracefully: fewer claims, not wrong ones. Provider abstraction allows opt-in stronger models |
 | R2 | **Contradiction false positives** erode trust faster than misses | Conservative thresholds; contradictions are proposals for review, not silent model edits |
 | R3 | **Concept fragmentation or over-merging** | Deterministic alias matching first; human approval above the merge threshold |
 | R4 | **`RELATED_TO` noise** turns the graph into a mesh | Similarity threshold, score retained, excluded from reasoning traversals |

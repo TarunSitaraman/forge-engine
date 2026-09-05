@@ -1,11 +1,11 @@
-# Retrieval Baseline — Measured, Not Assumed
+# Retrieval Baseline: Measured, Not Assumed
 
 *Phase 3. Every number on this page was produced by
 `forge retrieval-eval` against the labelled set in
 `forge/evaluation/data/retrieval-v1.yaml`, run over the real Forge vault. Nothing
 here is estimated, and nothing was tuned against the labels.*
 
-**Headline (Phase 3, since superseded — see §0 below): lexical search is the
+**Headline (Phase 3, since superseded: see §0 below): lexical search is the
 best retrieval method Forge currently has. Embeddings were built, measured, and
 rejected. Hybrid fusion was swept across four weights and every one of them
 regressed. No vector database is justified.**
@@ -22,7 +22,7 @@ unrelated changes is a property of the system, not of any one method.
 ### First, a negative result: static word vectors are much worse than hashing
 
 `SpacyEmbeddingProvider` (mean-pooled 300-d `en_core_web_md` vectors) was added
-to test whether *semantic* matching beats *vocabulary overlap*. It does not —
+to test whether *semantic* matching beats *vocabulary overlap*. It does not,
 not this kind of semantic matching:
 
 | Method | R@5 | R@10 | P@5 | MRR | Misses |
@@ -40,8 +40,8 @@ corpus mean, so spans stop being distinguishable; the hashing vector keeps rare
 discriminating terms and beats it comfortably.
 
 One thing does behave as predicted. Semantic-alone raises `fuzzy_concept` R@5
-from 0.100 to 0.200, and `hybrid(w=0.75)` reaches 0.300 — the best fuzzy R@5
-measured — while destroying `project` (0.750 → 0.250) and `technology`
+from 0.100 to 0.200, and `hybrid(w=0.75)` reaches 0.300: the best fuzzy R@5
+measured, while destroying `project` (0.750 → 0.250) and `technology`
 (1.000 → 0.333). **The semantic signal helps exactly where predicted and hurts
 everywhere else.** It is a real signal buried in a bad instrument.
 
@@ -49,7 +49,7 @@ everywhere else.** It is a real signal buried in a bad instrument.
 
 Are the `fuzzy_concept` targets even retrievable? Every one was probed at
 depth 3000 against lexical search. `label_rot` is empty; all five queries
-return 550–650 distinct documents.
+return 550-650 distinct documents.
 
 | Query target | Rank |
 |---|---:|
@@ -63,8 +63,8 @@ return 550–650 distinct documents.
 
 **Nothing is missing. Everything is mis-ranked.** Indexing and chunking are
 exonerated: the candidate set contains every labelled document. BM25 places
-them 100–200 positions too low because the queries deliberately share almost no
-vocabulary with them — `"keeping track of which items belong to the same group
+them 100-200 positions too low because the queries deliberately share almost no
+vocabulary with them, `"keeping track of which items belong to the same group
 as they merge"` has no term in common with `Union Find`.
 
 ### What this rules out
@@ -74,7 +74,7 @@ reorder what it is given, and four of the seven targets sit at ranks 35, 112,
 211 and 231. Re-ranking a shortlist that excludes the answer changes nothing.
 To reach rank 231 the shortlist would have to be ~250 deep, and a cross-encoder
 scoring 250 candidates per query is a different cost proposition from scoring
-30 — that trade needs measuring before it is assumed.
+30. That trade needs measuring before it is assumed.
 
 `RETRIEVAL_DEPTH = 30` is also not the binding constraint in the way it first
 appears. Raising it to 250 would let those documents *into* the evaluation
@@ -83,7 +83,7 @@ R@10. The depth is a symptom; the ranking is the disease.
 
 ### What this points at
 
-A **bi-encoder over the whole index** — a transformer sentence encoder scoring
+A **bi-encoder over the whole index**, a transformer sentence encoder scoring
 every document independently of its lexical rank. That is the one instrument
 tested here that can move a document from rank 231 into the top 10, because it
 never sees rank 231 in the first place. Static vectors were too weak an
@@ -96,12 +96,12 @@ Left unmeasured: this environment blocks `huggingface.co` and `ollama.com`
 
 ---
 
-## 0. Title boosting measured 2026-09-02 — a shipped setting that costs recall
+## 0. Title boosting measured 2026-09-02: a shipped setting that costs recall
 
 **The heading/filename boost was already in the code, already shipping, and had
 never been scored.** `SearchQuery.title_boost` existed from Phase 3, the
 answering service passed `TITLE_BOOST = 1.25`, and no run of the labelled set
-had ever exercised it — `retrieval-eval` had no way to sweep it. The value was
+had ever exercised it: `retrieval-eval` had no way to sweep it. The value was
 chosen from a single convincing anecdote, recorded in `search.py`: asking *"what
 is retrieval augmented generation?"* ranked four Prompt-Library spans above
 `Technologies/Docs/rag.md`, the canonical page, which missed the top eight
@@ -114,7 +114,7 @@ Measured over 670 sources / 8,133 spans, `hashing-v1-256c`, same labelled set:
 | Method | R@5 | R@10 | P@5 | MRR | Misses | Latency |
 |---|---:|---:|---:|---:|---:|---:|
 | lexical (FTS5/BM25) | 0.468 | **0.662** | 0.167 | 0.519 | **4** | **8.3 ms/q** |
-| title (b=1.25) *— the shipped value* | 0.468 | 0.600 | 0.167 | 0.532 | 5 | 9.6 ms/q |
+| title (b=1.25) *, the shipped value* | 0.468 | 0.600 | 0.167 | 0.532 | 5 | 9.6 ms/q |
 | title (b=1.5) | 0.468 | 0.621 | 0.167 | 0.514 | 5 | 9.5 ms/q |
 | title (b=2) | 0.447 | 0.579 | 0.158 | 0.502 | 5 | 9.7 ms/q |
 | title (b=3) | 0.406 | 0.558 | 0.142 | 0.491 | 6 | 9.5 ms/q |
@@ -123,7 +123,7 @@ Measured over 670 sources / 8,133 spans, `hashing-v1-256c`, same labelled set:
 | hybrid (w=0.75) | 0.511 | 0.678 | 0.192 | **0.569** | 4 | 636 ms/q |
 
 **Every title boost is a regression, and the shipped 1.25 is the mildest of
-them.** It buys nothing at R@5 — identical to lexical — costs 0.0625 of R@10,
+them.** It buys nothing at R@5, identical to lexical, costs 0.0625 of R@10,
 and turns a hit into a fifth miss. The comparison harness classifies all four
 as `regression` without being asked to.
 
@@ -133,10 +133,10 @@ Per-category R@10 isolates it:
 
 | Category | lexical | b=1.25 | change |
 |---|---:|---:|---|
-| `exact_concept` | 0.933 | 0.933 | — |
-| `technology` | 1.000 | 1.000 | — |
-| `project` | 0.750 | 0.750 | — |
-| `related_concept` | 0.578 | 0.578 | — |
+| `exact_concept` | 0.933 | 0.933 | - |
+| `technology` | 1.000 | 1.000 | - |
+| `project` | 0.750 | 0.750 | - |
+| `related_concept` | 0.578 | 0.578 | - |
 | `dsa` | 0.500 | 0.375 | **−0.125** |
 | `fuzzy_concept` | 0.300 | 0.100 | **−0.200** |
 
@@ -158,7 +158,7 @@ The eval measures **document recall**. The answering service uses the boost for
 **span selection** inside an answer, which is a different question, and the
 anecdote that motivated it was about span ordering. It is possible the boost
 earns its keep there and is still wrong here. What is no longer possible is
-shipping it as though it were measured — and a setting that costs 20 points of
+shipping it as though it were measured, and a setting that costs 20 points of
 `fuzzy_concept` recall needs a better defence than one query.
 
 The honest options are to default `title_boost` to 1.0 and keep the field for
@@ -174,21 +174,21 @@ frontmatter keys across all 671 files, and zero aliased wikilinks
 records collision *decisions*, not surface forms.
 
 Expansion needs a source of alternative names before it can be built. That is
-corpus work — adding `aliases:` to canonical pages, which Obsidian already
-supports natively — not engine work, and it should be measured against
+corpus work, adding `aliases:` to canonical pages, which Obsidian already
+supports natively: not engine work, and it should be measured against
 `fuzzy_concept` when it exists, since that is the category with room to move
 (R@5 = 0.100).
 
 ---
 
-## 0. Re-baselined 2026-09-01 — and the rejection no longer holds
+## 0. Re-baselined 2026-09-01: and the rejection no longer holds
 
 **Everything in §2 onward was measured before the engine was split out of the
 vault.** The full sweep has been re-run on the current corpus, same command,
 same labelled set, same embedder. The conclusion changed.
 
 Measured at engine `b3218bf`, over 643 sources / 7,118 spans, with
-`hashing-v1-256c`. Re-running produces byte-identical scores — the hashing
+`hashing-v1-256c`. Re-running produces byte-identical scores, the hashing
 provider is deterministic, so this is reproducible rather than a single sample.
 
 | Method | R@5 | R@10 | P@5 | MRR | Misses | Latency |
@@ -200,7 +200,7 @@ provider is deterministic, so this is reproducible rather than a single sample.
 | hybrid (w=0.75) | 0.567 | 0.678 | 0.217 | 0.571 | 4 | 891 ms/q |
 
 **Then, every fusion weight regressed. Now, every fusion weight improves.**
-At `w=0.50` hybrid beats lexical on all four quality metrics — R@5 +0.064,
+At `w=0.50` hybrid beats lexical on all four quality metrics, R@5 +0.064,
 R@10 +0.014, P@5 +0.025, MRR +0.070. The headline claim this document has
 carried since Phase 3, *"hybrid fusion was swept across four weights and every
 one of them regressed"*, is no longer true of this system.
@@ -210,7 +210,7 @@ one of them regressed"*, is no longer true of this system.
 Held constant: the labelled set (24 queries, 48 labels, unedited), the
 embedder (`hashing-v1-256c`), the command, and the fusion weights.
 
-Changed — **two things at once, and they are not separable from these runs**:
+Changed, **two things at once, and they are not separable from these runs**:
 
 | | Then | Now |
 |---|---:|---:|
@@ -229,13 +229,13 @@ done.
 ### What this does not license
 
 **The latency is now the argument, not the quality.** Hybrid costs 860 ms/q
-against lexical's 11 ms/q — **78× slower** for +0.064 R@5. Nothing about
+against lexical's 11 ms/q: **78× slower** for +0.064 R@5. Nothing about
 `forge search` being interactive has changed, and §7's reasoning about what a
 vector store would cost to operate stands untouched.
 
 `hashing-v1-256c` remains a hashed bag of tokens and character 4-grams, not a
 learned embedding. It is a floor, not a representative of what embeddings can
-do — which cuts both ways now: a real model was never the thing being
+do: which cuts both ways now: a real model was never the thing being
 rejected, and it is still unmeasured. §9 has the command.
 
 **24 queries and 48 labels is a small set.** A 0.064 difference on it is a
@@ -263,13 +263,13 @@ the benchmark says it helped.
 
 ## 2. The evaluation set
 
-`forge/evaluation/data/retrieval-v1.yaml` — **24 queries, 48 labels**, hand-built
+`forge/evaluation/data/retrieval-v1.yaml`, **24 queries, 48 labels**, hand-built
 and version-pinned.
 
 | Category | Queries | What it probes |
 |---|---:|---|
 | `exact_concept` | 5 | The user knows the term and types it exactly. |
-| `fuzzy_concept` | 5 | The user describes the idea in *other words* — the hardest case, and the one embeddings are supposed to fix. |
+| `fuzzy_concept` | 5 | The user describes the idea in *other words*, the hardest case, and the one embeddings are supposed to fix. |
 | `related_concept` | 3 | The answer spans several related documents. |
 | `dsa` | 4 | The flagship section, where retrieval is used most. |
 | `technology` | 3 | Canonical technology references. |
@@ -316,7 +316,7 @@ over 645 sources / 1692 spans of the real vault.
 | hybrid (w=0.75) | 0.279 | 0.449 | 0.125 | 0.336 | 9 | 264.3 ms/q |
 
 `w` is the share of the fused score given to the semantic signal; the
-remainder goes to lexical. Both scores are min-max normalized before fusion —
+remainder goes to lexical. Both scores are min-max normalized before fusion,
 BM25 and cosine live on incomparable scales, and blending them raw would let
 whichever has the wider range dominate regardless of the weight.
 
@@ -339,8 +339,8 @@ lexical to semantic costs recall. w=0.25 is the least-bad hybrid and still
 loses 0.126 of R@10.
 
 Two notes on why the sweep is reported in full rather than as a single
-verdict. First, an earlier run of this same sweep — before the Phase 3
-documentation was written into the vault — had w=0.25 *beating* the baseline
+verdict. First, an earlier run of this same sweep: before the Phase 3
+documentation was written into the vault, had w=0.25 *beating* the baseline
 on R@5 (+0.014) and P@5 (+0.008) while losing badly on R@10 and MRR. Reporting
 only R@5, or picking one weight a priori, would have manufactured a win out of
 that run. Second, that earlier run differed from this one only because writing
@@ -352,7 +352,7 @@ sweep the parameter, report four metrics, and treat small deltas as noise.
 technology docs into the vault (Kubernetes, FastAPI, Node/Express, PostgreSQL,
 React, Redis, Supabase) moved lexical R@10 from 0.650 to **0.608** and added a
 sixth miss, without a single line of retrieval code changing. The query that
-broke is `fuzzy-task-ordering` — "task ordering with dependencies", whose
+broke is `fuzzy-task-ordering`, "task ordering with dependencies", whose
 target is `Topological Sort.md`. It sat at rank 9; the new infrastructure docs
 discuss scheduling and dependency ordering often enough to push it to rank 11.
 
@@ -362,7 +362,7 @@ too small to be stable. Both facts are true at once and both matter.
 
 The lesson is not "the corpus got worse". It is that **BM25 degrades as a
 corpus grows denser in a topic**, and it degrades first exactly where it was
-already weakest — paraphrase. That is a much stronger argument for the two
+already weakest: paraphrase. That is a much stronger argument for the two
 deterministic fixes in §5 than any of the earlier runs made, because this time
 the regression was observed rather than predicted.
 
@@ -392,7 +392,7 @@ is a stand-in.
 *this particular vectorizer* does not help. It is **not** evidence that neural
 embeddings would not help. Those are different claims and this document makes
 only the first. The specific gap it cannot speak to is the `fuzzy_concept`
-category, which is precisely where real embeddings should earn their place —
+category, which is precisely where real embeddings should earn their place,
 and precisely where a vocabulary-overlap vectorizer has nothing to offer.
 
 The re-measurement is one command once a model is reachable:
@@ -432,12 +432,12 @@ complete misses, from the per-query detail:
 | "task ordering with dependencies" | fuzzy | `01_Patterns/Topological Sort.md` | rank 11 |
 | "off-by-one errors" | dsa | `08_Mistakes/Off-by-One.md` | rank 17 |
 
-Four of the five are vocabulary mismatches — the vault says "Union Find", the
+Four of the five are vocabulary mismatches, the vault says "Union Find", the
 user says "disjoint sets". The `vector-databases` case is different and more
 interesting: the term appears so often *across* the corpus (every RAG and
 LangChain document mentions it) that the canonical page loses to pages that
 merely discuss it. That is a BM25 saturation problem, not a semantic one, and
-it is fixable deterministically — by boosting title matches — which is a
+it is fixable deterministically: by boosting title matches: which is a
 cheaper and more defensible fix than a vector store.
 
 **Concrete implication for Phase 4+:** the two highest-value retrieval
@@ -454,12 +454,12 @@ set, and both should be measured before any vector database is reconsidered.
 |---|---:|---|---|
 | Lexical (current) | 13.8 ms/q | none (SQLite FTS5, stdlib) | baseline |
 | + hashing embeddings | ~200 ms/q | none | **negative** |
-| + neural embeddings | untested here | model download, ~100–500 MB | **unknown** |
+| + neural embeddings | untested here | model download, ~100-500 MB | **unknown** |
 | + vector database | untested here | Qdrant/pgvector service | **unknown** |
 
 A 15× latency increase for a measured regression is not a trade-off worth
 making. Brute-force cosine over 1626 vectors in SQLite is what makes the
-semantic row slow, and a vector database would fix *that* — but fixing the
+semantic row slow, and a vector database would fix *that*, but fixing the
 speed of a method that returns worse results is not an improvement.
 
 ---
@@ -501,12 +501,10 @@ database?" is **no, and here is the measurement.**
 
 ## Related
 
-* [`local-model-capability-spike.md`](local-model-capability-spike.md) — why no
+* [`local-model-capability-spike.md`](local-model-capability-spike.md), why no
   neural model was available, with the transcript.
-* [`../architecture/technology-decisions.md`](../architecture/technology-decisions.md)
-  — the standing no-vector-database position this measurement supports.
-* [`../architecture/phase-3-implementation.md`](../architecture/phase-3-implementation.md)
-  — how retrieval, the graph, and activation fit together.
+* [`../architecture/technology-decisions.md`](../architecture/technology-decisions.md), the standing no-vector-database position this measurement supports.
+* [`../architecture/phase-3-implementation.md`](../architecture/phase-3-implementation.md), how retrieval, the graph, and activation fit together.
 
 
 ---
@@ -532,7 +530,7 @@ lexical recall:
 | **fuzzy_concept** | **0.100** |
 
 Nearly all the loss sits in one category, and its queries are the ones that
-describe a concept without naming it — *"stopping a language model from making
+describe a concept without naming it, *"stopping a language model from making
 things up by giving it real passages"* for `rag.md`, *"technique for finding
 the best contiguous subarray without recomputing"* for `Sliding Window.md`.
 Those share almost no vocabulary with their targets, so BM25 never retrieved
@@ -548,7 +546,7 @@ direct vector matches, and the two signals are fused on one normalised scale.
 
 **A second defect fell out of the same code.** Lexical scores were normalised
 only for spans that had a vector, and spans without one kept their raw BM25
-value — around 19 against a fused maximum of 1.0. Any span missing an embedding
+value: around 19 against a fused maximum of 1.0. Any span missing an embedding
 therefore outranked every span with a good semantic match. This alone would
 make hybrid score worse than lexical, independent of embedding quality, and it
 is consistent with the measured result that hybrid degrades as semantic weight
@@ -556,7 +554,7 @@ rises.
 
 **Not yet measured:** whether real embeddings now lift `fuzzy_concept`. The
 stored vectors are still `hashing-v1-256c`, a hashed bag of tokens and
-character 4-grams, which is not semantic at all — so the union retrieval has
+character 4-grams, which is not semantic at all, so the union retrieval has
 nothing meaningful to union in. That measurement needs an embedding model, and
 is the next step:
 
@@ -566,7 +564,7 @@ forge embeddings build --provider ollama
 forge retrieval-eval --methods lexical,semantic,hybrid --detail
 ```
 
-Embedding ~7,000 spans is cheap in a way generation is not — this is a good use
+Embedding ~7,000 spans is cheap in a way generation is not. This is a good use
 of the local GPU, unlike extraction.
 
 ### `nomic-embed-text` needs asymmetric prefixes
@@ -574,7 +572,7 @@ of the local GPU, unlike extraction.
 Verified against Nomic's model card: stored text must be prefixed
 `search_document: ` and queries `search_query: `. The provider applied neither,
 which produces perfectly valid vectors sitting in the wrong region of the
-space — nothing errors, and no stub test notices. Same class of defect as the
+space. Nothing errors, and no stub test notices. Same class of defect as the
 cloud provider's message ordering. Now applied, and the prefix scheme is part
 of the model id (`nomic-embed-text+prefixed`) so prefixed and unprefixed
 vectors can never share a derivation-cache entry.
@@ -592,7 +590,7 @@ vectors can never share a derivation-cache entry.
 | hybrid(w=0.5) | 0.281 | 0.504 | 0.117 | 0.406 | 8 |
 | hybrid(w=0.75) | 0.315 | 0.433 | 0.133 | 0.271 | 10 |
 
-**Semantic beats lexical on every metric** — +0.097 R@5, +0.075 R@10, +0.030
+**Semantic beats lexical on every metric**, +0.097 R@5, +0.075 R@10, +0.030
 MRR. That is the first evidence embeddings earn their place on this corpus, and
 it replaces the earlier negative result, which was measured against a hashed
 bag of tokens rather than a real model.
@@ -603,7 +601,7 @@ are not what they claim. They were not:
 
 `_hybrid` built both score maps with `dict(...)` over lists sorted by
 *descending* score. `dict` keeps the **last** pair, so every document collapsed
-to its **worst** span — while `lexical` and `semantic` went through
+to its **worst** span, while `lexical` and `semantic` went through
 `_to_documents`, which correctly keeps the best. Hybrid was blending each
 document's weakest evidence against the other methods' strongest, and weighting
 that signal harder is exactly why it degraded as `w` rose.
@@ -634,18 +632,18 @@ document aggregation was the cause rather than a coincidence.
 moved +0.125 R@5 and **+0.196 MRR** on nothing but embedding the query as
 `search_query:` instead of as a document. A one-line omission was costing about
 a third of the ranking quality, and it produced no error, no warning, and no
-failing test — the vectors were valid the whole time.
+failing test: the vectors were valid the whole time.
 
 **Lexical is now the worst option on every metric**, so `forge ask` no longer
 defaults to it. It uses `w=0.75`: answering hands the model eight passages at
 once, so getting the right document *into* that set (R@10 0.774 vs 0.733)
 matters more than its rank within it, while the residual lexical weight still
 catches exact-term queries an embedding blurs. Semantic-alone wins R@5, P@5 and
-MRR and is within noise on 24 queries — this is the better available choice,
+MRR and is within noise on 24 queries. This is the better available choice,
 not a tuned optimum.
 
 **`fuzzy_concept` is still the weak category: R@10 0.200.** It improved from
 0.100 but remains far below every other category, and it is the one the whole
 embeddings exercise was aimed at. Five queries is too few to conclude much, and
 the honest reading is that describing a concept without naming it is still hard
-here — worth its own investigation rather than another round of weight tuning.
+here, worth its own investigation rather than another round of weight tuning.

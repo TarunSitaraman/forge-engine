@@ -1,4 +1,4 @@
-# Forge — Competitive Boundary
+# Forge: Competitive Boundary
 
 *The eight things Forge must not become, the specific decision that turns Forge into each one, and the observable symptom that says it already happened.*
 
@@ -13,10 +13,10 @@ decision looks locally correct at the time it is made.
 
 So each entry below has four parts:
 
-- **The drift decision** — the specific, tempting choice that causes it.
-- **Symptom** — what you would observe once it has happened.
-- **The boundary** — what to do instead.
-- **Structural defense** — the thing in the architecture that makes the
+- **The drift decision.** The specific, tempting choice that causes it.
+- **Symptom.** What you would observe once it has happened.
+- **The boundary.** What to do instead.
+- **Structural defense.** The thing in the architecture that makes the
   drift hard rather than merely discouraged.
 
 Review this list at every phase boundary in the
@@ -33,7 +33,7 @@ a chat box is the fastest thing to demo.
 secondary tab nobody opens. Product discussions are about response
 quality rather than model correctness.
 
-**Boundary:** the primary artifact is the **knowledge model** —
+**Boundary:** the primary artifact is the **knowledge model**,
 browsable, inspectable, and useful with no conversation at all. Natural
 language is one query method among several (graph traversal, filters,
 lexical search, similarity).
@@ -47,7 +47,7 @@ model is not legible.
 ## 2. Not a ChatGPT wrapper
 
 **Drift decision:** letting the system prompt become where behavior
-lives — solving problems by editing prompts rather than writing code.
+lives, solving problems by editing prompts rather than writing code.
 
 **Symptom:** the interesting logic is in a `prompts/` directory. Removing
 the LLM removes the product. Changing model versions changes behavior in
@@ -70,7 +70,7 @@ because that pipeline works and produces demoable answers quickly.
 
 **Symptom:** ingestion's only output is embeddings. The graph is
 decorative. Nothing in the system can answer "did this source change
-anything?" — because ingestion has no concept of change.
+anything?", because ingestion has no concept of change.
 
 **Boundary:** retrieval is **one subsystem**, feeding concept
 resolution, relationship discovery, contradiction analysis, and model
@@ -95,7 +95,7 @@ is what it changes in the model. Two documents about the same concept
 must converge on one concept, not produce two summaries.
 
 **Structural defense:** the MVP's acceptance test is explicitly the
-*second* document — detecting overlap and updating the graph instead of
+*second* document, detecting overlap and updating the graph instead of
 duplicating. A summarizer passes document one and fails document two.
 
 ---
@@ -106,7 +106,7 @@ duplicating. A summarizer passes document one and fails document two.
 because Obsidian's UX is proven and users ask for familiar things.
 
 **Symptom:** effort goes into a Markdown editor. Forge competes on
-editing ergonomics — a fight it cannot win and does not need.
+editing ergonomics, a fight it cannot win and does not need.
 
 **Boundary:** Obsidian **stays** the editor. Forge adds the layer
 Obsidian structurally cannot have: inference, provenance, contradiction
@@ -114,14 +114,14 @@ detection, evolution. The plugin surfaces engine capabilities inside the
 editor the user already likes.
 
 **Structural defense:** no editing surface in Forge's own interfaces
-until the engine is complete. Read, navigate, inspect — not compose.
+until the engine is complete. Read, navigate, inspect: not compose.
 
 ---
 
 ## 6. Not a NotebookLM clone
 
-**Drift decision:** scoping intelligence to a *session* — "here are my
-sources, answer questions about them" — because bounded context is much
+**Drift decision:** scoping intelligence to a *session*, "here are my
+sources, answer questions about them", because bounded context is much
 easier to make accurate.
 
 **Symptom:** knowledge resets between sessions. There is no persistent
@@ -134,7 +134,7 @@ distinction on this list: NotebookLM answers *about documents*; Forge
 maintains *a position* that documents modify.
 
 **Structural defense:** temporal versioning and supersession in the
-knowledge model from Phase 1 — before any query interface exists.
+knowledge model from Phase 1, before any query interface exists.
 Session-scoped systems cannot be retrofitted with history.
 
 ---
@@ -183,7 +183,7 @@ Every entry above is a surface form of one of these:
 **A. Collapsing the model into the interface.** Entries 1, 5, 6. The
 knowledge model stops being an independent asset and becomes whatever
 the current UI can display. Defense: the layering rule in
-[positioning](./product-positioning.md) — interfaces present, the core
+[positioning](./product-positioning.md), interfaces present, the core
 decides.
 
 **B. Collapsing understanding into retrieval.** Entries 2, 3, 4, 7. The
@@ -192,7 +192,7 @@ prose about it," and every claim about evolution becomes marketing.
 Defense: ingestion is measured by *model change*, and provenance tiers
 keep generated content permanently distinguishable from evidence.
 
-Entry 8 is the odd one out — it is a scope failure rather than an
+Entry 8 is the odd one out. It is a scope failure rather than an
 architecture failure, which is why it is the easiest to hold the line
 on and the least likely to happen by accident.
 

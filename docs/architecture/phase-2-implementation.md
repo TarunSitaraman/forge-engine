@@ -1,8 +1,8 @@
-# Phase 2 — External Knowledge Ingestion & Evidence Foundation
+# Phase 2: External Knowledge Ingestion & Evidence Foundation
 
 *What was built, how it behaves, and what it deliberately refuses to do. Describes the implementation as it exists.*
 
-**Status:** implemented · **Tests:** 435 passing, 92% coverage · **LLM required:** no
+**Status:** implemented, **Tests:** 435 passing, 92% coverage, **LLM required:** no
 **Validate:** `bash scripts/validate_phase2.sh` (16/16)
 
 ---
@@ -79,7 +79,7 @@ engine/forge/
   embeddings/    base.py · ollama_embeddings.py
 ```
 
-Adapters do acquisition **only** — no concept extraction, no relationship
+Adapters do acquisition **only**, no concept extraction, no relationship
 discovery, no LLM orchestration. That is what makes a future web or repository
 adapter a self-contained addition.
 
@@ -87,7 +87,7 @@ adapter a self-contained addition.
 
 ## 3. PDF parser behaviour
 
-`pypdfium2` (Apache/BSD — chosen in Phase 0 over PyMuPDF to avoid the AGPL
+`pypdfium2` (Apache/BSD, chosen in Phase 0 over PyMuPDF to avoid the AGPL
 question). No OCR.
 
 | Input | Outcome |
@@ -95,7 +95,7 @@ question). No OCR.
 | Normal text PDF | `INGESTED` with blocks, pages, offsets |
 | Multi-page | `INGESTED`, page boundaries preserved |
 | Page with no text | `INGESTED` + warning naming the page |
-| Image-only / scanned | **`OCR_REQUIRED`** — never a silent empty success |
+| Image-only / scanned | **`OCR_REQUIRED`**, never a silent empty success |
 | Malformed / truncated | `PARSE_FAILED` with the parser's reason |
 | Not a PDF | `PARSE_FAILED` |
 | Missing file | `NOT_FOUND` |
@@ -125,7 +125,7 @@ hashing bytes would report content changes that did not happen.
 
 ## 4. Span model
 
-Phase 1's `Span` gained four **optional** fields — `page`, `page_span`,
+Phase 1's `Span` gained four **optional** fields, `page`, `page_span`,
 `char_start`, `char_end`. Phase 1 Markdown spans set none of them, `make_id` is
 unchanged, and existing span identities are stable.
 
@@ -139,7 +139,7 @@ Span(
 span.citation()   # "p.2 | Retrieval Augmented Generation > Chunking Strategy"
 ```
 
-`page` is `None` for Markdown rather than faked as page 1 — absent is
+`page` is `None` for Markdown rather than faked as page 1, absent is
 information.
 
 Token offsets were deliberately not implemented: they would bind provenance to
@@ -149,11 +149,11 @@ a tokenizer version, and character offsets already answer the question.
 
 `chunking.build_spans`, three rules in priority order:
 
-1. **Never cross a structural boundary** — headings and pages end a chunk.
+1. **Never cross a structural boundary.** Headings and pages end a chunk.
 2. **Never split a sentence** when a boundary exists; an unsplittable oversized
    block is returned whole, because an oversized span is an inefficiency while
    a truncated one is a provenance error.
-3. **Deterministic identity** — content-identical documents produce identical
+3. **Deterministic identity.** Content-identical documents produce identical
    span ids.
 
 Lone headings are merged forward, so a bare title never becomes a span with a
@@ -183,7 +183,7 @@ and the cached result is reused. `test_every_component_invalidates` asserts all
 five independently.
 
 **Only useful outcomes are cached.** A `provider_unavailable` result is never
-stored — caching it would make a run permanently model-free once Ollama came
+stored, caching it would make a run permanently model-free once Ollama came
 back up.
 
 | Scenario | Behaviour |
@@ -196,7 +196,7 @@ back up.
 ### A data-loss bug found and fixed here
 
 Phase 1 used `INSERT OR REPLACE` for sources and documents. SQLite implements
-REPLACE as **DELETE-then-INSERT**, which fires `ON DELETE CASCADE` — so
+REPLACE as **DELETE-then-INSERT**, which fires `ON DELETE CASCADE`, so
 re-ingesting a *modified* source silently destroyed all of its prior documents
 and spans. That is precisely the historical provenance Phase 2 must preserve.
 
@@ -221,7 +221,7 @@ a success. Here that would silently write empty knowledge.
 | `SUCCEEDED` | every attempted span produced valid output |
 | `PARTIAL` | some spans succeeded, some failed |
 | `FAILED` | no span produced valid output |
-| `SKIPPED_NO_PROVIDER` | no model available — ingestion still succeeded |
+| `SKIPPED_NO_PROVIDER` | no model available, ingestion still succeeded |
 | `SKIPPED_CACHED` | unchanged source, nothing to do |
 
 **The grounding check.** Every claim must quote its span verbatim. The quote is
@@ -229,17 +229,17 @@ checked against the actual span text (exact substring, then a word-overlap
 fallback for whitespace/case normalization at `QUOTE_GROUNDING_THRESHOLD = 0.6`).
 A quote that is not there means the claim is **dropped and the drop reported**.
 
-A dropped claim does *not* fail the span — the filter rejecting a fabricated
+A dropped claim does *not* fail the span, the filter rejecting a fabricated
 quote is the system working, and treating it as failure would discard the
 span's good candidates and prevent caching a correct result.
 
 **Tier discipline.** `extraction_provenance` raises if asked for `SOURCE_FACT`
 or `USER_ASSERTION`. A model cannot assert source facts, and it cannot speak as
-the user. The request is rejected rather than silently downgraded — quietly
+the user. The request is rejected rather than silently downgraded, quietly
 fixing it would hide the bug.
 
 Cost control: `max_spans` (default 12) caps calls per document, longest spans
-first. The floor for "worth a call" is 40 characters — an earlier 120-character
+first. The floor for "worth a call" is 40 characters, an earlier 120-character
 threshold silently discarded short but meaningful sections, such as a two-line
 definition of a data structure, which then never appeared as a candidate at all.
 
@@ -254,17 +254,17 @@ Signals, in descending confidence:
 
 | # | Signal | Result |
 |---|---|---|
-| 1 | **Vault collision** | `AMBIGUOUS` — dominates everything |
+| 1 | **Vault collision** | `AMBIGUOUS`, dominates everything |
 | 2 | Exact canonical name | `MATCH_CANDIDATE` |
 | 3 | **Already proposed** from another source | `MATCH_CANDIDATE` |
 | 4 | Registered alias | `MATCH_CANDIDATE` |
 | 5 | Normalized name | `MATCH_CANDIDATE` |
 | 6 | Lexical ≥ 0.86 / embedding ≥ 0.88 | `MATCH_CANDIDATE`, or `AMBIGUOUS` on a near tie |
-| — | nothing | `NEW_CONCEPT` |
+| - | nothing | `NEW_CONCEPT` |
 
 **Signal 1 exists because of this corpus.** `Heap`, `Binary Search`, and `Trie`
-each have two canonical homes in the vault — a pattern and an
-algorithm/data-structure — accounting for 180 of its 282 unresolved links. Any
+each have two canonical homes in the vault: a pattern and an
+algorithm/data-structure, accounting for 180 of its 282 unresolved links. Any
 matcher that picks one is wrong half the time and never says so. So the
 ambiguity index is built from the **vault filesystem** (not from ingested
 sources, which may not include those files at all), and a colliding name is
@@ -287,9 +287,9 @@ is noise, not a decision.
 
 | Field | Purpose |
 |---|---|
-| `type` | `metadata_repair` · `new_concept` · `concept_match` · `new_claim` |
+| `type` | `metadata_repair`, `new_concept`, `concept_match`, `new_claim` |
 | `status` | `pending` → `approved` / `rejected` / `superseded` |
-| `safety` | `deterministic_verified` · `deterministic_unverified` · `model_generated` · `ambiguous` |
+| `safety` | `deterministic_verified`, `deterministic_unverified`, `model_generated`, `ambiguous` |
 | `operation` | action, target, before, after, details |
 | `evidence_span_ids` | required for anything model-derived |
 | `provenance` | full Phase 1 provenance record |
@@ -309,25 +309,25 @@ change writes a `Revision`.
 ### The 283 metadata repairs
 
 Phase 1's verified frontmatter repairs are surfaced one proposal **per line**,
-not per file — a file with two malformed fields is two independently reviewable
+not per file: a file with two malformed fields is two independently reviewable
 decisions. Each shows the file, current and proposed metadata, the reason, the
 affected wikilinks, and its safety class. All 283 classify as
 `DETERMINISTIC_VERIFIED`; none is applied.
 
-### Write-back — off by default
+### Write-back: off by default
 
 `forge proposals approve <id>` records a decision and **writes nothing**. With
 `--apply`:
 
-1. **Backup first** into `.forge/backups/<timestamp>/<path>` — reversible.
+1. **Backup first** into `.forge/backups/<timestamp>/<path>`, reversible.
 2. **A `Revision` is recorded** against the Source with before and after.
 3. **The exact diff is shown.**
 4. **Refusals are conservative:** not approved, not `DETERMINISTIC_VERIFIED`,
-   unsupported operation, file missing — all refused with a reason.
+   unsupported operation, file missing: all refused with a reason.
 5. **Staleness is checked.** The target line must still match what the proposal
    recorded; if the file changed underneath, the application is refused rather
    than clobbering the user's edit.
-6. **Only the named file is touched** — `test_only_the_named_file_is_touched`.
+6. **Only the named file is touched**, `test_only_the_named_file_is_touched`.
 
 ---
 
@@ -342,7 +342,7 @@ No chatbot, no conversational interface, no generation over retrieved text.
 
 FTS5 syntax never leaks from user input: tokens are quoted and embedded quotes
 doubled. Without that, a query like `quote"inside` produced
-`sqlite3.OperationalError: unterminated string` — the same shape as SQL
+`sqlite3.OperationalError: unterminated string`: the same shape as SQL
 injection, in a query language the caller never sees.
 
 ### Embeddings and the degradation mode
@@ -356,7 +356,7 @@ Optional throughout, documented rather than silent:
 
 `SearchService.degradation_note()` reports which state you are in, and the CLI
 prints it. An embedding backend that fails mid-query degrades to the lexical
-ordering rather than raising. No Qdrant — vectors live in SQLite, where
+ordering rather than raising. No Qdrant, vectors live in SQLite, where
 brute-force cosine over a few thousand spans is milliseconds.
 
 ---
@@ -378,7 +378,7 @@ Not an observability platform.
 | L1 | **No local model was available in this environment**, so extraction was validated against a scripted provider through the real `LLMProvider` interface. Real-model behaviour remains unmeasured (see [the spike](../research/local-model-capability-spike.md)) |
 | L2 | No OCR. Image-only PDFs report `OCR_REQUIRED` and stop |
 | L3 | PDF heading detection is a font-size heuristic; PDFs with uniform typography yield no headings |
-| L4 | Chunking is untuned for retrieval quality — no labelled set exists yet |
+| L4 | Chunking is untuned for retrieval quality, no labelled set exists yet |
 | L5 | Extraction caps at `max_spans` per document, so long PDFs are sampled, not exhaustively processed |
 | L6 | Nothing creates a `Concept` or `Claim` entity yet; Phase 2 produces proposals. Accepting a proposal into the model is Phase 3 |
 | L7 | Embedding re-rank weighting (0.5/0.5) is arbitrary and untuned |
@@ -387,8 +387,8 @@ Not an observability platform.
 
 ## Related
 
-- [CLI usage](../cli.md) · [Test strategy](../test-strategy.md)
+- [CLI usage](../cli.md), [Test strategy](../test-strategy.md)
 - [Phase 1 implementation](./phase-1-implementation.md)
 - [Canonical knowledge model](../knowledge-model/canonical-model.md)
-- [ADR-001](../decisions/001-forge-knowledge-os.md) — D2 segregated write-back
+- [ADR-001](../decisions/001-forge-knowledge-os.md), D2 segregated write-back
 - [Roadmap](../roadmap.md)
