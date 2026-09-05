@@ -132,3 +132,61 @@ class TestMovedCases:
         monkeypatch.setattr("sys.argv", ["assessment_compare.py", str(base), str(cand)])
         compare.main()
         assert "No case changed classification" in capsys.readouterr().out
+
+
+class TestStability:
+    """`assessment_eval.stability` — the answer to "is this delta real?".
+
+    Added after the fitted set scored 18/21 and 15/21 on consecutive days
+    against the same model, prompt and command, with the three differing cases
+    being exactly the three a prompt revision had been credited with fixing.
+    """
+
+    @staticmethod
+    def _eval_module():
+        spec = importlib.util.spec_from_file_location(
+            "assessment_eval", SCRIPT.parent / "assessment_eval.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        return module
+
+    def _report(self, module, answers: dict[str, tuple[str, str]]):
+        report = module.AssessmentReport(provider_id="cloud", model_id="m", scripted=False)
+        for case_id, (expected, actual) in answers.items():
+            result = module.CaseResult(case_id=case_id, expected=expected)
+            result.actual = actual
+            result.classification_correct = expected == actual
+            report.results.append(result)
+        return report
+
+    def test_a_case_answered_differently_across_runs_is_counted_unstable(self):
+        module = self._eval_module()
+        runs = [
+            self._report(module, {"flaky": ("INSUFFICIENT_EVIDENCE", "INSUFFICIENT_EVIDENCE")}),
+            self._report(module, {"flaky": ("INSUFFICIENT_EVIDENCE", "SUPPORTS")}),
+        ]
+        marks = module.stability(runs)
+        assert marks["unstable"] == 1
+        assert marks["cases"]["flaky"]["correct"] == 1
+        assert marks["cases"]["flaky"]["answers"] == {"INSUFFICIENT_EVIDENCE": 1, "SUPPORTS": 1}
+
+    def test_a_case_wrong_the_same_way_every_time_is_stable_not_unstable(self):
+        """A consistent failure is a finding about the model. A flipping one is
+        not, and conflating them is how a lucky run becomes a fixed case."""
+        module = self._eval_module()
+        runs = [self._report(module, {"hard": ("INSUFFICIENT_EVIDENCE", "SUPPORTS")})] * 3
+        marks = module.stability(runs)
+        assert marks["unstable"] == 0
+        assert marks["cases"]["hard"]["correct"] == 0
+
+    def test_the_score_spread_is_reported(self):
+        module = self._eval_module()
+        runs = [
+            self._report(module, {"a": ("SUPPORTS", "SUPPORTS"), "b": ("REFINES", "REFINES")}),
+            self._report(module, {"a": ("SUPPORTS", "SUPPORTS"), "b": ("REFINES", "SUPPORTS")}),
+        ]
+        marks = module.stability(runs)
+        assert marks["scores"] == [2, 1]
+        assert (marks["min_correct"], marks["max_correct"]) == (1, 2)

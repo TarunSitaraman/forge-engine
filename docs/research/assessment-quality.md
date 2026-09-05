@@ -8,17 +8,28 @@
 judgement does not, and it fails in one specific place — it cannot reliably
 tell that evidence is insufficient.**
 
-*Updated 2026-09-04. §7: a prompt fix took classification 0.76 → 0.86 and
-conflict recall 2/3 → 3/3, but **the false-positive conflict rate held at
-exactly 11.1%** — one false conflict was fixed and a different one created.
-§8: on a held-out set the fix was not written against, **cases the cues
-describe and cases they do not scored identically, 3/5 each** — the cues
-conferred no measurable advantage, and the REFINES regression reproduced on a
-fresh case. §9: a structural second-pass check scored **13/18 with and 13/18
-without**, fixing one case and breaking another at 50% precision. **Three
-approaches have now failed to move this class, which is enough to conclude the
-constraint is the model's judgement rather than how it is asked.** Validity and
-grounding stayed at 1.00 throughout.*
+*Updated 2026-09-05, and the update is a retraction. §10: re-running the
+fitted set against the same model, the same prompt and the same command scored
+**15/21 where §7 had measured 18/21** — and the three cases that differed were
+exactly the three §7 credited a prompt revision with fixing. **The 0.76 → 0.86
+gain is withdrawn, along with every per-class movement resting on it.** A
+single run on this set carries a spread of at least three cases, which is wider
+than most of the deltas this document was arguing over.*
+
+*What survives the retraction: validity and grounding at **1.00 on every run of
+both sets**; INSUFFICIENT_EVIDENCE as the consistently weakest class; and one
+case, `insufficient-mechanism-without-outcome`, that has returned SUPPORTS in
+every run recorded here despite a cue, a dedicated rule, and a structural
+check written against it. §8's finding that cues conferred no advantage on the
+cases they describe (3/5 each, near and far) also survives — it is an argument
+from no difference, which noise cannot manufacture.*
+
+*Earlier updates, now read in that light. §7: a prompt fix appeared to take
+classification 0.76 → 0.86 while the false-positive conflict rate held at
+exactly 11.1%. §8: a held-out set the fix was not written against. §9: a
+structural second-pass check scored 13/18 with and 13/18 without. **Three
+approaches failed to move this class, and the first one now looks as though it
+never worked at all.***
 
 ---
 
@@ -419,10 +430,100 @@ halves of that trade rather than a single accuracy figure that shows neither.
 `--corroborate` turns it on; `corroborate=True` in the constructor does the
 same.
 
-## 10. What follows
+## 10. The 0.2.0 gain did not reproduce, 2026-09-05
 
-1. **Do not write a fourth fix for this class.** Three failed. The next honest
-   move is a different model, not a different prompt or wrapper.
+*Same 21 cases, same model, same command, corroboration off, on
+`assess-prompts/0.3.0` — whose diff against 0.2.0 is the version string and an
+appended block of corroboration constants. `SYSTEM` and the assessment
+instruction are byte-identical, so this is a re-run of §7, not a new condition.*
+
+**15/21 (0.71). §7 measured 18/21 (0.86) the day before.**
+
+| Run | Score |
+|---|---:|
+| 0.1.0, 2026-09-03 | 16/21 (0.76) |
+| 0.2.0, 2026-09-04 | **18/21 (0.86)** |
+| 0.2.0 re-run, 2026-09-05 | **15/21 (0.71)** |
+
+Which cases failed is the part that matters:
+
+| Case | §7, 0.2.0 | Re-run |
+|---|---|---|
+| `conflict-contrary-finding` | fixed by 0.2.0 | **failed** (REFINES) |
+| `insufficient-partial-overlap` | fixed by 0.2.0 | **failed** (REFINES) |
+| `insufficient-anecdote-without-comparison` | fixed by 0.2.0 | **failed** (IRRELEVANT) |
+| `refines-narrows-scope` | broken by 0.2.0 | failed (POTENTIAL_CONFLICT) |
+| `insufficient-different-population` | unmoved | failed (POTENTIAL_CONFLICT) |
+| `insufficient-mechanism-without-outcome` | unmoved | failed (SUPPORTS) |
+
+**The three cases credited to the prompt fix are exactly the three that came
+back.** The three §7 called resistant or broken failed identically both times.
+That is not a prompt that half-worked; it is a prompt that changed nothing,
+measured twice through three cases of sampling noise.
+
+§7 already hedged that the gain was absorption rather than improvement. The
+hedge was too generous. **There was no gain.** The defensible reading now is
+that `assess-prompts/0.2.0` is indistinguishable from `0.1.0` on this set, and
+that the +0.10 was a single sample of a statistic with a spread of at least
+three cases on 21.
+
+### What this invalidates
+
+Everything in this document argued from a one- or two-case delta, which is most
+of it:
+
+- §7's `0.76 → 0.86` — **withdrawn**. Within noise.
+- §7's per-class movements (POTENTIAL_CONFLICT 2/3 → 3/3, INSUFFICIENT_EVIDENCE
+  2/6 → 4/6) — **withdrawn**. Both rest on the three unstable cases.
+- §9's "the structural check scored net zero, fixing one case and breaking
+  another" — the *net zero* stands as an observation, but "fixed
+  `ht-far-term-defined-differently`" and "broke
+  `ht-probe-refines-adds-precondition`" are single-run flips and cannot be
+  attributed to the check.
+- §8's near-transfer 3/5 vs far-transfer 3/5 equality — **survives**, because
+  it is an argument from *no difference*, which noise cannot manufacture. A
+  spread this wide makes a real advantage harder to see, not easier, and none
+  was there.
+
+### What survives
+
+The properties measured as absolutes rather than deltas:
+
+- **Validity and grounding at 1.00**, on both sets, every run. No malformed
+  output, no invented span id, ever.
+- **INSUFFICIENT_EVIDENCE is the weakest class**, at 2/6 and 4/6 on the fitted
+  set and 6/10 held out. Its rank is stable even though its value is not.
+- **The characteristic failure is asserting a relationship the passage does not
+  report.** It appeared in every run, and `insufficient-mechanism-without-outcome`
+  has returned SUPPORTS on every single run recorded here — cued, instructed,
+  and structurally checked.
+
+That last one is the honest version of this document's thesis. Not "the model
+scores 0.86", which it does not reliably, but: *the safety properties hold
+absolutely, one class fails consistently, and the deltas in between were mostly
+noise.*
+
+### Method change
+
+`--repeat N` runs the whole set N times, each with its own store so no
+repetition is served the previous one's cache, and reports the score spread
+plus every case answered inconsistently. **No further single-run number belongs
+in this document.** A model comparison needs it most: a Kimi-versus-gpt-oss
+delta of two cases would have been written up here as a result and would have
+meant nothing.
+
+```
+python3 scripts/assessment_eval.py --provider cloud --model MODEL --repeat 3 --json > MODEL.json
+```
+
+## 11. What follows
+
+**Re-run anything before believing it.** §10 is the precondition for every
+item below: a single run on this set carries a spread of at least three cases.
+
+1. **Do not write a fourth fix for this class.** Three failed — and §10 says
+   the first one arguably never worked at all. The next honest move is a
+   different model, not a different prompt or wrapper.
 2. **Try one stronger model on both sets** before concluding the task is
    infeasible. If a larger model handles INSUFFICIENT_EVIDENCE cleanly, the
    finding is about this model; if it does not, the finding is about the task,
@@ -467,7 +568,9 @@ same.
    proposal to a human. The measured position is that `CLAIM_EVIDENCE`
    proposals in particular cannot be trusted unreviewed — which is an argument
    for keeping that gate, not for removing it once accuracy "improves".
-4. **Repeat runs for variance.** Every number in this document is a single
-   observation, and the deltas being argued over are one and two cases.
+4. ~~**Repeat runs for variance.**~~ Done — and it invalidated most of the
+   deltas above. See §10. Left struck through rather than deleted because the
+   warning was written before the measurement and turned out to be the most
+   important line in the document.
 5. **Keep contradiction detection human-routed.** Unchanged by anything
    measured here.
