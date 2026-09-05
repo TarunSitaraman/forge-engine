@@ -3,7 +3,7 @@
 **A local-first knowledge OS that maintains understanding, not just files.**
 
 Forge ingests sources, extracts claims with page-level provenance, links them
-into a knowledge graph — and when new evidence contradicts something it already
+into a knowledge graph. When new evidence contradicts something it already
 believed, it *tells you* instead of silently overwriting it.
 
 [![tests](https://github.com/TarunSitaraman/forge-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/TarunSitaraman/forge-engine/actions/workflows/tests.yml)
@@ -18,7 +18,7 @@ cd /path/to/your/notes
 forge index && forge diagnostics
 ```
 
-Point it at any folder of Markdown and it reports what is quietly broken —
+Point it at any folder of Markdown and it reports what is quietly broken:
 dead wikilinks, missing frontmatter, conventions that contradict each other.
 No model, no API key, no network, no configuration.
 
@@ -31,17 +31,17 @@ No model, no API key, no network, no configuration.
 ## Why this exists
 
 Forge was not built against a toy corpus. It was built against a real personal
-knowledge vault — 671 Markdown files, ~58,800 lines, one canonical file per
-concept, enforced by hand for a year. Then a
+knowledge vault of 671 Markdown files and ~58,800 lines, one canonical file
+per concept, enforced by hand for a year. Then a
 [full audit](docs/architecture/forge-current-state.md) measured what that
 discipline actually produced:
 
-> 145 broken wikilinks · 42% of files with no machine-readable metadata ·
-> 283 malformed relationship fields · stale counts in three separate files
+> 145 broken wikilinks, 42% of files with no machine-readable metadata,
+> 283 malformed relationship fields, stale counts in three separate files
 
 The conventions were never wrong. They were **unenforceable by hand at that
 scale**. The engine's first job is to enforce mechanically what a knowledge base
-already specifies — and its later jobs follow from the same premise: a knowledge
+already specifies. Its later jobs follow from the same premise: a knowledge
 base that cannot check itself will drift, and one that silently accepts every
 new source will rot faster than one that maintains nothing.
 
@@ -54,7 +54,7 @@ These are enforced in code and asserted in tests, not stated as aspirations:
 
 - **The vault is read-only to the engine.** Tests byte-compare every Markdown
   file before and after every operation. Derived state lives in `.forge/` and is
-  rebuildable — delete it and nothing of value is lost.
+  rebuildable, so deleting it loses nothing of value.
 - **Provenance floor.** A derived object can never claim stronger provenance
   than its weakest input. Enforced in a pydantic validator, so a violating
   object *cannot be constructed*.
@@ -65,7 +65,7 @@ These are enforced in code and asserted in tests, not stated as aspirations:
 - **Model reasoning never mutates knowledge directly.** It produces a proposal;
   a human approves; activation applies it.
 - **Deterministic work stays deterministic.** Parsing, hashing, chunking,
-  matching, graph traversal, and impact classification make **zero** LLM calls —
+  matching, graph traversal, and impact classification make **zero** LLM calls,
   and the tests assert the call count, so a future refactor cannot quietly
   introduce one.
 - **No measurement claim without a measurement.** Where something could not be
@@ -105,7 +105,7 @@ be standing in.
 with something Forge already believes, it does not overwrite it and does not
 quietly accept it. It reports a *potential conflict*, shows you the page that
 prompted it, and waits. Approve, and the original claim is marked disputed with
-the new evidence attached — never rewritten, never retracted. The whole run
+the new evidence attached. It is never rewritten and never retracted. The run
 replays afterwards with `forge workflow inspect`.
 
 Ambiguous concepts are never merged silently either. A collision is documented
@@ -122,24 +122,24 @@ asserted:
 | lexical (FTS5/BM25) | 0.510 | 0.685 | 0.535 | **11 ms/q** |
 | **hybrid (w=0.50)** | **0.574** | **0.699** | **0.604** | 860 ms/q |
 
-Re-baselined 2026-09-01 with the full sweep — two methods, four fusion weights,
+Re-baselined 2026-09-01 with the full sweep: two methods, four fusion weights,
 deterministic embedder, byte-identical on re-run. **This reversed the earlier
 finding.** Embeddings were built, measured and rejected in Phase 3, when every
 fusion weight regressed; on the current corpus every weight improves.
 
 It still ships lexical-only, and the reason is now cost rather than quality:
-**78× the latency for +0.064 R@5**, on a 24-query set where that is a handful
-of documents moving rank. Two things changed under the old measurement at once
-— the corpus lost the engine's `docs/`, and the chunker took spans from 1,692
-to 7,118 — so the cause is not attributed. [The numbers, and what they do not
+**78x the latency for +0.064 R@5**, on a 24-query set where that is a handful
+of documents moving rank. Two things changed under the old measurement at once:
+the corpus lost the engine's `docs/`, and the chunker took spans from 1,692 to
+7,118. The cause is therefore not attributed. [The numbers, and what they do not
 license](docs/research/retrieval-baseline.md).
 
 Extraction quality has its own eval, and its headline metric is deliberately
 **junk rate rather than recall**, because the failure mode this corpus actually
 has is over-extraction and recall rewards that. A test pins the choice: an
 extractor emitting every noun phrase scores 1.0 recall and is still correctly
-judged bad. First trustworthy run — `openai/gpt-oss-120b`, prompt `0.3.0`, all
-6 cases completed: **junk 0.000, recall 0.472, grounding 1.000** over 23 claims.
+judged bad. First trustworthy run, on `openai/gpt-oss-120b` with prompt
+`0.3.0` and all 6 cases completed: **junk 0.000, recall 0.472, grounding 1.000** over 23 claims.
 Read [the caveats](docs/research/extraction-cost.md) before quoting any of it;
 0.000 means "no known failure recurred", not "no junk".
 
@@ -160,12 +160,12 @@ old number.
 
 ## Status
 
-**Phases 0–4 complete.** The engine indexes a corpus deterministically, ingests
+**Phases 0-4 complete.** The engine indexes a corpus deterministically, ingests
 external PDFs and Markdown with page- and section-level provenance, turns
 everything it infers into proposals a human decides on, activates approved ones
 into canonical knowledge you can traverse and cite, and evaluates how new
-evidence changes what it already knows — pausing for approval before anything
-changes. Phases 5–10 are not started; see [`docs/roadmap.md`](docs/roadmap.md).
+evidence changes what it already knows, pausing for approval before anything
+changes. Phases 5-10 are not started; see [`docs/roadmap.md`](docs/roadmap.md).
 
 ```bash
 python -m pytest tests           # 1,114 tests, fully offline, no model needed
@@ -181,7 +181,7 @@ out. Point them at a checkout to run the full 1,114:
 FORGE_TEST_VAULT=/path/to/forge python -m pytest tests
 ```
 
-The suite is otherwise complete and requires no model — CI and every test run
+The suite is otherwise complete and requires no model. CI and every test run
 **offline** against a scripted provider.
 
 ## Layout
@@ -210,7 +210,7 @@ Start with [`docs/`](docs/README.md): the
 pip install forge-kb             # Python 3.10+
 ```
 
-Then point it at any folder of Markdown and see what is broken — no model, no
+Then point it at any folder of Markdown and see what is broken. No model, no
 API key, no network, no configuration:
 
 ```bash
@@ -239,8 +239,8 @@ Per-machine provider configuration lives in `~/.config/forge/forge.env`;
 [`config/forge.env.example`](config/forge.env.example) is the template, and
 `forge status` reports which settings file was loaded and which model is
 actually active. Note that the model ids in that example rotate faster than the
-file does — verify one is live before trusting it.
+file does, so verify one is live before trusting it.
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT. See [`LICENSE`](LICENSE).

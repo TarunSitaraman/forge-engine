@@ -1,4 +1,4 @@
-# Forge Knowledge OS — Documentation
+# Forge Knowledge OS: Documentation
 
 *Engineering documentation for the Forge engine. Distinct from the Markdown vault in the rest of this repository, which is Forge's knowledge content.*
 
@@ -18,7 +18,7 @@
 | 8 | [roadmap.md](./roadmap.md) | In what order, with what exit gates |
 | 9 | [decisions/001-forge-knowledge-os.md](./decisions/001-forge-knowledge-os.md) | What was decided, and what is still open |
 
-### Phases 1–4 — as built
+### Phases 1-4, as built
 
 | Document | Answers |
 |---|---|
@@ -26,7 +26,7 @@
 | [architecture/phase-2-implementation.md](./architecture/phase-2-implementation.md) | Phase 2: ingestion, extraction, proposals, retrieval |
 | [architecture/phase-3-implementation.md](./architecture/phase-3-implementation.md) | Phase 3: activation, identity, graph, retrieval evaluation |
 | [architecture/phase-4-implementation.md](./architecture/phase-4-implementation.md) | Phase 4: the agentic evolution workflow, providers, checkpointing |
-| [research/provider-availability.md](./research/provider-availability.md) | Which providers could actually be exercised — and what stays unmeasured |
+| [research/provider-availability.md](./research/provider-availability.md) | Which providers could actually be exercised, and what stays unmeasured |
 | [research/retrieval-baseline.md](./research/retrieval-baseline.md) | What retrieval actually scores, and why hybrid was rejected |
 | [cli.md](./cli.md) | How to run it |
 | [test-strategy.md](./test-strategy.md) | How it is verified |
@@ -54,30 +54,30 @@ across near-empty files:
 | Ingestion pipeline | [target-architecture §4](./architecture/target-architecture.md) |
 | Retrieval | [target-architecture §6](./architecture/target-architecture.md) |
 | LangGraph workflows / node design | [target-architecture §5](./architecture/target-architecture.md) |
-| "Agents" | Same — Forge has workflow nodes, not agents, deliberately |
+| "Agents" | Same. Forge has workflow nodes, not agents, deliberately |
 | Deployment | [target-architecture §10](./architecture/target-architecture.md), [technology-decisions §8](./architecture/technology-decisions.md) |
-| API | Not yet designed — Phase 6 |
-| UX | Not yet designed — Phase 6 |
+| API | Not yet designed, Phase 6 |
+| UX | Not yet designed, Phase 6 |
 | Storage interfaces, provenance, revisions, corpus indexing | [phase-1-implementation.md](./architecture/phase-1-implementation.md) |
 
 A folder is created when its content exists. Writing `docs/api/` before
 an API exists would produce a placeholder that goes stale before it is
-ever true — precisely the drift the audit measured in the vault (§6.4).
+ever true, precisely the drift the audit measured in the vault (§6.4).
 
 ---
 
 ## Conventions in this tree
 
-- **Relative Markdown links**, not wikilinks — these docs are read on
-  GitHub as often as in Obsidian. Permitted by
+- **Relative Markdown links**, not wikilinks, because these docs are read
+  on GitHub as often as in Obsidian. Permitted by
   the vault repository's `CONVENTIONS.md` for exactly this case.
 - **kebab-case filenames**, per that same `CONVENTIONS.md`.
 - **ADRs are immutable once accepted.** Supersede with a new numbered
   ADR; never rewrite history.
 - **Measured claims cite their measurement.** Numbers in the audit were
-  taken from the filesystem, not from existing documentation — the
-  audit found three separate cases of stale hand-maintained counts, and
-  this tree should not add a fourth.
+  taken from the filesystem, not from existing documentation. The audit
+  found three separate cases of stale hand-maintained counts, and this
+  tree should not add a fourth.
 
 ---
 
@@ -103,7 +103,7 @@ Concepts and Claims with evidence links, provenance, and revisions; activation
 is idempotent; concept collisions are resolved by a persisted *user* decision
 rather than by similarity; relationships are activated only where evidence
 supports them; the graph is SQLite with bounded traversal and nine integrity
-diagnostics. Retrieval was **measured** against a labelled 24-query set —
+diagnostics. Retrieval was **measured** against a labelled 24-query set:
 lexical wins, and hybrid was rejected on the evidence
 ([retrieval baseline](./research/retrieval-baseline.md)). 595 tests, 89%
 coverage, no model required.
@@ -112,8 +112,8 @@ coverage, no model required.
 already knows. A stateful LangGraph workflow narrows candidates
 deterministically, assesses new evidence against existing claims with a
 grounded, strictly-schema'd model call, classifies the impact with ordinary
-code, generates reviewable proposals, **pauses for a human**, and — only on
-approval — corroborates, refines (superseding non-destructively), or marks a
+code, generates reviewable proposals, **pauses for a human**, and then, only
+on approval, corroborates, refines (superseding non-destructively), or marks a
 claim disputed, recording a revision either way. Providers are pluggable: local
 Ollama, remote Ollama, cloud, or mock, with no silent downgrade for knowledge
 mutation. 1,114 tests, CI fully offline.
@@ -123,11 +123,11 @@ the phase shipped with a fully-tested pipeline and entirely unmeasured model
 quality. That gap has since been **partly** closed: on 2026-08-14 a local Qwen3
 8B scored 5/5 on the assessment set with valid schemas and correct grounding on
 every case. Five cases are a smoke test, not a characterisation of a rate, and
-the cloud path remains unmeasured — read
+the cloud path remains unmeasured. Read
 [provider availability](./research/provider-availability.md) §6 before quoting
 either result.
 
-Verify with `bash scripts/validate_phase1.sh` … `validate_phase4.sh`.
+Verify with `bash scripts/validate_phase1.sh` through `validate_phase4.sh`.
 Demos: `python3 scripts/phase2_demo.py`, `phase3_demo.py`, `phase4_demo.py`.
 
-**Not started:** Phases 5–10. See [roadmap.md](./roadmap.md).
+**Not started:** Phases 5-10. See [roadmap.md](./roadmap.md).
