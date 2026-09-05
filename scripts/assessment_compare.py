@@ -33,6 +33,16 @@ def load(path: Path) -> dict:
             f"{path}: scripted run. Classification is 1.0 by construction there, "
             "so comparing it to anything is meaningless."
         )
+    missing = [r["case"] for r in payload["results"] if r.get("unavailable")]
+    if missing:
+        # A run that lost the provider scored a subset. Diffing it against a
+        # complete run reports an outage as a set of regressions, which is
+        # exactly the reading this tool exists to prevent.
+        raise SystemExit(
+            f"{path}: {len(missing)} case(s) never reached the model "
+            f"(first: {missing[0]}). This run is incomplete and is not "
+            "comparable. Re-run it."
+        )
     return payload
 
 

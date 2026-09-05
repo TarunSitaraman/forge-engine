@@ -190,3 +190,70 @@ class TestStability:
         marks = module.stability(runs)
         assert marks["scores"] == [2, 1]
         assert (marks["min_correct"], marks["max_correct"]) == (1, 2)
+
+
+class TestUnavailableIsNotAMiss:
+    """An outage is not a wrong answer.
+
+    2026-09-05: a three-run variance measurement lost DNS at case 13 of run 3.
+    The remaining nine cases were recorded as ordinary misses, which would have
+    entered the stability table as nine cases that "changed their answer" and
+    dropped the run's score by nine. The failure mode this whole document warns
+    about, arriving through the tool built to detect it.
+    """
+
+    @staticmethod
+    def _eval_module():
+        spec = importlib.util.spec_from_file_location(
+            "assessment_eval", SCRIPT.parent / "assessment_eval.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        return module
+
+    def _run(self, module, answered: int, lost: int):
+        report = module.AssessmentReport(provider_id="cloud", model_id="m", scripted=False)
+        for i in range(answered):
+            result = module.CaseResult(case_id=f"case-{i}", expected="SUPPORTS")
+            result.actual = "SUPPORTS"
+            result.classification_correct = True
+            result.structured_output_valid = True
+            result.grounded = True
+            report.results.append(result)
+        for i in range(answered, answered + lost):
+            result = module.CaseResult(case_id=f"case-{i}", expected="SUPPORTS")
+            result.unavailable = True
+            result.detail = "semantic_analysis_unavailable: network unreachable"
+            report.results.append(result)
+        return report
+
+    def test_accuracy_is_over_the_cases_that_reached_the_model(self):
+        """12 of 12 answered correctly is 1.00, not 12/21 = 0.57."""
+        module = self._eval_module()
+        report = self._run(module, answered=12, lost=9)
+        assert report.classification_accuracy == 1.0
+        assert report.unavailable == 9
+        assert len(report.measured) == 12
+
+    def test_the_headline_says_the_run_is_incomplete(self):
+        module = self._eval_module()
+        report = self._run(module, answered=12, lost=9)
+        assert "9/21 UNMEASURED" in report.headline()
+
+    def test_an_unmeasured_case_is_not_counted_as_a_changed_answer(self):
+        module = self._eval_module()
+        complete = self._run(module, answered=21, lost=0)
+        truncated = self._run(module, answered=12, lost=9)
+        marks = module.stability([complete, truncated])
+        assert marks["unstable"] == 0
+        assert marks["cases"]["case-20"]["measured"] == 1
+        assert marks["incomplete_runs"] == [2]
+
+    def test_the_comparison_refuses_an_incomplete_report(self, tmp_path):
+        module = self._eval_module()
+        payload = self._run(module, answered=12, lost=9).to_dict()
+        path = tmp_path / "truncated.json"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        with pytest.raises(SystemExit, match="never reached the model"):
+            compare.load(path)

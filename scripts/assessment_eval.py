@@ -54,6 +54,7 @@ from forge.evaluation.assessment import (  # noqa: E402
     CaseResult,
 )
 from forge.evolution import EvidenceAssessor, EvolutionProposer  # noqa: E402
+from forge.evolution.assessor import AssessmentOutcome  # noqa: E402
 from forge.llm import MockProvider, get_provider, provider_identity  # noqa: E402
 from forge.llm.base import ProviderUnavailable  # noqa: E402
 from forge.storage import SqliteStore  # noqa: E402
@@ -182,16 +183,27 @@ def stability(reports: list[AssessmentReport]) -> dict:
     per_case: dict[str, dict] = {}
     for report in reports:
         for result in report.results:
-            entry = per_case.setdefault(result.case_id, {"correct": 0, "answers": {}})
+            entry = per_case.setdefault(
+                result.case_id, {"correct": 0, "measured": 0, "answers": {}}
+            )
+            if result.unavailable:
+                # Not evidence about the model in either direction.
+                continue
+            entry["measured"] += 1
             entry["correct"] += int(result.classification_correct)
             answer = result.actual or "no result"
             entry["answers"][answer] = entry["answers"].get(answer, 0) + 1
-    scores = [sum(r.classification_correct for r in report.results) for report in reports]
+    scores = [sum(r.classification_correct for r in report.measured) for report in reports]
+    incomplete = [i + 1 for i, report in enumerate(reports) if report.unavailable]
     return {
         "runs": len(reports),
         "min_correct": min(scores) if scores else 0,
         "max_correct": max(scores) if scores else 0,
         "scores": scores,
+        "measured_per_run": [len(report.measured) for report in reports],
+        # Runs that lost the provider part-way. Their score is over a subset
+        # and is not comparable with a complete run's.
+        "incomplete_runs": incomplete,
         "unstable": sum(1 for e in per_case.values() if len(e["answers"]) > 1),
         "cases": per_case,
     }
@@ -311,7 +323,12 @@ def main() -> int:
             terminal through the redirect.
             """
             report.results.append(result)
-            mark = "ok  " if result.classification_correct else "MISS"
+            if result.unavailable:
+                mark = "----"
+            elif result.classification_correct:
+                mark = "ok  "
+            else:
+                mark = "MISS"
             detail = result.actual or (result.detail[:40] if result.detail else "no result")
             print(
                 f"[{position:>2}/{total}] {mark} {result.case_id:<44} "
@@ -338,6 +355,7 @@ def main() -> int:
                 batch = assessor.assess([evidence_span], [claim])
             except ProviderUnavailable as exc:
                 result.detail = f"provider unavailable: {exc}"
+                result.unavailable = True
                 note(result, index + 1)
                 store.close()
                 continue
@@ -345,6 +363,15 @@ def main() -> int:
 
             if not batch.ok:
                 result.detail = f"{batch.outcome.value}: {batch.detail[:120]}"
+                # The provider never answered. That is an outage, not a
+                # judgement, and scoring it as a miss reports a dropped
+                # connection as a model regression. Measured 2026-09-05: a run
+                # lost DNS at case 13 and the remaining 9 were recorded as
+                # ordinary failures, which would have gone into the variance
+                # table as nine flipped cases.
+                result.unavailable = (
+                    batch.outcome is AssessmentOutcome.SEMANTIC_ANALYSIS_UNAVAILABLE
+                )
                 note(result, index + 1)
                 store.close()
                 continue
@@ -419,11 +446,20 @@ def main() -> int:
             marks = stability(reports)
             print(f"{'case':<44} {'correct':>9}  answers")
             for case_id, entry in marks["cases"].items():
-                if entry["correct"] == args.repeat:
+                if entry["measured"] and entry["correct"] == entry["measured"]:
                     continue
                 answers = ", ".join(f"{k}x{v}" for k, v in entry["answers"].items())
-                print(f"{case_id:<44} {entry['correct']}/{args.repeat:<7} {answers}")
+                tally = f"{entry['correct']}/{entry['measured']}"
+                print(f"{case_id:<44} {tally:<9} {answers or 'never measured'}")
             print()
+            if marks["incomplete_runs"]:
+                runs = ", ".join(str(n) for n in marks["incomplete_runs"])
+                print(
+                    f"WARNING: run(s) {runs} lost the provider part-way and are "
+                    f"scored over a subset ({marks['measured_per_run']} cases "
+                    f"measured per run). Those scores are not comparable with a "
+                    f"complete run's. Re-run before quoting the spread."
+                )
             print(
                 f"score range {marks['min_correct']}-{marks['max_correct']} of "
                 f"{len(dataset)} across {args.repeat} runs; "

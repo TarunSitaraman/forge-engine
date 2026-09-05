@@ -16,6 +16,12 @@ gain is withdrawn, along with every per-class movement resting on it.** A
 single run on this set carries a spread of at least three cases, which is wider
 than most of the deltas this document was arguing over.*
 
+*Repeated 2026-09-05 with `--repeat 3`: four complete runs now stand at 18, 15,
+16 and 16 of 21. **Three cases flip between runs and three are wrong in every
+run**, and the three that flip are exactly the three the prompt revision was
+credited with fixing. Every published movement in this document lives inside
+those three.*
+
 *What survives the retraction: validity and grounding at **1.00 on every run of
 both sets**; INSUFFICIENT_EVIDENCE as the consistently weakest class; and one
 case, `insufficient-mechanism-without-outcome`, that has returned SUPPORTS in
@@ -515,6 +521,67 @@ meant nothing.
 ```
 python3 scripts/assessment_eval.py --provider cloud --model MODEL --repeat 3 --json > MODEL.json
 ```
+
+### Four runs now, and the spread is three cases
+
+*Repeated 2026-09-05 with `--repeat 3`. Run 3 lost DNS at case 13, so nine of
+its cases never reached the model and it is excluded. Two complete runs from
+that batch, plus the two single runs above.*
+
+| Run | Score |
+|---|---:|
+| 2026-09-04 | 18/21 |
+| 2026-09-05, 06:50 | 15/21 |
+| 2026-09-05, 07:08 run 1 | 16/21 |
+| 2026-09-05, 07:11 run 2 | 16/21 |
+
+**Same model, same prompt, same set, same command: 15 to 18.** The spread is
+three cases wide, which is wider than any delta this document argued from
+before §10.
+
+Per case, across the four:
+
+| Case | Correct | Verdict |
+|---|---|---|
+| `conflict-contrary-finding` | 1 of 4 | flips |
+| `insufficient-partial-overlap` | 1 of 4 | flips |
+| `refines-narrows-scope` | 1 of 4 | flips |
+| `insufficient-anecdote-without-comparison` | 0 of 4 | **always wrong** |
+| `insufficient-different-population` | 0 of 4 | **always wrong** |
+| `insufficient-mechanism-without-outcome` | 0 of 4 | **always wrong** |
+
+Every other case was correct every time.
+
+**Three cases flip and three never work.** The three that flip are the three
+§7 credited a prompt revision with fixing. The three that never work were
+already the ones §7 called resistant, plus `anecdote-without-comparison`, which
+0.2.0 was also credited with fixing and which has since failed four times out
+of four.
+
+So the set has a stable core of 15 correct, three cases that answer at roughly
+chance, and three fixed failures. Every published movement in this document
+lives entirely inside the flipping three.
+
+**The stable failures are the finding.** All three are the same shape: evidence
+that is on-topic and inconclusive, read as support.
+`insufficient-mechanism-without-outcome` has a cue, a dedicated rule and a
+structural check written against it, and has now returned SUPPORTS in every run ever recorded here.
+
+### The outage nearly entered the table as data
+
+Run 3's nine unreachable cases were recorded as ordinary misses. Left alone
+they would have appeared in the stability table as nine cases that changed
+their answer, and dropped that run's score by nine, in the tool built
+specifically to stop a delta being misread.
+
+Fixed: a case the provider never answered is now flagged `unavailable`, every
+rate is computed over the cases that reached the model, the headline prints
+`[9/21 UNMEASURED]`, `--repeat` warns which runs are incomplete, and
+`assessment_compare.py` refuses an incomplete report outright rather than
+diffing it. **This is the third metric in this project to have scored a
+non-answer as an answer**, after the grounding score that could only print
+1.000 and the extraction eval that scored timed-out runs as clean. The pattern
+is the same every time: the failure path produces a number instead of a gap.
 
 ## 11. What follows
 

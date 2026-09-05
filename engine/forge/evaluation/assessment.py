@@ -124,6 +124,12 @@ class CaseResult:
     cached_on_repeat: bool = False
     latency_ms: float = 0.0
     detail: str = ""
+    #: True when no answer was obtained because the provider was unreachable.
+    #: A dropped connection is not a wrong answer, and averaging the two
+    #: together turns a network outage into a model regression. Measured
+    #: 2026-09-05: a run lost DNS at case 13 and the remaining 9 cases were
+    #: recorded as ordinary misses.
+    unavailable: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -137,6 +143,7 @@ class CaseResult:
             "cached_on_repeat": self.cached_on_repeat,
             "latency_ms": round(self.latency_ms, 2),
             "detail": self.detail,
+            "unavailable": self.unavailable,
         }
 
 
@@ -147,10 +154,23 @@ class AssessmentReport:
     scripted: bool
     results: list[CaseResult] = field(default_factory=list)
 
+    @property
+    def measured(self) -> list[CaseResult]:
+        """Cases that actually reached the model."""
+        return [r for r in self.results if not r.unavailable]
+
+    @property
+    def unavailable(self) -> int:
+        return sum(1 for r in self.results if r.unavailable)
+
     def _rate(self, attribute: str) -> float:
-        if not self.results:
+        """Over measured cases. A case the provider never answered is not
+        evidence about the model in either direction, so counting it as a
+        failure would report an outage as a score."""
+        measured = self.measured
+        if not measured:
             return 0.0
-        return sum(1 for r in self.results if getattr(r, attribute)) / len(self.results)
+        return sum(1 for r in measured if getattr(r, attribute)) / len(measured)
 
     @property
     def structured_output_validity(self) -> float:
@@ -174,9 +194,10 @@ class AssessmentReport:
 
     @property
     def mean_latency_ms(self) -> float:
-        if not self.results:
+        measured = self.measured
+        if not measured:
             return 0.0
-        return sum(r.latency_ms for r in self.results) / len(self.results)
+        return sum(r.latency_ms for r in measured) / len(measured)
 
     def to_dict(self, *, include_cases: bool = True) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -184,6 +205,8 @@ class AssessmentReport:
             "model_id": self.model_id,
             "scripted": self.scripted,
             "cases": len(self.results),
+            "measured": len(self.measured),
+            "unavailable": self.unavailable,
             "structured_output_validity": round(self.structured_output_validity, 4),
             "grounding_rate": round(self.grounding_rate, 4),
             "classification_accuracy": round(self.classification_accuracy, 4),
@@ -203,7 +226,7 @@ class AssessmentReport:
         return payload
 
     def headline(self) -> str:
-        return (
+        line = (
             f"{self.provider_id}/{self.model_id:<20} "
             f"valid={self.structured_output_validity:.2f} "
             f"grounded={self.grounding_rate:.2f} "
@@ -212,3 +235,8 @@ class AssessmentReport:
             f"cache={self.cache_effectiveness:.2f} "
             f"{self.mean_latency_ms:.0f}ms/case"
         )
+        if self.unavailable:
+            # Loud, because every rate above it is now over a subset and the
+            # run must not be compared with a complete one.
+            line += f"  [{self.unavailable}/{len(self.results)} UNMEASURED]"
+        return line
