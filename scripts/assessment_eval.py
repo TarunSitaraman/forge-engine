@@ -31,6 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "engine"))
 
 from forge.config import Settings  # noqa: E402
+from forge.logging import configure_logging  # noqa: E402
 from forge.domain import (  # noqa: E402
     AssessmentClass,
     Claim,
@@ -201,6 +202,12 @@ def main() -> int:
             "dataset and never reaches a model"
         )
 
+    # Without this, structlog has never been configured and falls back to its
+    # default PrintLogger, which writes to **stdout** — straight into the file
+    # `--json` redirects, making the report unparseable. configure_logging
+    # routes through stdlib logging, which this engine points at stderr.
+    configure_logging()
+
     dataset = AssessmentDataset.load(args.dataset)
     workdir = Path(tempfile.mkdtemp(prefix="forge-assess-eval-"))
     settings = Settings.load(state_dir=workdir / "state")
@@ -238,6 +245,27 @@ def main() -> int:
         provider_id=provider_id, model_id=model_id, scripted=scripted
     )
 
+    total = len(dataset)
+
+    def note(result: CaseResult, position: int) -> None:
+        """Append the result, and say so on **stderr**.
+
+        stdout is the report. Under ``--json`` that is redirected to a file
+        which is only written once every case has run, so a working run and a
+        hung one look identical for several minutes — and on a rate-limited
+        host, where the provider sits in backoff, that is exactly when you want
+        to see it moving. stderr stays on the terminal through the redirect.
+        """
+        report.results.append(result)
+        mark = "ok  " if result.classification_correct else "MISS"
+        detail = result.actual or (result.detail[:40] if result.detail else "no result")
+        print(
+            f"[{position:>2}/{total}] {mark} {result.case_id:<44} "
+            f"{detail:<26} {result.latency_ms / 1000:.1f}s",
+            file=sys.stderr,
+            flush=True,
+        )
+
     for index, case in enumerate(dataset):
         store = SqliteStore(workdir / f"case-{index}.db")
         store.initialize()
@@ -256,14 +284,14 @@ def main() -> int:
             batch = assessor.assess([evidence_span], [claim])
         except ProviderUnavailable as exc:
             result.detail = f"provider unavailable: {exc}"
-            report.results.append(result)
+            note(result, index + 1)
             store.close()
             continue
         result.latency_ms = (time.perf_counter() - started) * 1000
 
         if not batch.ok:
             result.detail = f"{batch.outcome.value}: {batch.detail[:120]}"
-            report.results.append(result)
+            note(result, index + 1)
             store.close()
             continue
 
@@ -274,7 +302,7 @@ def main() -> int:
                 if batch.rejected
                 else "no assessment produced"
             )
-            report.results.append(result)
+            note(result, index + 1)
             store.close()
             continue
 
@@ -302,7 +330,7 @@ def main() -> int:
         repeat = assessor.assess([evidence_span], [claim])
         result.cached_on_repeat = repeat.cache.hits == 1 and repeat.llm_calls == 0
 
-        report.results.append(result)
+        note(result, index + 1)
         store.close()
 
     payload = report.to_dict()
