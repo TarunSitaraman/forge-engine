@@ -439,7 +439,17 @@ same.
        --model MODEL --json \
        --dataset engine/forge/evaluation/data/assessment-holdout-v1.yaml \
        > holdout-MODEL.json
+
+   python3 scripts/assessment_compare.py holdout-gpt-oss-120b.json holdout-MODEL.json
    ```
+
+   The comparison step is not optional bookkeeping. **A model swap can score
+   identically and disagree on a third of the set** — that is exactly what the
+   corroboration check did, 13/18 both ways while fixing one case and breaking
+   another, and a headline delta showed none of it. `assessment_compare.py`
+   prints the per-class table and names every case that moved in each
+   direction. It refuses to diff two different datasets, and refuses a scripted
+   run, whose accuracy is 1.0 by construction.
 
    Both sets, because the fitted set has seen three rounds of prompt work aimed
    at it and the held-out set has seen none. A model that scores well on the
