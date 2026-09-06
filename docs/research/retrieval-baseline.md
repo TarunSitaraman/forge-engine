@@ -152,18 +152,30 @@ loses two thirds of its recall.
 retrieval improvement; it is a re-ranking of the results you did not need
 re-ranked, paid for out of the results you did.**
 
-### What this does not settle
+### Decided 2026-09-06: defaulted off, and the escape hatch was wrong
 
-The eval measures **document recall**. The answering service uses the boost for
-**span selection** inside an answer, which is a different question, and the
-anecdote that motivated it was about span ordering. It is possible the boost
-earns its keep there and is still wrong here. What is no longer possible is
-shipping it as though it were measured, and a setting that costs 20 points of
-`fuzzy_concept` recall needs a better defence than one query.
+This section previously argued the finding might not transfer, because the eval
+measures **document recall** while answering uses the boost for **span
+selection**, "which is a different question". **That was wrong.** `Answerer.ask`
+and `RetrievalEvaluator._lexical` issue the identical
+`SearchService.search(SearchQuery(...))` call. The eval measures this exact
+operation, and the distinction was a way of leaving a measured regression in
+place.
 
-The honest options are to default `title_boost` to 1.0 and keep the field for
-callers who want it, or to keep 1.25 in answering *only*, with this table cited
-next to it. Left as a decision, not silently changed.
+`SearchQuery.title_boost` already defaulted to 1.0, so the regression shipped in
+exactly one line: `TITLE_BOOST = 1.25` in the answering service. **It is now
+1.0.**
+
+The docstring beside it made the case harder to see. It cited a sweep over
+1,724 spans with `nomic-embed-text` showing R@10 0.489 -> 0.510, "the only
+value that improves both": measured on a corpus less than a quarter the
+current size with a different embedder, and contradicted by the table above.
+A reader at the point of use found a confident justification for a setting the
+research had already withdrawn. The docstring now carries the current numbers
+and points here.
+
+The field is kept, not deleted. A caller with a measurement that supports a
+boost may pass one; the default no longer asserts something unmeasured.
 
 ### Alias-driven query expansion: not attempted, and why
 

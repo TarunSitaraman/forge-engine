@@ -42,13 +42,28 @@ ENGINE_DOCS = ("docs/",)
 
 #: Multiplier applied when a span's heading path or filename matches the query.
 #:
-#: Swept against the 24-query labelled set: 1.0 gives R@10 0.489 / MRR 0.482;
-#: 1.25 gives R@10 0.510 / MRR 0.526, the only value that improves both. 1.5
-#: keeps the recall gain but loses most of the MRR gain, and 2.0+ is worse than
-#: no boost at all. **24 queries is a small set** — the +0.021 recall move is
-#: about half a query, so treat 1.25 as the best available choice rather than a
-#: tuned optimum.
-TITLE_BOOST = 1.25
+#: **1.0, meaning off.** It shipped at 1.25 on a sweep over 1,724 spans with
+#: `nomic-embed-text` (2026-08-28) that showed R@10 0.489 -> 0.510. That sweep
+#: is superseded: re-run on the post-split corpus, 670 sources and 8,133 spans,
+#: **every boost is a regression** and 1.25 is merely the mildest, costing
+#: 0.062 of R@10 and turning a hit into a miss.
+#:
+#: The damage is concentrated exactly where answering needs help. Per-category
+#: R@10 under b=1.25: `exact_concept`, `technology`, `project` and
+#: `related_concept` are unchanged, `dsa` loses 0.125 and `fuzzy_concept` loses
+#: 0.200 of its 0.300. A boost can only fire when the query's words appear in a
+#: filename or heading, which is precisely where BM25 already ranks the page
+#: first; it adds nothing there and pushes down the differently-worded pages a
+#: question actually needs.
+#:
+#: The retrieval doc previously argued this might not transfer, because the
+#: eval scores document recall while answering does span selection. That was
+#: wrong: `ask()` and `RetrievalEvaluator._lexical` make the identical
+#: `SearchService.search(SearchQuery(...))` call, so the measurement is of this
+#: exact operation.
+#:
+#: See docs/research/retrieval-baseline.md, "Title boosting measured".
+TITLE_BOOST = 1.0
 
 #: Retrieval mode for answering. Measured on the 24-query labelled set with
 #: `nomic-embed-text` over 1,724 spans (2026-08-28):

@@ -310,7 +310,26 @@ with a real model**, and populate the graph at corpus scale.
       forward.
 - [ ] Concept extraction scored against the 545 filename-derived concepts
       *(the reference set now exists; scoring needs a model run)*
-- [ ] Retrieval improvements measured against the Phase 3 labelled set
+- [x] **Retrieval improvements measured against the Phase 3 labelled set.**
+      Both deterministic improvements the Phase 3 miss analysis proposed are
+      resolved, and neither shipped as an improvement.
+
+      **Title/heading boosting: measured, and a regression.** Over 670 sources
+      and 8,133 spans, every boost scores below plain lexical; the shipped 1.25
+      cost 0.062 of R@10 and 0.200 of `fuzzy_concept`, the hardest category. It
+      is inert on the categories it was meant to help, because it can only fire
+      where BM25 already ranks the page first. **Defaulted to 1.0 on
+      2026-09-06**, and the docstring beside it, which cited a superseded sweep
+      over a corpus a quarter the size, was corrected. The research note that
+      the finding "might not transfer to answering" was also wrong and is
+      withdrawn: `ask()` and the evaluator issue the identical
+      `SearchService.search` call.
+
+      **Alias-driven query expansion: not attempted, and correctly so.** The
+      vault contains zero `aliases:` frontmatter keys across 671 files and zero
+      aliased wikilinks across 4,703 links. There is nothing to expand from.
+      That is corpus work, not engine work, and should be measured against
+      `fuzzy_concept` once the aliases exist.
 
 *A structural corroboration pass exists but is off by default*, a second
 question over any SUPPORTS/REFINES, measured 2026-09-05 at 13/18 with and

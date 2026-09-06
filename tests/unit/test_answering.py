@@ -103,10 +103,27 @@ class TestQueryConstruction:
         Answerer(search, MockProvider(default_response="x [1]")).ask("q")
         assert search.last_query.exclude_sources == ("docs/",)
 
-    def test_the_title_boost_is_applied(self):
+    def test_the_title_boost_is_off(self):
+        """Changed 2026-09-06 from asserting 1.25, and the old value was the bug.
+
+        The boost shipped on a sweep over 1,724 spans that showed R@10
+        0.489 -> 0.510. Re-run on the post-split corpus, every boost is a
+        regression: 1.25 costs 0.062 of R@10 and 0.200 of `fuzzy_concept`,
+        the category a real question most often falls into.
+
+        `ask()` and `RetrievalEvaluator._lexical` issue the identical
+        `SearchService.search(SearchQuery(...))`, so that measurement is of
+        this call and not of a neighbouring one.
+        """
         search = _FakeSearch(_hits(1))
         Answerer(search, MockProvider(default_response="x [1]")).ask("q")
-        assert search.last_query.title_boost == 1.25
+        assert search.last_query.title_boost == 1.0
+
+    def test_the_boost_remains_available_to_callers(self):
+        """Defaulted off, not deleted. A caller with a measurement may set it."""
+        from forge.retrieval.search import SearchQuery
+
+        assert SearchQuery(text="q", title_boost=1.5).title_boost == 1.5
 
     def test_answering_defaults_to_semantic_retrieval(self):
         """Measured 2026-08-28: lexical is the worst option on every metric.
