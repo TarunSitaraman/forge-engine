@@ -767,14 +767,34 @@ class TestCloudHealthActuallyChecks:
         assert ok is True
         assert "unverified" in detail
 
-    def test_a_network_failure_does_not_raise(self, monkeypatch):
+    def test_a_network_failure_is_unreachable_not_unverified(self, monkeypatch):
+        """Changed 2026-09-06. This test previously asserted `ok is True`, and
+        that expectation was the defect.
+
+        The rule it was protecting is the one above: a gateway that serves no
+        `/models` must not be refused. But a transport error is not a missing
+        endpoint, it is a missing host, and every subsequent call fails
+        identically. Passing it through as "unverified, carry on" let a laptop
+        with dead DNS run a 42-case evaluation to completion in six seconds and
+        report a score of 0.00.
+        """
+
         def handler(request):
             raise httpx.ConnectError("no route to host")
 
         provider = cloud(monkeypatch, handler, vendor="openai", model="m")
         ok, detail = provider.health()
-        assert ok is True
-        assert "unverified" in detail
+        assert ok is False
+        assert "cannot reach cloud provider" in detail
+
+    def test_a_network_failure_still_does_not_raise(self, monkeypatch):
+        """It reports; it does not throw. That contract is unchanged."""
+
+        def handler(request):
+            raise httpx.ConnectTimeout("timed out")
+
+        provider = cloud(monkeypatch, handler, vendor="openai", model="m")
+        assert provider.health()[0] is False
 
     def test_the_probe_runs_once_however_often_health_is_called(self, monkeypatch):
         """extract() calls health() per source — 642 times on a full vault run."""
@@ -913,3 +933,4 @@ class TestRateLimitBackoff:
             )
         assert slept, "a 429 was retried without waiting, which cannot succeed"
         assert slept == sorted(slept), "backoff must not shrink between attempts"
+

@@ -299,6 +299,12 @@ def main() -> int:
     reports: list[AssessmentReport] = []
     total = len(dataset)
 
+    # Once the provider has gone away, every remaining case produces an empty
+    # result in milliseconds. Finishing the set costs nothing but produces a
+    # full page of MISS lines that look like measurements.
+    CONSECUTIVE_FAILURES_BEFORE_ABORT = 3
+    aborted = False
+
     for repetition in range(args.repeat):
         report = AssessmentReport(
             provider_id=provider_id, model_id=model_id, scripted=scripted
@@ -338,6 +344,23 @@ def main() -> int:
             )
 
         for index, case in enumerate(dataset):
+            # Read the tail rather than keep a counter: `note` is a closure and
+            # is called from four places, so a counter it updated would have to
+            # be rebound through every one of them.
+            tail = report.results[-CONSECUTIVE_FAILURES_BEFORE_ABORT:]
+            if len(tail) == CONSECUTIVE_FAILURES_BEFORE_ABORT and all(
+                r.unavailable for r in tail
+            ):
+                aborted = True
+                print(
+                    f"ABORTED run {repetition + 1}: the provider failed "
+                    f"{CONSECUTIVE_FAILURES_BEFORE_ABORT} times in a row, so the "
+                    f"remaining {len(dataset) - index} case(s) were not attempted. "
+                    "Fix the connection and re-run. Nothing here is a measurement.",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                break
             store = SqliteStore(run_dir / f"case-{index}.db")
             store.initialize()
             claim, evidence_span, source = build_case(store, case, index)
@@ -437,6 +460,8 @@ def main() -> int:
             + ("on (second pass over SUPPORTS/REFINES)" if corroborate else "OFF")
             + "\n"
         )
+        if aborted:
+            print("  *** ABANDONED MID-SET, NOT A MEASUREMENT ***\n")
         for index, run in enumerate(reports):
             prefix = f"  run {index + 1}  " if args.repeat > 1 else "  "
             print(prefix + run.headline())
@@ -486,6 +511,15 @@ def main() -> int:
             print(f"\nCAVEAT: {report.to_dict()['caveat']}")
 
     shutil.rmtree(workdir, ignore_errors=True)
+    if aborted:
+        # Exit 2, the same code the CLI uses for "could not run", so a caller
+        # cannot mistake an abandoned run for a run that scored badly.
+        print(
+            "\nNo usable result: at least one run was abandoned mid-set because "
+            "the provider stopped responding. Re-run once it is reachable.",
+            file=sys.stderr,
+        )
+        return 2
     return 0 if all(r.proposal_correctness == 1.0 for r in reports) else 1
 
 

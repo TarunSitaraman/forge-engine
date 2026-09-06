@@ -191,6 +191,19 @@ class CloudProvider:
             resp = self._http().get(
                 "/v1/models", headers={"Authorization": f"Bearer {self._require_key()}"}
             )
+        except httpx.TransportError as exc:
+            # The host could not be reached at all: DNS failure, no route,
+            # connection refused, timeout. Every subsequent call will fail the
+            # same way, so this is unreachable, not merely unverified.
+            #
+            # 2026-09-06: a laptop with no network ran a 42-case evaluation to
+            # completion against this probe's "unverified, carry on", producing
+            # 42 empty results and a reported score of 0.00. A health check that
+            # passes with the network down is not a health check.
+            return False, (
+                f"cannot reach cloud provider {self.vendor!r} at {self.base_url}: "
+                f"{type(exc).__name__}: {exc}"
+            )
         except Exception as exc:  # never raises: a probe failure is a report
             return True, f"{configured}; model list unreachable ({type(exc).__name__}), unverified"
 

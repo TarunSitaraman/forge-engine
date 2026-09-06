@@ -583,6 +583,40 @@ non-answer as an answer**, after the grounding score that could only print
 1.000 and the extraction eval that scored timed-out runs as clean. The pattern
 is the same every time: the failure path produces a number instead of a gap.
 
+### A run with no network reported 0.00, 2026-09-06
+
+A Kimi comparison was attempted on a laptop that had lost DNS. Both runs
+finished in six seconds, all 42 cases empty, and the summary read:
+
+```
+score range 0-0 of 21 across 2 runs; 0 case(s) answered inconsistently.
+```
+
+A total outage, rendered as a score and a consistency claim. Two separate
+things had to hold for that:
+
+1. `CloudProvider._probe_models` caught the DNS failure under a blanket
+   `except Exception` and reported "model list unreachable, unverified" as
+   **reachable**. The rule it was protecting is real: a gateway that serves no
+   `/models` must not be refused. But a transport error is not a missing
+   endpoint, it is a missing host, and every later call fails identically.
+2. Nothing stopped the run once the provider had clearly gone. The remaining
+   cases each failed in under a millisecond and printed a MISS.
+
+Fixed: a transport error (DNS, refused, timeout) now fails the health check
+before any case runs, and a run abandons itself after three consecutive
+provider failures, prints that it is not a measurement, and exits 2. The
+pre-existing test asserting the old behaviour was updated rather than worked
+around, with the reason written into it.
+
+**That is the fourth non-answer scored as an answer in this project**, after
+the grounding score that could only print 1.000, the extraction eval that
+scored timed-out runs as clean, and the outage recorded as nine misses the day
+before. The recurring shape is worth naming: **when the failure path returns a
+value of the same type as the success path, it gets averaged into the result.**
+The fix is always the same, make the absence of an answer a distinct state
+rather than a bad one.
+
 ## 11. What follows
 
 **Re-run anything before believing it.** §10 is the precondition for every
