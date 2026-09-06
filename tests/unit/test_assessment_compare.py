@@ -257,3 +257,57 @@ class TestUnavailableIsNotAMiss:
         path.write_text(json.dumps(payload), encoding="utf-8")
         with pytest.raises(SystemExit, match="never reached the model"):
             compare.load(path)
+
+
+class TestRetryExhaustionIsAlsoANonAnswer:
+    """The fifth non-answer scored as an answer, inside the fix for the fourth.
+
+    2026-09-06: a `--repeat 3` run against a rate-limited host exhausted its
+    retries on six cases. Those came back as AssessmentOutcome.RETRYABLE_FAILURE,
+    which the previous fix did not list, so they were recorded as wrong answers
+    with actual=None. The summary then reported "6 case(s) answered
+    inconsistently" for a model that had given the same answer on every case it
+    was actually asked.
+    """
+
+    @staticmethod
+    def _eval_module():
+        spec = importlib.util.spec_from_file_location(
+            "assessment_eval", SCRIPT.parent / "assessment_eval.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        return module
+
+    def test_both_infrastructure_outcomes_count_as_no_answer(self):
+        module = self._eval_module()
+        outcome = module.AssessmentOutcome
+        assert outcome.SEMANTIC_ANALYSIS_UNAVAILABLE in module.NO_ANSWER_OUTCOMES
+        assert outcome.RETRYABLE_FAILURE in module.NO_ANSWER_OUTCOMES
+
+    def test_a_rejected_assessment_is_still_the_models_fault(self):
+        """The model answered and the answer was invalid. That is a result."""
+        module = self._eval_module()
+        assert module.AssessmentOutcome.ASSESSMENT_REJECTED not in module.NO_ANSWER_OUTCOMES
+
+    def test_a_case_answered_once_and_dropped_once_is_not_inconsistent(self):
+        """The exact shape of the bad report: one real answer, one dropped
+        call, counted as two different answers."""
+        module = self._eval_module()
+
+        def run(actual, unavailable):
+            report = module.AssessmentReport(provider_id="cloud", model_id="m", scripted=False)
+            result = module.CaseResult(case_id="c", expected="REFINES")
+            if unavailable:
+                result.unavailable = True
+            else:
+                result.actual = actual
+                result.classification_correct = actual == "REFINES"
+            report.results.append(result)
+            return report
+
+        marks = module.stability([run("REFINES", False), run(None, True)])
+
+        assert marks["unstable"] == 0, "a dropped call is not a second opinion"
+        assert marks["cases"]["c"] == {"correct": 1, "measured": 1, "answers": {"REFINES": 1}}

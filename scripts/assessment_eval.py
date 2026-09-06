@@ -61,6 +61,25 @@ from forge.storage import SqliteStore  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 
+#: Outcomes where the model never answered. Both are infrastructure: the
+#: provider was unreachable, or every retry came back 429. ASSESSMENT_REJECTED
+#: is deliberately absent -- there the model did answer and the answer was
+#: invalid, which is a real result about the model.
+#:
+#: 2026-09-06: the first version of this listed only
+#: SEMANTIC_ANALYSIS_UNAVAILABLE, so a --repeat 3 run that exhausted its
+#: retries on six cases recorded them as wrong answers and reported "6 cases
+#: answered inconsistently" for a model that had in fact given the same answer
+#: every time it was asked. Fifth instance of a non-answer scored as an answer
+#: in this project, and the first inside the code written to prevent the
+#: fourth.
+NO_ANSWER_OUTCOMES = frozenset(
+    {
+        AssessmentOutcome.SEMANTIC_ANALYSIS_UNAVAILABLE,
+        AssessmentOutcome.RETRYABLE_FAILURE,
+    }
+)
+
 
 def scripted_provider(dataset: AssessmentDataset) -> MockProvider:
     """Answers each case with its expected label, citing the real span shown.
@@ -392,9 +411,7 @@ def main() -> int:
                 # lost DNS at case 13 and the remaining 9 were recorded as
                 # ordinary failures, which would have gone into the variance
                 # table as nine flipped cases.
-                result.unavailable = (
-                    batch.outcome is AssessmentOutcome.SEMANTIC_ANALYSIS_UNAVAILABLE
-                )
+                result.unavailable = batch.outcome in NO_ANSWER_OUTCOMES
                 note(result, index + 1)
                 store.close()
                 continue

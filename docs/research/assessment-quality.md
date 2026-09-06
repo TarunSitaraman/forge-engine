@@ -705,12 +705,12 @@ tally of what two models said.
 
 ### Two properties where Qwen is simply better
 
-- **It is deterministic here.** 42 case-answers across two runs, zero
-  disagreement. gpt-oss-120b flipped three cases across four runs. For an
+- **It is deterministic here.** 57 real answers across three runs, zero
+  disagreement, and the five failures are the same five every time. gpt-oss-120b flipped three cases across four runs. For an
   assessor whose output is audited and cached under a derivation key, a stable
   answer is worth more than a point of accuracy: §10 exists entirely because
-  the larger model's variance swamped every delta measured before it. *Two runs
-  is a thin basis for a determinism claim, and it should be repeated.*
+  the larger model's variance swamped every delta measured before it. *Repeated
+  on a third run, which confirmed it once a scoring bug was removed: see below.*
 - **It is roughly twice as fast.** Before rate limiting took over, Qwen
   answered in 0.7-1.1 s against gpt-oss's 1.2-2.2 s. Nearly all the reported
   9-12 s per case is Groq's 429 backoff, not inference.
@@ -719,6 +719,50 @@ At a fifth the parameters, matching accuracy, deterministic, and faster, **the
 27B model is the better choice for this component** on everything measured
 here. That conclusion is worth more than the model comparison was expected to
 produce.
+
+### The third run confirmed it, after a bug had to be removed first
+
+*`--repeat 3`, 2026-09-06, on a heavily rate-limited key.* The tool reported
+`score range 13-16 of 21 across 3 runs; 6 case(s) answered inconsistently`,
+which reads as the determinism claim collapsing. It was not. **Six cases had
+exhausted their retries against a 429 and never reached the model at all**,
+and the previous day's fix did not cover them.
+
+`AssessmentOutcome.RETRYABLE_FAILURE` is a distinct value from
+`SEMANTIC_ANALYSIS_UNAVAILABLE`, and only the second was listed as a
+non-answer. So retry exhaustion was scored as a wrong answer with `actual=None`,
+and `no result` entered the stability table as if it were an opinion. Every one
+of the six "inconsistent" cases reads `X x2, no result x1`. **Not one of them
+gave two different real answers.**
+
+Counting only cases that reached the model:
+
+| Run | Measured | Correct | Real misses |
+|---|---:|---:|---|
+| 1 | 18/21 | 14 (0.78) | contrary, narrows, anecdote, diffpop |
+| 2 | 18/21 | 13 (0.72) | those four, plus mechanism |
+| 3 | 21/21 | 16 (0.76) | those five |
+
+`mechanism-without-outcome` is absent from run 1 only because it was one of the
+dropped calls. **Across 57 real answers in three runs, zero cases gave two
+different answers**, and the five failures are the same five every time they
+were asked. The determinism finding survives and is now on three runs rather
+than two.
+
+**This is the fifth non-answer scored as an answer in this project, and the
+first one inside the code written to stop the fourth.** The list is now: a
+grounding score that could only print 1.000; an extraction eval that scored
+timed-out runs as clean; an outage recorded as nine misses; a dead network
+reported as 0.00; and retry exhaustion counted as a changed opinion. The
+pattern named in §10 held again, one layer up: **the failure path returned a
+value of the same type as the success path**, and this time the type was
+"a case result with `actual=None`" rather than a float.
+
+Fixed: both infrastructure outcomes are now non-answers, and
+`ASSESSMENT_REJECTED` deliberately is not, because there the model did answer
+and the answer was invalid. Under this much throttling, raise
+`FORGE_LLM_MAX_RETRIES` before running: three attempts is not enough when
+nearly every call is rate-limited on the first try.
 
 ### What this key cannot answer
 
