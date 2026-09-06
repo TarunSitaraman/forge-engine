@@ -437,7 +437,27 @@ class IngestionPipeline:
         spans_by_id = {s.id: s for s in self._spans_for_source(source.id)}
         created = 0
 
-        seen: set[str] = set()
+        # Names this source has already proposed, from an earlier run.
+        #
+        # Extraction is cached, so a resumed run re-derives nothing — but it
+        # still reaches here, and the matcher has meanwhile learned about the
+        # proposals the *first* run made. Without this, a source that proposed
+        # `Test Concept` as NEW_CONCEPT comes back and raises a CONCEPT_MATCH
+        # against its own earlier proposal: one source, two live proposals,
+        # same name. Measured 2026-09-06 as the resumability gate's only
+        # failure, an interrupted run leaving 4 proposals where an
+        # uninterrupted one leaves 3.
+        #
+        # Rejected proposals are excluded so a human's "no" is not re-asked,
+        # which is the same rule `_matcher` applies.
+        already_proposed = {
+            p.operation.target.casefold()
+            for p in self.store.list_proposals(limit=1000)
+            if p.source_id == source.id
+            and p.type in (ProposalType.NEW_CONCEPT, ProposalType.CONCEPT_MATCH)
+        }
+
+        seen: set[str] = set(already_proposed)
         for candidate in result.concepts:
             if candidate.name.casefold() in seen:
                 continue

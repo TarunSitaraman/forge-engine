@@ -273,8 +273,32 @@ with a real model**, and populate the graph at corpus scale.
       defensible claim is **the graph never duplicates without a human
       approving the duplicate**, not that overlap detection is complete.
       Embeddings would widen it and are off by default.
-- [ ] Interrupting mid-ingestion and resuming does not duplicate work *(already
-      true for evolution; needs proving for ingestion)*
+- [x] **Interrupting mid-ingestion and resuming does not duplicate work,
+      2026-09-06.** Proving it found a defect, so it was not true when this box
+      was written.
+
+      `tests/integration/test_ingestion_resume.py` states the gate as an
+      equality rather than an absence: **a partial run followed by a resume
+      must leave the same store as one uninterrupted run.** Weaker phrasings
+      ("no duplicate spans", "no crash") pass for a system that silently drops
+      the work it was interrupted during.
+
+      It failed. An interrupted run left **4 proposals where an uninterrupted
+      one left 3**, plus an extra revision. Cause: extraction is cached, so the
+      resumed run re-derived nothing and cost no model calls, but it still
+      reached `_propose`, and by then the matcher had learned about the
+      proposals the first run made. A source that had proposed `Test Concept`
+      as NEW_CONCEPT came back and raised a CONCEPT_MATCH **against its own
+      earlier proposal**. One source, two live proposals, one name.
+
+      Fixed by making `_propose` idempotent per source: names this source has
+      already proposed are skipped, with rejected proposals excluded so a
+      human's "no" is not re-asked. Three of the six tests fail without the
+      fix. The remaining tests also pin that a resumed document costs zero
+      model calls, that ingesting deterministically and extracting later still
+      works (the silent-no-op defect `_ingest_one` documents), and that
+      extraction over stored spans does not re-chunk or bump the document
+      version.
 - [ ] Every model change traces to a workflow id and a `Revision` *(already true)*
 - [x] **Graph populated deterministically, 2026-09-06.** `forge bootstrap
       --apply` over the vault: **545 concepts, 2,752 RELATED_TO edges, 0 LLM
