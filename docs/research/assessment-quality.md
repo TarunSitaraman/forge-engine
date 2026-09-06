@@ -16,6 +16,18 @@ gain is withdrawn, along with every per-class movement resting on it.** A
 single run on this set carries a spread of at least three cases, which is wider
 than most of the deltas this document was arguing over.*
 
+*Updated again 2026-09-06, and this is the finding the document was looking
+for. A second model family, `qwen/qwen3.8-27b`, scored **16/21 twice with zero
+cases answered inconsistently**, and **every one of its five failures is a case
+gpt-oss-120b also fails, with the same wrong label**. Two independently trained
+families, one a fifth the size, converging on the same answer for every hard
+case is evidence about the cases, not the models: re-reading them, one is
+mislabelled outright and three are genuinely contestable. Three rounds of prompt
+work failed because they were trying to instruct a model into labels the cases
+do not clearly support. See §11, including why relabelling to match model
+consensus would be exactly the motivated reasoning this project has caught
+itself in before.*
+
 *Repeated 2026-09-05 with `--repeat 3`: four complete runs now stand at 18, 15,
 16 and 16 of 21. **Three cases flip between runs and three are wrong in every
 run**, and the three that flip are exactly the three the prompt revision was
@@ -617,10 +629,118 @@ value of the same type as the success path, it gets averaged into the result.**
 The fix is always the same, make the absence of an answer a distinct state
 rather than a bad one.
 
-## 11. What follows
+## 11. A second model family fails the same cases, the same way, 2026-09-06
+
+*`qwen/qwen3.8-27b`, `--repeat 2`, same 21 cases, same prompt, same command. The
+only other general-purpose model this Groq key offers besides the gpt-oss pair.*
+
+**16/21 twice. Zero cases answered inconsistently.** Validity and grounding
+1.00.
+
+The headline sits inside gpt-oss-120b's 15-18 band, so on accuracy the two are
+indistinguishable. That is not the finding. The finding is *which* cases failed:
+
+| Case | gpt-oss-120b | qwen3.8-27b | Expected |
+|---|---|---|---|
+| `conflict-contrary-finding` | REFINES | REFINES | POTENTIAL_CONFLICT |
+| `refines-narrows-scope` | POTENTIAL_CONFLICT | POTENTIAL_CONFLICT | REFINES |
+| `insufficient-anecdote-without-comparison` | IRRELEVANT | IRRELEVANT | INSUFFICIENT_EVIDENCE |
+| `insufficient-different-population` | POTENTIAL_CONFLICT | POTENTIAL_CONFLICT | INSUFFICIENT_EVIDENCE |
+| `insufficient-mechanism-without-outcome` | SUPPORTS | SUPPORTS | INSUFFICIENT_EVIDENCE |
+
+**Five for five, the same wrong label.** Two independently trained families, one
+of them a fifth the size, converge on the same answer for every case the larger
+one gets wrong. Qwen also got `insufficient-partial-overlap` right both times,
+which gpt-oss manages 1 time in 4.
+
+### This moves the constraint from the model to the cases
+
+The question §10 left open was whether INSUFFICIENT_EVIDENCE is `gpt-oss-120b`'s
+limit or the task's. It is neither, on this evidence. **The disagreement is
+between the models and the labels, and the models agree with each other.**
+
+Reading the five back, the labels are weaker than this document has been
+assuming:
+
+1. **`conflict-contrary-finding` looks mislabelled.** The claim is *"RAG **can**
+   improve factual accuracy"*. Evidence that it can also hurt does not
+   contradict a possibility claim, it conditions it. REFINES is the better
+   answer and both models gave it. A counterexample cannot conflict with "can".
+2. **`insufficient-anecdote-without-comparison` exposes an undefined boundary.**
+   Both models said IRRELEVANT for evidence that is plainly on-topic but
+   establishes nothing. That is §6's unfixed defect surfacing again: IRRELEVANT
+   and INSUFFICIENT_EVIDENCE both produce no proposal, so nothing in the schema
+   or the prompt ever forced them apart.
+3. **`insufficient-different-population` and `refines-narrows-scope` are
+   genuinely contestable.** A contradicting result from a population the claim
+   does not cover: non-transferable, or a conflict worth a human's attention?
+   A claim of "no data loss" against a default that loses a second: over-broad,
+   or wrong? Both models chose POTENTIAL_CONFLICT for both, which is the answer
+   that **routes to a human**: operationally the safer error.
+4. **`insufficient-mechanism-without-outcome` is the one where the label holds.**
+   A documented cache-read price is not a measurement of a bill. But even here
+   the claim is ambiguous between "the price is lower" (supported) and "the cost
+   fell" (unmeasured).
+
+**So three rounds of prompt engineering failed because they were trying to
+instruct a model into labels the cases do not clearly support.** That is a more
+useful explanation than "the model cannot judge insufficiency", and it is the
+one the evidence now favours.
+
+### The trap this creates
+
+The obvious next move is to relabel the cases the models agree on. **Do not do
+that on this evidence.** Two models agreeing is not two independent
+observations: they share training data, architecture lineage, and probably
+much of the same reasoning about these very categories. Model consensus is
+weak evidence about ground truth and strong evidence about *shared prior*.
+
+Relabelling to match would also raise the score from 16 to 20 out of 21, which
+is exactly the shape of motivated reasoning this project has already caught
+itself in once, when an extractor scoring 1.0 recall was correctly judged bad.
+**A gold label is only worth revising against an argument, never against a
+score.** The argument for `conflict-contrary-finding` is above and stands on the
+word "can". The others need a human deciding what the category means, not a
+tally of what two models said.
+
+### Two properties where Qwen is simply better
+
+- **It is deterministic here.** 42 case-answers across two runs, zero
+  disagreement. gpt-oss-120b flipped three cases across four runs. For an
+  assessor whose output is audited and cached under a derivation key, a stable
+  answer is worth more than a point of accuracy: §10 exists entirely because
+  the larger model's variance swamped every delta measured before it. *Two runs
+  is a thin basis for a determinism claim, and it should be repeated.*
+- **It is roughly twice as fast.** Before rate limiting took over, Qwen
+  answered in 0.7-1.1 s against gpt-oss's 1.2-2.2 s. Nearly all the reported
+  9-12 s per case is Groq's 429 backoff, not inference.
+
+At a fifth the parameters, matching accuracy, deterministic, and faster, **the
+27B model is the better choice for this component** on everything measured
+here. That conclusion is worth more than the model comparison was expected to
+produce.
+
+### What this key cannot answer
+
+Groq serves 14 models on it, and after removing two speech-to-text, two
+text-to-speech, two prompt-injection classifiers of 22M and 86M parameters, a
+safety classifier and a 7B Arabic model, four general-purpose models remain:
+`gpt-oss-120b`, `gpt-oss-20b`, and the two Qwen 27Bs. **There is nothing larger
+than gpt-oss-120b available here.** The "try a frontier model" question stays
+open for want of a provider, and should be recorded as unresolved rather than
+answered by the largest model that happened to be reachable.
+
+## 12. What follows
 
 **Re-run anything before believing it.** §10 is the precondition for every
 item below: a single run on this set carries a spread of at least three cases.
+
+**And review the cases before blaming the model.** §11 supersedes much of what
+follows: the five hardest cases are ones two unrelated model families answer
+identically and against the label. The next work is a human deciding what
+IRRELEVANT and INSUFFICIENT_EVIDENCE mean when they differ, and whether a
+possibility claim ("RAG *can* improve accuracy") can be conflicted at all by a
+counterexample. That is category design, not prompt engineering.
 
 1. **Do not write a fourth fix for this class.** Three failed, and §10 says
    the first one arguably never worked at all. The next honest move is a
