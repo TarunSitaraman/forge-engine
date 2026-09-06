@@ -256,7 +256,16 @@ with a real model**, and populate the graph at corpus scale.
 - [ ] Interrupting mid-ingestion and resuming does not duplicate work *(already
       true for evolution; needs proving for ingestion)*
 - [ ] Every model change traces to a workflow id and a `Revision` *(already true)*
-- [ ] Concept extraction scored against the ~500 filename-derived concepts
+- [x] **Graph populated deterministically, 2026-09-06.** `forge bootstrap
+      --apply` over the vault: **545 concepts, 2,752 RELATED_TO edges, 0 LLM
+      calls**, 125 navigation and template pages skipped. Graph stats: mean
+      degree 10.1, max 163, 72 isolated nodes, neighbour query 0.5 ms, path
+      query 91 ms. This was listed as "deferred from the original Phase 4
+      scope" and was in fact already built; the box was stale, which is the
+      failure mode this document warns about elsewhere. Recount, do not carry
+      forward.
+- [ ] Concept extraction scored against the 545 filename-derived concepts
+      *(the reference set now exists; scoring needs a model run)*
 - [ ] Retrieval improvements measured against the Phase 3 labelled set
 
 *A structural corroboration pass exists but is off by default*, a second
