@@ -308,8 +308,41 @@ with a real model**, and populate the graph at corpus scale.
       scope" and was in fact already built; the box was stale, which is the
       failure mode this document warns about elsewhere. Recount, do not carry
       forward.
-- [ ] Concept extraction scored against the 545 filename-derived concepts
-      *(the reference set now exists; scoring needs a model run)*
+- [ ] Concept extraction scored against the 545 filename-derived concepts.
+      **The harness is built and verified offline, 2026-09-06; only the model
+      run is outstanding.** `scripts/concept_extraction_eval.py` scores
+      extraction against the vault's own page names, which nobody labelled for
+      this purpose, and reports three numbers rather than recall:
+      **self-recovery** (does the page about X yield X?), **junk rate** against
+      the same 25 observed-junk strings `extraction-eval` uses, so the two are
+      quotable side by side, and **off-vocabulary rate**, which is reported and
+      explicitly not called junk. Global recall is not reported: a page about
+      B-trees is not supposed to mention 544 other concepts, so "3 of 545"
+      would be arithmetic rather than a finding. One command when the key is
+      next available:
+
+          python3 scripts/concept_extraction_eval.py --provider cloud --limit 40
+
+      Building it produced one result already, out of the offline mode. The
+      scripted provider pairs every verbatim quote with the same sentence
+      reversed, so grounding should read exactly 0.500, and a run reading 1.000
+      means the drop path broke. It read **0.528**. The gap is a real weakness
+      in `_grounded`: its fallback is a longest-common-subsequence *ratio* over
+      the whole span, which is scale-free, so a short quote against a span that
+      repeats its tokens is cheap to satisfy. On a real DSA validation block
+      with five near-identical `assert sorted(result) == sorted(...)` lines,
+      the fully reversed quote scores **1.000** and is accepted as evidence;
+      the same quote against a two-assert version scores 0.875 and is correctly
+      rejected. Every negative case previously written for `_grounded` was
+      prose, and prose does not repeat its tokens that way.
+
+      **Pinned, not fixed**, in
+      `tests/unit/test_phase2_units.py::test_a_reversed_quote_survives_grounding_on_a_repetitive_code_span`.
+      Narrowing the fallback to a window changes what every shipped extraction
+      accepts, and would move the assessment and extraction numbers this phase
+      is gated on, so it is a deliberate separate change rather than a side
+      effect of writing an eval script. See
+      [extraction against the vault](./research/extraction-against-the-vault.md).
 - [x] **Retrieval improvements measured against the Phase 3 labelled set.**
       Both deterministic improvements the Phase 3 miss analysis proposed are
       resolved, and neither shipped as an improvement.

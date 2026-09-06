@@ -17,7 +17,7 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them, `1,072 passed, 42 skipped` becomes `1,114 passed`. See
+   to run them, `1,199 passed, 42 skipped` becomes `1,241 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine*, architecture, ADRs, research,
@@ -44,6 +44,34 @@ are measurement records: renaming the corpus a number was measured
 against would falsify it.
 
 ## Known Stale/Legacy Items
+
+**The vault is a second extraction reference set, 2026-09-06, and building
+the harness broke the grounding check.** `scripts/concept_extraction_eval.py`
+scores extraction against the 545 concepts `forge bootstrap` derives from the
+vault's directory listing. The point is provenance: the six labelled cases in
+`extraction-v1.yaml` had their expected concepts chosen by whoever wrote the
+prompt, and these 545 were recorded years earlier for an unrelated reason.
+Three numbers, and recall is deliberately not one: **self-recovery** (does the
+page about X yield X?), **junk rate** against the same 25 forbidden strings the
+labelled set carries, imported rather than retyped so the two are comparable,
+and **off-vocabulary rate**, reported and explicitly not called junk because a
+concept the vault lacks a page for is extraction working.
+
+Its offline mode pairs every verbatim quote with the same sentence reversed, so
+grounding must read exactly 0.500 and a run reading 1.000 means the drop path
+broke. **It read 0.528.** `_grounded` falls back to a longest-common-subsequence
+*ratio*, which is scale-free, so a short quote against a span that repeats its
+tokens is cheap to satisfy. On a real DSA validation block with five
+near-identical `assert sorted(result) == sorted(...)` lines, the fully reversed
+quote scores **1.000** and is accepted as evidence; the same quote against a
+two-assert version scores 0.875 and is correctly rejected. Every negative case
+ever written for `_grounded` was prose, and prose does not repeat its tokens
+that way, which is why the 2026-08-19 bag-of-words fix looked complete.
+
+**Pinned in `test_phase2_units.py`, not fixed.** Narrowing the fallback changes
+what every shipped extraction accepts and would move the numbers Phase 5 is
+gated on. Do it as its own change with its own measurement. Write-up:
+`docs/research/extraction-against-the-vault.md`.
 
 **Phase 4, done 2026-08-29: the extraction-quality eval, and cross-span
 dedup.** Both are deterministic and cost zero model calls.
@@ -632,7 +660,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine, distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,114 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,241 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -657,12 +685,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 1,072 passed, 42 skipped — offline, no model
+python -m pytest tests           # 1,199 passed, 42 skipped, offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,114 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,241 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.

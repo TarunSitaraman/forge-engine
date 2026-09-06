@@ -349,6 +349,87 @@ class TestExtraction:
         """
         assert _grounded(quote, self.SPAN_TEXT) is False
 
+    #: A validation block from `DSA/04_Problems/Backtracking - Combination Sum.md`,
+    #: verbatim. Its five near-identical assert lines are the whole point.
+    REPETITIVE_CODE_SPAN = (
+        "## Edge Cases & Validation\n"
+        "```python\n"
+        "# Simple case\n"
+        "result = combinationSum([2,3,6,7], 7)\n"
+        "assert sorted(result) == sorted([[2,2,3],[7]])\n\n"
+        "# Single candidate reused multiple times\n"
+        "result = combinationSum([2], 8)\n"
+        "assert result == [[2,2,2,2]]\n\n"
+        "# No valid combination\n"
+        "result = combinationSum([5], 3)\n"
+        "assert result == []\n\n"
+        "# Multiple valid combinations\n"
+        "result = combinationSum([2,3,5], 8)\n"
+        "expected = [[2,2,2,2],[2,3,3],[3,5]]\n"
+        "assert sorted(result) == sorted(expected)\n\n"
+        "# CombinationSum2 with duplicates in input\n"
+        "result = combinationSum2([10,1,2,7,6,1,5], 8)\n"
+        "expected = [[1,1,6],[1,2,5],[1,7],[2,6]]\n"
+        "assert sorted(result) == sorted(expected)\n"
+        "```"
+    )
+
+    def test_a_reversed_quote_survives_grounding_on_a_repetitive_code_span(self):
+        """KNOWN LIMIT, measured 2026-09-06. Pinned so a fix is a visible change.
+
+        `_grounded` falls back to a longest-common-subsequence *ratio* over the
+        whole span. That is scale-free, so a short quote matched against a long
+        span with repeated tokens is cheap to satisfy: the words need only
+        appear in ascending order somewhere, and successive repetitions of a
+        line supply as many ascending positions as the quote has words.
+
+        Concretely, reversing `assert sorted(result) == sorted([[2,2,3],[7]])`
+        gives tokens `sorted 2 2 3 7 sorted result assert`, and the five assert
+        lines in this real vault span match all eight in order — overlap 1.000,
+        against 0.875 (correctly rejected) for the same quote and a two-line
+        version of the same block. The prose cases above are unaffected, which
+        is why this went unseen: natural language does not repeat its tokens
+        this way, and every negative case written for `_grounded` was prose.
+
+        Found by the corpus extraction eval, whose scripted mode pairs each
+        verbatim quote with a reversed one and expects grounding to read 0.500.
+        It read 0.528. The gap was this.
+
+        Not fixed here on purpose: narrowing the fallback to a window changes
+        what every shipped extraction accepts and would move the assessment and
+        extraction numbers Phase 5 is currently gated on. This test states the
+        current behaviour so that changing it is deliberate and reviewable.
+        """
+        quote = "assert sorted(result) == sorted([[2,2,3],[7]])"
+        reversed_quote = " ".join(reversed(quote.split()))
+
+        assert _grounded(quote, self.REPETITIVE_CODE_SPAN) is True
+        assert _grounded(reversed_quote, self.REPETITIVE_CODE_SPAN) is True, (
+            "if this now fails, the fallback was tightened — that is the fix, "
+            "update this test and re-measure extraction rather than reverting"
+        )
+
+    def test_the_same_reversal_is_rejected_without_the_repetition(self):
+        """The repetition is the mechanism, not the code or the punctuation.
+
+        Same quote, same reversal, a span holding two assert lines instead of
+        five: overlap 0.875, below the 0.9 threshold, correctly rejected. So
+        the check is not broken for code — it is defeated by how many ascending
+        positions the span offers.
+        """
+        short_span = (
+            "```python\n"
+            "result = combinationSum([2,3,6,7], 7)\n"
+            "assert sorted(result) == sorted([[2,2,3],[7]])\n"
+            "result = combinationSum([2], 1)\n"
+            "assert sorted(result) == sorted([])\n"
+            "```"
+        )
+        reversed_quote = " ".join(
+            reversed("assert sorted(result) == sorted([[2,2,3],[7]])".split())
+        )
+        assert _grounded(reversed_quote, short_span) is False
+
     def test_ungrounded_reordering_is_dropped_end_to_end(self, scripted_extractor):
         """The unit rule has to actually reject the claim in the pipeline."""
         extractor = scripted_extractor(
