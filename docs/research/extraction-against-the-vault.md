@@ -65,7 +65,7 @@ disambiguation a human recorded in `concept-identity.yaml`; the extractor is
 never asked to produce it and must not be scored on it. Emitting `Heap`
 therefore counts as recovering either Heap page.
 
-## 4. The finding the offline mode produced
+## 4. The finding the offline mode produced, and the fix
 
 The scripted provider exists so the harness can be verified with no key. It
 answers with the page's own name, so self-recovery is 1.000 by construction and
@@ -74,21 +74,21 @@ precedent.
 
 What is different here: a grounding check that always passes in the only mode
 runnable offline is worse than no check, because it reassures. So the scripted
-answer pairs every verbatim quote with **the same sentence reversed**, built
-entirely from the span's own vocabulary, so only the order-preserving half of
-`_grounded` can reject it. Grounding should therefore read exactly **0.500**,
-and a run reading 1.000 means the drop path stopped working.
+answer pairs every real quote with an **adversarial probe**: the same line with
+its token order reversed, built entirely from the span's own vocabulary, so
+only the order-preserving half of `_grounded` can reject it. Every probe
+emitted must come back dropped.
 
-It read **0.528**.
+They did not. The first run reported grounding 0.528 where the probes alone
+predicted 0.500.
 
 ### 4.1 The cause
 
 `_grounded` tries a substring match first, then falls back to a longest-common-
 subsequence **ratio** over words. The ratio is scale-free. A short quote matched
-against a long span with repeated tokens is therefore cheap to satisfy: the
-quote's words need only appear in ascending order *somewhere*, and successive
-repetitions of a line supply as many ascending positions as the quote has
-words.
+against a long span is therefore cheap to satisfy: the quote's words need only
+appear in ascending order *somewhere*, and successive repetitions of a line
+supply as many ascending positions as the quote has words.
 
 The concrete case, from `DSA/04_Problems/Backtracking - Combination Sum.md`.
 Its validation block holds five near-identical assert lines. Reversing
@@ -103,7 +103,7 @@ match all eight in order:
 | the real 5-assert block | 1.000 | yes, wrongly |
 | a 2-assert version of the same block | 0.875 | no, correctly |
 
-So the check is not broken for code. It is defeated by how many ascending
+So the check was not broken for code. It was defeated by how many ascending
 positions the span offers.
 
 ### 4.2 Why it went unseen
@@ -115,26 +115,88 @@ overlap fixed a real defect, where a quote inverting a span's meaning scored
 1.0. What nobody tested was a span whose own text is repetitive, which in this
 corpus means every DSA problem page's validation block.
 
-### 4.3 Pinned, not fixed
+### 4.3 The fix
 
-Both behaviours are now asserted in
-`tests/unit/test_phase2_units.py`: the 5-assert span accepts the reversal, the
-2-assert span rejects it. The first test says in its message that a failure
-means the fallback was tightened, and that the fix is to update the test and
-re-measure rather than to revert.
+The subsequence match is now constrained to a **window** roughly the length of
+the quote (`_local_overlap`), which encodes what a quote actually is: a
+contiguous passage. The window slides in quarter-window steps, so no source
+region up to three quarters of a window can be split across a boundary.
 
-It is not fixed here. Narrowing the fallback to a window, or putting a floor on
-the absolute number of matched tokens, changes what **every shipped extraction
-accepts**, and would move the assessment and extraction numbers Phase 5 is
-currently gated on. That is a deliberate separate change with its own
-measurement, not a side effect of writing an eval script.
+The constant deserves a note, because the first version of its comment claimed
+a margin that had not been measured and was wrong. Measured on the motivating
+case, the reversed quote is rejected at **every factor from 1 to 11** and only
+accepted at 12, where the window is the whole 100-token span again. The setting
+is nowhere near a boundary and a later reader should not treat it as delicate.
 
-The bound on the damage is worth stating plainly, because it is a rule this
-project treats as load-bearing. "Nothing is stored without evidence" still
-holds in the sense that a quote is always checked against the span it came
-from. What this weakens is the strength of that check on repetitive spans: a
-fabricated quote assembled from such a span can pass. Claims from prose spans,
-which is most of the corpus, are unaffected.
+What the factor does buy is tolerance for a quote whose words are all present
+and in order but spread apart by words the model did not quote:
+
+| window factor | source region tolerated | reversed quote |
+| ------------- | ----------------------- | -------------- |
+| 2 | 2.5x the quote's length | rejected |
+| **3 (chosen)** | **3.5x** | **rejected** |
+| 4 | 4.5x | rejected |
+| 12 | 12x | **accepted, the defect returns** |
+
+3 takes the extra elision headroom at no cost to the defect. A floor of 16
+tokens keeps a three-word quote from being held to a nine-token window; on a
+span measured here that floor is the difference between 0.667 (rejected) and
+1.000.
+
+### 4.4 Re-measured, and a harness bug found on the way
+
+Scored over **all 545 pages** in scripted mode, which is 1,536 adversarial
+probes:
+
+| | probes emitted | dropped | survived | on pages |
+| ---- | ---- | ---- | ---- | ---- |
+| before the fix | 1,536 | 1,526 | **10** | 9 |
+| after the fix | 1,536 | 1,536 | **0** | 0 |
+
+Probes and pages are counted separately on purpose: one page carried two
+survivors, so the first version of this table said 9 survivors against 1,526
+dropped, three numbers that cannot all be true.
+
+The eval exits non-zero on a survivor, so this is a pass/fail the offline suite
+can hold, not a rate to interpret. Reverting `_local_overlap` to
+`_ordered_overlap` reproduces the 10, which is what makes the check sensitive
+rather than merely green.
+
+The grounding rate itself moves only 0.519 to 0.515, which is why it is the
+wrong number to read: probes are a small share of claims, and the rate sits
+above 0.500 anyway because unprobed spans contribute a kept claim and no
+probe.
+
+**11 of the first pass's "survivors" were the harness, not the check**, and
+that is worth recording because it nearly became a false finding. The probe was
+originally built by reversing a line's *words*. That barely permutes its
+*tokens* when one word holds most of them:
+
+    result = groupAnagrams(["eat","tea","tan","ate","nat","bat"])
+
+is four whitespace-delimited words, and reversing them leaves seven of eight
+tokens in their original order. Lines like `self.parent[x] =
+self.parent[self.parent[x]]` are near-palindromic in token space, and a grid of
+ones and zeros reverses to nearly itself. None of those is a reordering, so
+accepting them is correct behaviour. Probes are now built by reversing
+**tokens**, and a line is skipped unless at least 60% of its tokens are
+distinct; 98 spans have no such line and are left unprobed rather than counted
+against the check.
+
+Selection deliberately **never calls `_grounded`**. Trying scrambles until one
+the check rejects would make every run pass by construction. A test asserts the
+absence of that reference by parsing the function.
+
+### 4.5 What this does and does not change
+
+Nothing about the assessment numbers. That path grounds on **span ids**, not
+quoted text, so Phase 5's classification and false-positive-conflict figures
+are untouched. What moves is the extractor's claim-drop path and the two
+extraction evals, and only for quotes matched against repetitive spans.
+
+The invariant is what it was supposed to be all along: a quote is checked
+against the span it came from, and being assembled from that span's own
+vocabulary no longer suffices.
 
 ## 5. Running it
 

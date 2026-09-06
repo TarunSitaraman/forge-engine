@@ -547,6 +547,10 @@ def _ordered_overlap(quote_words: Sequence[str], text_words: Sequence[str]) -> f
 
     A longest-common-subsequence ratio. Unlike a set intersection this cannot
     be satisfied by rearranging the source's own vocabulary.
+
+    Unbounded over the whole span, though, which is why callers should use
+    :func:`_local_overlap` instead. See its docstring for the case that
+    distinction was found by.
     """
     if not quote_words:
         return 0.0
@@ -557,6 +561,74 @@ def _ordered_overlap(quote_words: Sequence[str], text_words: Sequence[str]) -> f
             current[j] = previous[j - 1] + 1 if q == t else max(previous[j], current[j - 1])
         previous = current
     return previous[len(text_words)] / len(quote_words)
+
+
+#: How much longer than the quote the source region may be. A quote is a
+#: contiguous passage, so its words should be findable close together; the
+#: slack is for a model dropping interior words, which lengthens the region
+#: the quote was drawn from without lengthening the quote.
+#:
+#: **3 is not knife-edge, and the first version of this comment claimed it
+#: was.** Measured 2026-09-06 on the case that motivated the window: the
+#: reversed quote is rejected at every factor from 1 to 11 and only accepted
+#: at 12, where the window is the whole 100-token span again. So the setting
+#: is not defending a boundary, and a later reader should not treat it as
+#: delicate.
+#:
+#: What the factor does buy is elision tolerance, measured on a quote whose
+#: words are all present and in order but spread apart by words the model did
+#: not quote: factor 2 holds to a source region 2.5x the quote's length,
+#: factor 3 to 3.5x, factor 4 to 4.5x. 3 takes the extra headroom at no cost
+#: to the defect, which is why it is 3 and not 2.
+#: See `docs/research/extraction-against-the-vault.md` §4 for both runs.
+QUOTE_WINDOW_FACTOR = 3
+
+#: Windows never shrink below this. A three-word quote would otherwise get a
+#: nine-token window, which is tighter than the check needs to be and would
+#: start rejecting real quotes from dense text.
+MIN_QUOTE_WINDOW_TOKENS = 16
+
+
+def _local_overlap(quote_words: Sequence[str], text_words: Sequence[str]) -> float:
+    """Best ordered overlap achievable inside any one window of the text.
+
+    **Why the window exists.** `_ordered_overlap` alone is a *ratio*, so it is
+    scale-free: a short quote matched against a long span needs only to find
+    its words in ascending order *somewhere*, and a span that repeats a line
+    supplies as many ascending positions as the quote has words. Measured
+    2026-09-06 on a real DSA validation block whose five near-identical lines
+    read `assert sorted(result) == sorted(...)`: the fully **reversed** quote
+    scored 1.000 and was accepted as evidence. The same reversal against a
+    two-line version of the same block scored 0.875 and was correctly
+    rejected, which is what named the mechanism: not code, not punctuation,
+    but how many ascending positions the span offers.
+
+    Constraining the match to a window roughly the length of the quote encodes
+    what a quote actually is: a contiguous passage. Prose never noticed the
+    difference, which is why every negative case written for `_grounded`
+    before this one was prose and none of them caught it.
+
+    The window slides in quarter-window steps, so any source region up to
+    three quarters of a window long is wholly inside some window and cannot be
+    split across a boundary. That is more than twice the quote's own length,
+    which is the headroom the elision slack needs.
+    """
+    if not quote_words:
+        return 0.0
+    window = max(len(quote_words) * QUOTE_WINDOW_FACTOR, MIN_QUOTE_WINDOW_TOKENS)
+    if len(text_words) <= window:
+        return _ordered_overlap(quote_words, text_words)
+
+    step = max(1, window // 4)
+    best = 0.0
+    for start in range(0, len(text_words), step):
+        chunk = text_words[start : start + window]
+        if len(chunk) < len(quote_words) and start:
+            break  # the tail is shorter than the quote; earlier windows cover it
+        best = max(best, _ordered_overlap(quote_words, chunk))
+        if best >= 1.0:
+            break
+    return best
 
 
 def _grounded(quote: str, text: str) -> bool:
@@ -575,9 +647,11 @@ def _grounded(quote: str, text: str) -> bool:
        the span stripped the same way. This is the common case and absorbs all
        formatting noise. A quote may use ``...`` to elide, in which case each
        segment must appear in order.
-    2. Otherwise, a longest-common-subsequence ratio over words, which tolerates
-       a model dropping interior words but still requires what remains to be in
-       the original sequence.
+    2. Otherwise, a longest-common-subsequence ratio over words **within a
+       window** the length of the quote plus slack, which tolerates a model
+       dropping interior words but still requires what remains to be in the
+       original sequence *and* close together. The window is load-bearing: see
+       `_local_overlap` for the reversed quote that scored 1.000 without it.
     """
     if not quote.strip():
         return False
@@ -594,7 +668,7 @@ def _grounded(quote: str, text: str) -> bool:
         else:
             return True
 
-    return _ordered_overlap(_tokens(quote), _tokens(text)) >= QUOTE_GROUNDING_THRESHOLD
+    return _local_overlap(_tokens(quote), _tokens(text)) >= QUOTE_GROUNDING_THRESHOLD
 
 
 def _status(attempted: int, succeeded: int) -> ExtractionStatus:

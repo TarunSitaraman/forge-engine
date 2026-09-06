@@ -108,7 +108,7 @@ rather than by similarity; relationships are activated only where evidence
 supports them; the graph is SQLite with bounded traversal and nine integrity
 diagnostics. Retrieval was **measured** against a labelled 24-query set:
 lexical wins, and hybrid was rejected on the evidence
-([retrieval baseline](./research/retrieval-baseline.md)). 1,241 tests, 89%
+([retrieval baseline](./research/retrieval-baseline.md)). 1,247 tests, 89%
 coverage, no model required.
 
 **Phase 4 complete.** Forge now evaluates how new evidence affects what it
@@ -119,7 +119,7 @@ code, generates reviewable proposals, **pauses for a human**, and then, only
 on approval, corroborates, refines (superseding non-destructively), or marks a
 claim disputed, recording a revision either way. Providers are pluggable: local
 Ollama, remote Ollama, cloud, or mock, with no silent downgrade for knowledge
-mutation. 1,241 tests, CI fully offline.
+mutation. 1,247 tests, CI fully offline.
 
 *Measured honestly:* no real model was reachable during Phase 4 development, so
 the phase shipped with a fully-tested pipeline and entirely unmeasured model

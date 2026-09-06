@@ -323,25 +323,39 @@ with a real model**, and populate the graph at corpus scale.
 
           python3 scripts/concept_extraction_eval.py --provider cloud --limit 40
 
-      Building it produced one result already, out of the offline mode. The
-      scripted provider pairs every verbatim quote with the same sentence
-      reversed, so grounding should read exactly 0.500, and a run reading 1.000
-      means the drop path broke. It read **0.528**. The gap is a real weakness
-      in `_grounded`: its fallback is a longest-common-subsequence *ratio* over
-      the whole span, which is scale-free, so a short quote against a span that
-      repeats its tokens is cheap to satisfy. On a real DSA validation block
-      with five near-identical `assert sorted(result) == sorted(...)` lines,
-      the fully reversed quote scores **1.000** and is accepted as evidence;
-      the same quote against a two-assert version scores 0.875 and is correctly
-      rejected. Every negative case previously written for `_grounded` was
-      prose, and prose does not repeat its tokens that way.
+      Building it produced one result already, out of the offline mode, and a
+      fix. The scripted provider pairs every verbatim quote with an
+      adversarial probe, the same line with its token order reversed, and
+      every probe must come back dropped. Ten did not.
 
-      **Pinned, not fixed**, in
-      `tests/unit/test_phase2_units.py::test_a_reversed_quote_survives_grounding_on_a_repetitive_code_span`.
-      Narrowing the fallback to a window changes what every shipped extraction
-      accepts, and would move the assessment and extraction numbers this phase
-      is gated on, so it is a deliberate separate change rather than a side
-      effect of writing an eval script. See
+      **Cause: `_grounded` fell back to a longest-common-subsequence *ratio*
+      over the whole span.** A ratio is scale-free, so a short quote against a
+      span that repeats its tokens is cheap to satisfy: the quote's words need
+      only appear in ascending order somewhere, and five near-identical
+      `assert sorted(result) == sorted(...)` lines supply as many ascending
+      positions as the quote has words. The fully reversed quote scored 1.000
+      and was accepted as evidence. Every negative case ever written for
+      `_grounded` was prose, and prose does not repeat its tokens that way.
+
+      **Fixed 2026-09-06:** the match is now constrained to a window roughly
+      the length of the quote, which encodes what a quote is, a contiguous
+      passage. Re-measured over all 545 pages, 1,536 probes: **10 survived
+      before, 0 after**, and reverting the window reproduces the 10, so the
+      offline check is sensitive rather than merely green. The eval exits
+      non-zero on a survivor.
+
+      Two things worth carrying forward. The window factor is **not
+      knife-edge**, and the first version of its comment claimed it was: the
+      defect returns only at factor 12, where the window is the whole span
+      again. And **11 of the first pass's apparent survivors were the harness,
+      not the check**: probes built by reversing *words* barely permute
+      *tokens* when one word holds most of them, so probes are now built at
+      the token level and degenerate lines are skipped rather than counted
+      against the check.
+
+      **This does not move the assessment numbers.** That path grounds on span
+      ids, not quoted text, so the classification and false-positive-conflict
+      figures above are untouched. See
       [extraction against the vault](./research/extraction-against-the-vault.md).
 - [x] **Retrieval improvements measured against the Phase 3 labelled set.**
       Both deterministic improvements the Phase 3 miss analysis proposed are

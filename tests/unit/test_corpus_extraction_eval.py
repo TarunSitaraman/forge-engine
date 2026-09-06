@@ -25,7 +25,7 @@ from forge.evaluation.corpus_extraction import (
     run,
     score_page,
 )
-from forge.extraction.extractor import _grounded
+from forge.extraction.extractor import _grounded, _tokens
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "concept_extraction_eval.py"
 
@@ -271,6 +271,68 @@ def test_the_junk_list_comes_from_the_labelled_set():
     assert "VARCHAR(n)" in forbidden
     assert "maxmemory" in forbidden
     assert len(forbidden) == len(set(forbidden)), "deduplicated across cases"
+
+
+def test_a_degenerate_line_yields_no_probe_rather_than_a_fake_one():
+    """The harness bug that read as a defect in `_grounded`.
+
+    Reversing the *words* of `result = groupAnagrams(["eat","tea","tan"])`
+    barely moves the *tokens*, because one word holds most of them; reversing
+    a near-palindrome like `self.parent[x] = self.parent[self.parent[x]]`
+    moves them not at all. Neither is a reordering, so a grounding check is
+    right to accept them, and counting their acceptance against it reported
+    the check failing on 11 of 545 pages when nothing was wrong.
+
+    Lines like these must be skipped, not turned into probes.
+    """
+    probe = _script().adversarial_probe(
+        "self.parent[x] = self.parent[self.parent[x]]\n"
+        "self.parent[x] = self.parent[self.parent[x]]"
+    )
+    assert probe is None
+
+
+def test_the_probe_reverses_tokens_not_words():
+    """Word reversal is not enough when one word holds six tokens.
+
+    `result = groupAnagrams(["eat","tea","tan","ate","nat","bat"])` is four
+    whitespace-delimited words. Reversed as words, seven of its eight tokens
+    stay in their original order and the "probe" is very nearly the original.
+    """
+    line = 'result = groupAnagrams(["eat","tea","tan","ate","nat","bat"])'
+    probe = _script().adversarial_probe(line)
+    assert probe is not None
+    quote, scrambled = probe
+    assert quote == line
+    assert _tokens(scrambled) == list(reversed(_tokens(line)))
+
+    by_words = " ".join(reversed(line.split()))
+    assert _tokens(by_words) != list(reversed(_tokens(line))), (
+        "if these ever agree, the word-level shortcut is safe again and this "
+        "test is the place to say so"
+    )
+
+
+def test_probe_selection_never_consults_the_grounding_check():
+    """Otherwise the probe is rejected by construction and proves nothing.
+
+    Selecting scrambles until one `_grounded` rejects would make every run
+    pass whatever `_grounded` does. Both selection criteria are properties of
+    the input, so the module needs no reference to the function under test.
+    """
+    import ast
+
+    tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
+    fn = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "adversarial_probe"
+    )
+    # Names the body actually references, so the docstring may discuss the
+    # function under test without tripping this.
+    referenced = {n.id for n in ast.walk(fn) if isinstance(n, ast.Name)}
+    referenced |= {n.attr for n in ast.walk(fn) if isinstance(n, ast.Attribute)}
+    assert "_grounded" not in referenced
 
 
 def test_the_scripted_provider_pairs_a_real_quote_with_an_ungrounded_one():

@@ -62,7 +62,7 @@ from forge.extraction import CandidateExtractor
 # which spans are worth a call. Approximating them here would let this script
 # count a page as thin that the extractor would have extracted from, or the
 # reverse, and the difference would land silently in self-recovery.
-from forge.extraction.extractor import MIN_SPAN_CHARS, _is_navigation
+from forge.extraction.extractor import MIN_SPAN_CHARS, _is_navigation, _tokens
 from forge.llm import MockProvider, get_provider
 from forge.logging import configure_logging
 
@@ -85,22 +85,68 @@ def forbidden_strings(path: Path | None = None) -> list[str]:
     return list(seen)
 
 
+#: A candidate line must be this proportion distinct tokens before it is used
+#: to build an adversarial probe. Reversing `self.parent[x] = self.parent[
+#: self.parent[x]]` produces a near-identical token sequence, and reversing a
+#: grid of ones and zeros produces the same multiset in nearly the same order,
+#: so neither is a reordering in any sense a grounding check should catch.
+#: Measured 2026-09-06: without this filter 11 of 545 pages emitted a "probe"
+#: that was really the original, and the eval reported them as the check
+#: failing. That was the harness, not the check.
+MIN_DISTINCT_TOKEN_RATIO = 0.6
+
+#: Shortest line worth quoting, and the fewest tokens whose order carries
+#: information. Below six, reversal is too easily a coincidence.
+MIN_PROBE_CHARS = 40
+MIN_PROBE_TOKENS = 6
+
+
+def adversarial_probe(body: str) -> tuple[str, str] | None:
+    """Pick a line of the span and return it with its token order reversed.
+
+    Returns ``None`` when the span has no line whose order can be meaningfully
+    reversed, rather than emitting a degenerate probe and counting its survival
+    against the check.
+
+    **Selection never consults `_grounded`.** It would be trivial to try
+    scrambles until one the check rejects, and the resulting test would pass by
+    construction and detect nothing. Both criteria here are properties of the
+    input alone: enough tokens, and enough of them distinct.
+
+    Reversal is at the **token** level, not the word level. `result =
+    groupAnagrams(["eat","tea","tan","ate","nat","bat"])` is four words, one of
+    which holds six tokens, so reversing words leaves the token order almost
+    untouched. That is what 11 pages of this vault were quietly exercising.
+    """
+    for raw in body.splitlines():
+        line = raw.strip()
+        if len(line) < MIN_PROBE_CHARS:
+            continue
+        tokens = _tokens(line)
+        if len(tokens) < MIN_PROBE_TOKENS:
+            continue
+        if len(set(tokens)) / len(tokens) < MIN_DISTINCT_TOKEN_RATIO:
+            continue
+        return line[:400], " ".join(reversed(tokens))
+    return None
+
+
 def scripted_provider(current: dict) -> MockProvider:
     """Answers each call from the page under test, exercising the real path.
 
     Concepts: the page's own name, so the recovery path is driven end to end.
 
-    Claims: **two per span, one grounded and one not.** The grounded quote is
-    lifted verbatim out of the span the prompt actually contains, parsed back
-    out of the request rather than invented — the same technique the assessment
-    eval uses for span ids. The ungrounded one is that same sentence with its
-    words reversed, so it is built entirely from the span's own vocabulary and
-    can only be caught by the ordered-overlap check rather than by a word the
-    span does not have.
+    Claims: **a real quote, plus an adversarial probe wherever one can be
+    built.** The real quote is lifted verbatim out of the span the prompt
+    actually contains, parsed back out of the request rather than invented, the
+    same technique the assessment eval uses for span ids. The probe is that
+    line's tokens in reverse, so it is assembled entirely from the span's own
+    vocabulary and only the order-preserving half of `_grounded` can reject it.
 
     A check that cannot fail in the only mode runnable offline is worse than no
-    check, because it reassures. So scripted grounding is 0.500 by construction
-    and a run reporting 1.000 means the drop path stopped working.
+    check, because it reassures. So every probe emitted must come back dropped,
+    and the run reports the count rather than leaving the reader to infer it
+    from a rate.
     """
 
     def respond(request):
@@ -108,27 +154,34 @@ def scripted_provider(current: dict) -> MockProvider:
         body = text.split("--- TEXT START ---", 1)[-1].split("--- TEXT END ---", 1)[0].strip()
         name = current["page"].canonical_name
         if text.lstrip().startswith("List the individual factual assertions"):
-            quote = next(
-                (line.strip() for line in body.splitlines() if len(line.strip()) >= 40),
+            probe = adversarial_probe(body)
+            fallback = next(
+                (line.strip() for line in body.splitlines() if len(line.strip()) >= MIN_PROBE_CHARS),
                 body[:200],
             )[:400]
-            scrambled = " ".join(reversed(quote.split()))
-            return json.dumps(
+            quote = probe[0] if probe else fallback
+            claims = [
                 {
-                    "claims": [
-                        {
-                            "statement": f"{name} is described in this section.",
-                            "evidence_quote": quote,
-                            "concept": name,
-                        },
-                        {
-                            "statement": f"{name} has an unsupported property.",
-                            "evidence_quote": scrambled,
-                            "concept": name,
-                        },
-                    ]
+                    "statement": f"{name} is described in this section.",
+                    "evidence_quote": quote,
+                    "concept": name,
                 }
-            )
+            ]
+            if probe is not None:
+                current["probes"] = current.get("probes", 0) + 1
+                by_page = current.setdefault("probes_by_page", {})
+                path = current["page"].path
+                by_page[path] = by_page.get(path, 0) + 1
+                claims.append(
+                    {
+                        "statement": f"{name} has an unsupported property.",
+                        "evidence_quote": probe[1],
+                        "concept": name,
+                    }
+                )
+            else:
+                current["unprobed_spans"] = current.get("unprobed_spans", 0) + 1
+            return json.dumps({"claims": claims})
         return json.dumps({"concepts": [{"name": name, "kind": "concept"}]})
 
     return MockProvider(responder=respond)
@@ -315,8 +368,28 @@ def main() -> int:
     report.seed = args.seed
     report.duration_seconds = time.perf_counter() - started
 
+    # The scripted mode's own verdict. Every probe emitted must come back
+    # dropped; a survivor is a regression in `_grounded`, not a bad page.
+    #
+    # Compared per page against the probes *that page* was given. The first
+    # version compared each page's kept claims to its dropped ones, which
+    # flagged all 76 pages holding a span with no viable probe and reported
+    # "1536 emitted, 1536 dropped, 76 survived" — three numbers that cannot all
+    # be true. A survivor is a page the extractor dropped fewer claims for than
+    # it was probed with.
+    probes = int(current.get("probes", 0))
+    probes_by_page: dict = current.get("probes_by_page", {})
+    dropped = sum(s.dropped_claims for s in report.complete)
+    survivors = [
+        s for s in report.complete if s.dropped_claims < probes_by_page.get(s.path, 0)
+    ]
+
     payload = {
         **report.to_dict(),
+        "adversarial_probes": probes,
+        "probes_dropped": dropped,
+        "probe_survivors": [s.path for s in survivors],
+        "spans_without_a_probe": int(current.get("unprobed_spans", 0)),
         "provider": args.provider,
         "max_spans": args.max_spans,
         "vault": str(settings.vault_path),
@@ -393,16 +466,40 @@ def main() -> int:
 
         if args.provider == "scripted":
             print(
+                f"\nadversarial probes: {probes} emitted, {dropped} dropped, "
+                f"{probes - dropped} survived on {len(survivors)} page(s)"
+            )
+            if survivors:
+                print(
+                    "  *** REGRESSION: a quote built by reversing a span's own token\n"
+                    "  order was accepted as evidence. That is the defect the window in\n"
+                    "  `_grounded` exists to prevent. Pages:"
+                )
+                for score in survivors[:10]:
+                    print(f"    {score.path}")
+            else:
+                print("  every probe was rejected, which is the check working.")
+            if current.get("unprobed_spans"):
+                print(
+                    f"  {current['unprobed_spans']} span(s) had no line whose token order\n"
+                    "  could be meaningfully reversed and were left unprobed rather than\n"
+                    "  counted against the check."
+                )
+            print(
                 "\nCAVEAT: the scripted provider answers with the page's own name, so "
                 "self-recovery\nis 1.000 by construction and says nothing about any model. "
                 "What this mode does\nmeasure is the harness: span construction from real "
                 "vault files, schema validation,\nthe grounding check, normalization and "
                 "scoring. Use --provider cloud or ollama for\na number about extraction."
-                "\n\nGrounding should read 0.500 here: the scripted answer pairs a verbatim "
-                "quote with\none scrambled from the span's own words, so a run reporting "
-                "1.000 means the drop\npath has stopped working."
+                "\n\nRead the probe line above rather than the grounding rate. The rate "
+                "sits a little\nover 0.500 because spans with no line whose token order can "
+                "be meaningfully\nreversed contribute a kept claim and no probe. The exact "
+                "statement is the one\nthe probe line makes: every probe emitted came back "
+                "dropped."
             )
 
+    if args.provider == "scripted" and survivors:
+        return 1
     return 0 if report.trustworthy else 1
 
 

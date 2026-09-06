@@ -17,7 +17,7 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them, `1,199 passed, 42 skipped` becomes `1,241 passed`. See
+   to run them, `1,205 passed, 42 skipped` becomes `1,247 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine*, architecture, ADRs, research,
@@ -57,20 +57,37 @@ labelled set carries, imported rather than retyped so the two are comparable,
 and **off-vocabulary rate**, reported and explicitly not called junk because a
 concept the vault lacks a page for is extraction working.
 
-Its offline mode pairs every verbatim quote with the same sentence reversed, so
-grounding must read exactly 0.500 and a run reading 1.000 means the drop path
-broke. **It read 0.528.** `_grounded` falls back to a longest-common-subsequence
-*ratio*, which is scale-free, so a short quote against a span that repeats its
-tokens is cheap to satisfy. On a real DSA validation block with five
-near-identical `assert sorted(result) == sorted(...)` lines, the fully reversed
-quote scores **1.000** and is accepted as evidence; the same quote against a
-two-assert version scores 0.875 and is correctly rejected. Every negative case
-ever written for `_grounded` was prose, and prose does not repeat its tokens
-that way, which is why the 2026-08-19 bag-of-words fix looked complete.
+Its offline mode pairs every real quote with an **adversarial probe**, the same
+line with its token order reversed, and every probe must come back dropped. Ten
+did not. `_grounded` fell back to a longest-common-subsequence *ratio*, which is
+scale-free, so a short quote against a span that repeats its tokens is cheap to
+satisfy. On a real DSA validation block with five near-identical
+`assert sorted(result) == sorted(...)` lines, the fully reversed quote scored
+**1.000** and was accepted as evidence; the same quote against a two-assert
+version scored 0.875 and was correctly rejected. Every negative case ever
+written for `_grounded` was prose, and prose does not repeat its tokens that
+way, which is why the 2026-08-19 bag-of-words fix looked complete.
 
-**Pinned in `test_phase2_units.py`, not fixed.** Narrowing the fallback changes
-what every shipped extraction accepts and would move the numbers Phase 5 is
-gated on. Do it as its own change with its own measurement. Write-up:
+**Fixed the same day.** `_local_overlap` constrains the match to a window
+roughly the length of the quote. Re-measured over all 545 pages, 1,536 probes:
+**10 survived before, 0 after**, and reverting the window reproduces the 10, so
+the offline check is sensitive rather than merely green. It exits non-zero on a
+survivor.
+
+**Two traps this laid, both worth remembering.** The window factor is *not*
+knife-edge, and the first version of its comment said it was: the defect only
+returns at factor 12, where the window is the whole span again. Never write a
+margin you have not swept. And **11 of the first pass's apparent survivors were
+the harness**: probes built by reversing *words* barely permute *tokens* when
+one word holds most of them (`result = groupAnagrams(["eat","tea",...])`) or
+when the line is near-palindromic (`self.parent[x] = self.parent[self.parent[x]]`).
+Accepting those is correct behaviour. Probes are now token-level and skip lines
+under 60% distinct tokens. Probe selection deliberately never calls `_grounded`,
+or the test would pass by construction; a test parses the function to assert
+that.
+
+**Assessment numbers are untouched** by all of this: that path grounds on span
+ids, not quoted text. Write-up:
 `docs/research/extraction-against-the-vault.md`.
 
 **Phase 4, done 2026-08-29: the extraction-quality eval, and cross-span
@@ -660,7 +677,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine, distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,241 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,247 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -685,12 +702,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 1,199 passed, 42 skipped, offline, no model
+python -m pytest tests           # 1,205 passed, 42 skipped, offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,241 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,247 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.

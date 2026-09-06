@@ -13,7 +13,8 @@ import pytest
 from forge.domain import ExtractionStatus, IngestionStatus, ProvenanceTier, Span, SourceKind
 from forge.embeddings import NullEmbeddingProvider, OllamaEmbeddingProvider
 from forge.extraction import CandidateExtractor, extraction_provenance
-from forge.extraction.extractor import _grounded
+from forge.extraction import extractor as extractor_module
+from forge.extraction.extractor import _grounded, _local_overlap, _ordered_overlap, _tokens
 from forge.ingestion import build_spans, extraction_key, split_sentences
 from forge.ingestion.chunking import MAX_CHUNK_CHARS
 from forge.llm import MockProvider
@@ -351,6 +352,12 @@ class TestExtraction:
 
     #: A validation block from `DSA/04_Problems/Backtracking - Combination Sum.md`,
     #: verbatim. Its five near-identical assert lines are the whole point.
+    #: One assert line from that span, and the same line with its tokens
+    #: reversed. Shared by the three tests below so the probe and the quote it
+    #: is built from cannot drift apart.
+    REPEATED_ASSERT = "assert sorted(result) == sorted([[2,2,3],[7]])"
+    REVERSED_ASSERT = "sorted([[2,2,3],[7]]) == sorted(result) assert"
+
     REPETITIVE_CODE_SPAN = (
         "## Edge Cases & Validation\n"
         "```python\n"
@@ -374,48 +381,51 @@ class TestExtraction:
         "```"
     )
 
-    def test_a_reversed_quote_survives_grounding_on_a_repetitive_code_span(self):
-        """KNOWN LIMIT, measured 2026-09-06. Pinned so a fix is a visible change.
+    def test_a_reversed_quote_is_rejected_on_a_repetitive_code_span(self):
+        """The defect the corpus extraction eval found, and its fix.
 
-        `_grounded` falls back to a longest-common-subsequence *ratio* over the
-        whole span. That is scale-free, so a short quote matched against a long
-        span with repeated tokens is cheap to satisfy: the words need only
-        appear in ascending order somewhere, and successive repetitions of a
-        line supply as many ascending positions as the quote has words.
+        `_grounded` used to fall back to a longest-common-subsequence *ratio*
+        over the whole span. A ratio is scale-free, so a short quote matched
+        against a long span needed only to find its words in ascending order
+        somewhere, and five near-identical assert lines supply as many
+        ascending positions as the quote has words. Reversing
 
-        Concretely, reversing `assert sorted(result) == sorted([[2,2,3],[7]])`
-        gives tokens `sorted 2 2 3 7 sorted result assert`, and the five assert
-        lines in this real vault span match all eight in order — overlap 1.000,
-        against 0.875 (correctly rejected) for the same quote and a two-line
-        version of the same block. The prose cases above are unaffected, which
-        is why this went unseen: natural language does not repeat its tokens
-        this way, and every negative case written for `_grounded` was prose.
+            assert sorted(result) == sorted([[2,2,3],[7]])
 
-        Found by the corpus extraction eval, whose scripted mode pairs each
-        verbatim quote with a reversed one and expects grounding to read 0.500.
-        It read 0.528. The gap was this.
+        gives the tokens `sorted 2 2 3 7 sorted result assert`, and this real
+        vault span matched all eight in order: overlap 1.000, accepted as
+        evidence for a claim nobody made.
 
-        Not fixed here on purpose: narrowing the fallback to a window changes
-        what every shipped extraction accepts and would move the assessment and
-        extraction numbers Phase 5 is currently gated on. This test states the
-        current behaviour so that changing it is deliberate and reviewable.
+        Found because the corpus extraction eval's offline mode pairs every
+        verbatim quote with its reversal and expects grounding to read exactly
+        0.500. It read 0.528. Fixed by constraining the match to a window the
+        length of the quote plus slack, which is what a quote is: a contiguous
+        passage.
         """
-        quote = "assert sorted(result) == sorted([[2,2,3],[7]])"
-        reversed_quote = " ".join(reversed(quote.split()))
+        assert self.REVERSED_ASSERT == " ".join(reversed(self.REPEATED_ASSERT.split()))
+        assert _grounded(self.REPEATED_ASSERT, self.REPETITIVE_CODE_SPAN) is True
+        assert _grounded(self.REVERSED_ASSERT, self.REPETITIVE_CODE_SPAN) is False
 
-        assert _grounded(quote, self.REPETITIVE_CODE_SPAN) is True
-        assert _grounded(reversed_quote, self.REPETITIVE_CODE_SPAN) is True, (
-            "if this now fails, the fallback was tightened — that is the fix, "
-            "update this test and re-measure extraction rather than reverting"
-        )
+    def test_the_window_is_what_rejects_it_not_the_threshold(self):
+        """Names the mechanism, so a later reader does not retune the wrong knob.
 
-    def test_the_same_reversal_is_rejected_without_the_repetition(self):
-        """The repetition is the mechanism, not the code or the punctuation.
+        Unwindowed, the same reversal against the same span scores a perfect
+        1.000 — no threshold below 1.0 could have caught it. Windowed it scores
+        0.875. The fix is locality, not strictness.
+        """
+        quote_words = _tokens(self.REVERSED_ASSERT)
+        span_words = _tokens(self.REPETITIVE_CODE_SPAN)
 
-        Same quote, same reversal, a span holding two assert lines instead of
-        five: overlap 0.875, below the 0.9 threshold, correctly rejected. So
-        the check is not broken for code — it is defeated by how many ascending
-        positions the span offers.
+        assert _ordered_overlap(quote_words, span_words) == 1.0
+        assert _local_overlap(quote_words, span_words) == pytest.approx(0.875)
+
+    def test_the_repetition_is_the_mechanism_not_the_code(self):
+        """Two assert lines instead of five: rejected even before the fix.
+
+        The span is code either way, and the punctuation is identical. What
+        changed is how many ascending positions the span offers, which is why
+        every negative case written for `_grounded` before this one was prose
+        and none of them caught it.
         """
         short_span = (
             "```python\n"
@@ -425,10 +435,46 @@ class TestExtraction:
             "assert sorted(result) == sorted([])\n"
             "```"
         )
-        reversed_quote = " ".join(
-            reversed("assert sorted(result) == sorted([[2,2,3],[7]])".split())
+        assert _ordered_overlap(_tokens(self.REVERSED_ASSERT), _tokens(short_span)) < 0.9
+        assert _grounded(self.REVERSED_ASSERT, short_span) is False
+
+    def test_a_quote_whose_words_are_spread_out_still_grounds(self):
+        """The window must not reject a real quote the model elided from.
+
+        A quote whose words are all present and in order, but separated by
+        words the model did not quote, is a legitimate quote. Measured
+        2026-09-06: factor 3 holds to a source region 3.5x the quote's length.
+        Two interleaved words per quoted word is inside that; this pins the
+        tolerance so a later tightening has to be deliberate.
+        """
+        quote = "the index keeps its leaves at one uniform depth below the root"
+        spread = " ".join(
+            f"{word} moreover typically" for word in quote.split()
         )
-        assert _grounded(reversed_quote, short_span) is False
+        source = f"Preface sentence. {spread} And a trailing sentence."
+
+        assert _grounded(quote, source) is True
+
+    def test_a_window_never_shrinks_below_the_floor(self, monkeypatch):
+        """A three-word quote must not be held to a nine-token window.
+
+        The factor scales with the quote, so a short quote gets a short window
+        and starts failing for its length rather than its content. Measured on
+        this span: with no floor the three quoted words sit 12 tokens apart and
+        score 0.667, rejected; with the floor they score 1.000. The floor is
+        what makes the window a minimum standard rather than a moving one.
+        """
+        quote = "leaves uniform depth"
+        source = (
+            "A B-tree of any order keeps every one of its leaves positioned at "
+            "exactly one and the same uniform level of measured depth below the "
+            "root node of the tree, always."
+        )
+        monkeypatch.setattr(extractor_module, "MIN_QUOTE_WINDOW_TOKENS", 0)
+        assert _local_overlap(_tokens(quote), _tokens(source)) == pytest.approx(2 / 3)
+
+        monkeypatch.setattr(extractor_module, "MIN_QUOTE_WINDOW_TOKENS", 16)
+        assert _grounded(quote, source) is True
 
     def test_ungrounded_reordering_is_dropped_end_to_end(self, scripted_extractor):
         """The unit rule has to actually reject the claim in the pipeline."""
