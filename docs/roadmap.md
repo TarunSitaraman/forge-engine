@@ -252,7 +252,27 @@ with a real model**, and populate the graph at corpus scale.
       human looking. **Not** judged acceptable for promoting
       `POTENTIAL_CONFLICT` to an asserted `Contradiction`; human routing
       stays. See [assessment quality](./research/assessment-quality.md).
-- [ ] A second overlapping document updates the model rather than duplicating it
+- [x] **A second overlapping document updates the model rather than
+      duplicating it, 2026-09-06.** MVP steps 11-13, asserted end to end in
+      `tests/integration/test_mvp_second_document.py`: ingest, activate,
+      ingest an overlapping document, activate again, then check the shape of
+      the graph on the other side.
+
+      Detection was already covered; **step 13 was not**, and the two are
+      different claims. An unchanged concept count is also what a refused
+      duplicate looks like, so the tests assert the mechanism: the second
+      document raises `CONCEPT_MATCH` with `match_candidate` and **no**
+      `NEW_CONCEPT`, activation registers the name as an alias of the existing
+      concept, the id survives, revisions are never lost, and the second
+      source and its spans are still stored so its evidence stays citable.
+
+      **The boundary, measured rather than assumed:** matching is lexical, so
+      `Hybrid Retrieval` against a stored `Hybrid Search` does not match and is
+      proposed as a new concept. The duplicate never reaches the graph, because
+      it is a pending proposal and nothing activates without approval. So the
+      defensible claim is **the graph never duplicates without a human
+      approving the duplicate**, not that overlap detection is complete.
+      Embeddings would widen it and are off by default.
 - [ ] Interrupting mid-ingestion and resuming does not duplicate work *(already
       true for evolution; needs proving for ingestion)*
 - [ ] Every model change traces to a workflow id and a `Revision` *(already true)*
