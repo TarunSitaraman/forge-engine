@@ -737,6 +737,54 @@ class TestCloudHealthActuallyChecks:
         _, detail = provider.health()
         assert "gpt-oss" in detail, "a bare rejection leaves the user guessing"
 
+    def test_with_no_near_match_it_lists_what_is_actually_offered(self, monkeypatch):
+        """2026-09-06: asked for `moonshotai/kimi-k2-instruct` against a host
+        serving 14 models, none of them Kimi. The stem matched nothing, so the
+        suggestion fell back to the alphabetical head and proposed
+        `allam-2-7b`. A suggestion nobody would act on is worse than none; with
+        a short list the useful answer is the list."""
+        offered = ["allam-2-7b", "groq/compound", "openai/gpt-oss-120b"]
+        provider = cloud(
+            monkeypatch,
+            self._models_handler(offered),
+            vendor="openai",
+            model="moonshotai/kimi-k2-instruct",
+        )
+        ok, detail = provider.health()
+
+        assert ok is False
+        assert "it offers:" in detail
+        for model in offered:
+            assert model in detail, "a short list should be shown in full"
+
+    def test_a_long_list_is_not_dumped_into_the_error(self, monkeypatch):
+        """The opposite failure: burying the message under 200 model ids."""
+        offered = [f"vendor/model-{n:03d}" for n in range(200)]
+        provider = cloud(
+            monkeypatch,
+            self._models_handler(offered),
+            vendor="openai",
+            model="moonshotai/kimi-k2-instruct",
+        )
+        _, detail = provider.health()
+
+        assert "200 are offered" in detail
+        assert detail.count("vendor/model-") == 5
+
+    def test_a_near_match_still_wins_over_the_full_list(self, monkeypatch):
+        """When the id merely rotated, the adjacent name is the answer, and
+        printing every model would hide it."""
+        provider = cloud(
+            monkeypatch,
+            self._models_handler(["openai/gpt-oss-120b", "allam-2-7b"]),
+            vendor="openai",
+            model="openai/gpt-oss-70b",
+        )
+        _, detail = provider.health()
+
+        assert "e.g. openai/gpt-oss-120b" in detail
+        assert "it offers:" not in detail
+
     def test_an_offered_model_is_confirmed(self, monkeypatch):
         provider = cloud(
             monkeypatch,

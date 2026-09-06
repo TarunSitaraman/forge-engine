@@ -47,6 +47,10 @@ from .base import (
 )
 
 log = get_logger(__name__)
+
+#: Above this many, listing every model buries the error instead of answering
+#: it. 25 is comfortably above what a single vendor typically serves.
+MAX_MODELS_TO_LIST = 25
 T = TypeVar("T", bound=BaseModel)
 
 #: Wire formats this provider can speak. Adding one is a change here and
@@ -229,11 +233,24 @@ class CloudProvider:
         # rejection: model ids rotate, and the replacement is usually adjacent.
         stem = self.model.split("/")[-1].split("-")[0].lower()
         near = [m for m in offered if stem and stem in m.lower()][:5]
-        suggestion = ", ".join(near or sorted(offered)[:5])
+        if near:
+            suggestion = f"e.g. {', '.join(near)}"
+        elif len(offered) <= MAX_MODELS_TO_LIST:
+            # No near match means the id was not rotated, the model is absent.
+            # The alphabetical head is then actively misleading: it offered
+            # `allam-2-7b` as the suggestion for `kimi-k2-instruct`. On a short
+            # list, printing all of it answers the question actually being
+            # asked, which is what *can* be used.
+            suggestion = "it offers: " + ", ".join(sorted(offered))
+        else:
+            suggestion = (
+                f"none resemble it; {len(offered)} are offered, starting "
+                + ", ".join(sorted(offered)[:5])
+            )
         return False, (
-            f"cloud provider {self.vendor!r} does not offer model {self.model!r} — the host "
+            f"cloud provider {self.vendor!r} does not offer model {self.model!r}: the host "
             f"lists {len(offered)} models and this is not one of them, so every call would "
-            f"fail. Set FORGE_CLOUD_MODEL to one it does offer, e.g. {suggestion}"
+            f"fail. Set FORGE_CLOUD_MODEL to one it does offer, {suggestion}"
         )
 
     # -- inference ---------------------------------------------------------
