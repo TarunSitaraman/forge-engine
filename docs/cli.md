@@ -364,6 +364,33 @@ provider changes between modes, and `forge model-test` writes its results to
 recording which provider and model produced them. Both refuse to invent a number
 when the provider is unreachable; they report the unavailability instead.
 
+**On a rate-limited hosted key, pace the run with `--sleep`.** Both evals take
+a minimum interval in seconds between model calls:
+
+```bash
+python3 scripts/assessment_eval.py --provider cloud --model <id> --repeat 3 --sleep 5
+python3 scripts/concept_extraction_eval.py --provider cloud --limit 40 --sleep 5
+```
+
+This is proactive pacing, not backoff, and the distinction is the whole point.
+`FORGE_LLM_MAX_RETRIES` only reacts once the limit has already been hit, and
+raising it sends *more* requests into a limiter that is counting requests.
+Measured on Groq, 2026-09-06: a `--repeat 3` run with `FORGE_LLM_MAX_RETRIES=5`
+spent forty minutes in 60-second backoffs and its third repetition scored 1 of
+21, every case a `retryable_failure`. The same set unpaced the hour before
+scored 16 of 21 twice. Nothing about the model changed.
+
+The interval is measured between call *starts*, so a call that took longer than
+the interval waits not at all, and the wait is subtracted from the reported
+per-case latency so the ms/case column stays a measurement of the model. The
+run prints how long it spent waiting, and `--json` records both the interval
+and the total.
+
+Pace the extraction eval by call rather than by page for a reason: one page is
+up to `--max-spans` concept calls plus the same number of claim calls, so
+pacing pages would leave five of six back to back, which is the burst a limiter
+sees.
+
 Five cases were never enough to establish a rate even for Qwen3. Treat any new
 provider's first run as a smoke test too, and read
 [provider availability](./research/provider-availability.md) §6 before quoting

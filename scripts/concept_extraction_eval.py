@@ -63,7 +63,7 @@ from forge.extraction import CandidateExtractor
 # count a page as thin that the extractor would have extracted from, or the
 # reverse, and the difference would land silently in self-recovery.
 from forge.extraction.extractor import MIN_SPAN_CHARS, _is_navigation, _tokens
-from forge.llm import MockProvider, get_provider
+from forge.llm import MockProvider, get_provider, throttled
 from forge.logging import configure_logging
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -215,6 +215,19 @@ def main() -> int:
         ),
     )
     parser.add_argument("--model", default=None, help="Override the model for this run.")
+    parser.add_argument(
+        "--sleep",
+        type=float,
+        default=0.0,
+        metavar="SECONDS",
+        help=(
+            "Minimum seconds between model calls. One page is up to "
+            "--max-spans concept calls plus the same number of claim calls, so "
+            "this paces calls rather than pages: pacing pages would leave five "
+            "of six back to back, which is the burst a limiter sees. A call "
+            "that took longer than SECONDS does not sleep at all."
+        ),
+    )
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument("--detail", action="store_true", help="Per-page emitted concepts.")
     args = parser.parse_args()
@@ -223,6 +236,13 @@ def main() -> int:
         parser.error("--limit must be 0 (all) or positive")
     if args.max_spans < 1:
         parser.error("--max-spans must be at least 1")
+    if args.sleep < 0:
+        parser.error("--sleep must not be negative")
+    if args.sleep and args.provider == "scripted":
+        parser.error(
+            "--sleep needs a real provider: the scripted one makes no network "
+            "calls and pacing it only makes the run slower"
+        )
     if args.model and args.provider == "scripted":
         parser.error(
             "--model needs a real provider: the scripted one answers from the "
@@ -318,6 +338,10 @@ def main() -> int:
     else:
         provider = get_provider(settings)
         reachable, detail = provider.health()
+        if reachable:
+            # After the health probe: that is one call before any work, and
+            # delaying it only makes an unreachable provider slower to report.
+            provider = throttled(provider, args.sleep)
         if not reachable:
             print(f"provider {args.provider!r} is unavailable: {detail}")
             print("\nNo results. This is reported rather than substituted with a weaker model.")
@@ -394,6 +418,8 @@ def main() -> int:
         "max_spans": args.max_spans,
         "vault": str(settings.vault_path),
         "pages_excluded_as_thin": thin,
+        "min_call_interval_seconds": args.sleep,
+        "throttle_waited_seconds": round(getattr(provider, "slept_seconds", 0.0), 1),
         "concept_pages": len(plan.concepts),
         "scripted": args.provider == "scripted",
     }
@@ -410,7 +436,14 @@ def main() -> int:
             f"excluded   : {thin} page(s) with nothing above the extractor's own floor"
         )
         print(f"sample     : {len(sample)} of {len(eligible)} eligible pages, seed {args.seed}")
-        print(f"provider   : {args.provider}, max-spans {args.max_spans}\n")
+        print(f"provider   : {args.provider}, max-spans {args.max_spans}")
+        if args.sleep:
+            waited = getattr(provider, "slept_seconds", 0.0)
+            print(
+                f"throttle   : >= {args.sleep:g}s between calls, "
+                f"{waited / 60:.1f} min of the wall clock below was waiting"
+            )
+        print()
         print(f"  {report.summary_line()}\n")
         print(
             f"  self-recovery   {report.self_recovery:.3f}   "

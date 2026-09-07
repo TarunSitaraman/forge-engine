@@ -24,6 +24,7 @@ from .base import (
 from .cloud import CloudProvider
 from .mock import MockProvider, fixture_provider, malformed_provider, unavailable_provider
 from .ollama import OllamaProvider
+from .throttle import ThrottledProvider, throttled
 
 log = get_logger(__name__)
 
@@ -159,6 +160,8 @@ __all__ = [
     "ProviderCapabilities",
     "MockProvider",
     "OllamaProvider",
+    "ThrottledProvider",
+    "throttled",
     "fixture_provider",
     "unavailable_provider",
     "malformed_provider",

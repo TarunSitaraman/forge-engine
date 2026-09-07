@@ -477,3 +477,73 @@ one run under a mode nobody knew was on.
 
 Separating the two needs a think-on run of the same scope, which is the next
 measurement.
+
+---
+
+## 10. Retries made rate limiting worse (2026-09-06)
+
+**The runs.** `assessment_eval.py --provider cloud --model qwen/qwen3.8-27b`
+against Groq, three times over about two hours, same model, same prompt, same
+set. What changed between them was the repetition count and, for the last one,
+`FORGE_LLM_MAX_RETRIES`.
+
+| | score range | inconsistent cases | wall clock |
+| ---- | ---- | ---- | ---- |
+| `--repeat 2`, default retries | **16 to 16** of 21 | 0 | ~7 min |
+| `--repeat 3`, default retries | 13 to 16 of 21 | 6 | ~10 min |
+| `--repeat 3`, `FORGE_LLM_MAX_RETRIES=5` | **1 to 16** of 21 | 20 | ~40 min |
+
+Score *ranges* rather than per-run numbers, because that is what the harness
+reports and because a per-run accuracy is computed over measured cases only: a
+run that lost six cases to 429s and one that answered all 21 do not have
+comparable denominators.
+
+Neither of the bottom two rows is a model result and neither must be quoted as
+one. In the last row, nearly every case of the third repetition came back
+`retryable_failure`: the provider answered 429 to six consecutive attempts,
+several of them after 60-second `Retry-After` waits. The run spent most of its
+forty minutes asleep.
+
+**Why raising retries was the wrong lever.** The backoff in `CloudProvider` is
+*reactive*. It starts only once the limit has been hit, and a limiter that is
+counting requests answers a retry by counting it too. Raising the retry ceiling
+therefore does not buy patience, it buys more requests: six attempts per call
+instead of three, each of them evidence to the limiter that the client has not
+backed off. The run spent forty minutes almost entirely asleep and finished
+with less data than the ten-minute run before it.
+
+**What was added instead: `--sleep`.** Both evals now take a minimum interval
+in seconds between model calls, `ThrottledProvider` in `forge.llm.throttle`.
+Three properties, each of which is the reason it is not simply
+`time.sleep(n)` after each call:
+
+* **The interval is between call starts, not a delay bolted onto each call.**
+  The Groq calls in these runs took 9 to 12 seconds each, so a blanket
+  `sleep(5)` would have added five seconds to every one of them for nothing. A
+  call slower than the interval satisfies it on its own and waits not at all.
+* **The unit is the call, not the case.** One page of the concept-extraction
+  eval is up to six calls. Pacing per case would leave five of them
+  back to back, which is precisely the burst a limiter sees.
+* **The wait is subtracted from reported latency.** Otherwise a `--sleep 5` run
+  reports every case as five seconds slower than it was, and the ms/case column
+  silently stops measuring the model. The run prints the total time spent
+  waiting, and `--json` records both the interval and that total, so a paced
+  measurement carries its own pacing.
+
+The throttle wraps the provider *after* `provider_identity` has been read. A
+wrapper that hid `resolve_model` would make every derivation key in a paced run
+record the model as `unknown`, which is silent and would poison the cache; a
+test asserts identity still resolves through it.
+
+**Not paced:** a provider's own internal retries. `structured` repairing a
+malformed response, and `complete` backing off a 429, happen inside the wrapped
+provider and never pass back through the throttle. It flattens the burst its
+caller creates, which is the one worth flattening.
+
+**What still stands from these runs.** The only clean qwen measurement is the
+`--repeat 2` run: **16 of 21, twice, with zero cases answered inconsistently**.
+The `--repeat 3` run at default retries already shows the contamination
+starting, 13 to 16 with six cases inconsistent, and several of those six read
+`no result` rather than a wrong answer. The five it misses are the same five
+`gpt-oss-120b` misses. Everything from the `MAX_RETRIES=5` run is infrastructure
+noise and is recorded here only so nobody re-derives the number and believes it.

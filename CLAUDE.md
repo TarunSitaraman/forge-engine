@@ -17,7 +17,7 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them, `1,205 passed, 42 skipped` becomes `1,247 passed`. See
+   to run them, `1,224 passed, 42 skipped` becomes `1,266 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine*, architecture, ADRs, research,
@@ -44,6 +44,28 @@ are measurement records: renaming the corpus a number was measured
 against would falsify it.
 
 ## Known Stale/Legacy Items
+
+**Raising `FORGE_LLM_MAX_RETRIES` made rate limiting worse, 2026-09-06, and
+`--sleep` is the answer.** Same model, prompt and set on Groq: `--repeat 2` at
+default retries scored 16 to 16 of 21 with zero inconsistent cases in seven
+minutes; the same command with `FORGE_LLM_MAX_RETRIES=5` scored **1 to 16 with
+20 inconsistent cases in forty minutes**, nearly every case a
+`retryable_failure`. The backoff in `CloudProvider` is reactive, so it only
+starts once the limit is hit, and a limiter that counts requests counts the
+retries too. More retries buys more requests, not more patience.
+
+Both evals now take `--sleep SECONDS`, a minimum interval between model calls
+(`forge.llm.throttle`). Three things about it are deliberate and easy to get
+wrong: the interval is between call **starts**, so a call slower than the
+interval waits not at all (Groq calls ran 9 to 12 s; a blanket sleep would have
+added 5 s to each for nothing); the unit is the **call**, not the case, because
+one extraction page is up to six calls and pacing pages leaves five back to
+back; and the wait is **subtracted from reported latency**, or a paced run
+records the flag as the model being slow. The wrapper is applied *after*
+`provider_identity` is read, since hiding `resolve_model` would write
+`unknown` into every derivation key of a paced run. A provider's own internal
+retries are not paced and cannot be from there. See
+`docs/research/provider-availability.md` §10.
 
 **The vault is a second extraction reference set, 2026-09-06, and building
 the harness broke the grounding check.** `scripts/concept_extraction_eval.py`
@@ -677,7 +699,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine, distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,247 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,266 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -702,12 +724,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 1,205 passed, 42 skipped, offline, no model
+python -m pytest tests           # 1,224 passed, 42 skipped, offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,247 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,266 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.

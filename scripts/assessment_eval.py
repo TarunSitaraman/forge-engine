@@ -55,7 +55,7 @@ from forge.evaluation.assessment import (  # noqa: E402
 )
 from forge.evolution import EvidenceAssessor, EvolutionProposer  # noqa: E402
 from forge.evolution.assessor import AssessmentOutcome  # noqa: E402
-from forge.llm import MockProvider, get_provider, provider_identity  # noqa: E402
+from forge.llm import MockProvider, get_provider, provider_identity, throttled  # noqa: E402
 from forge.llm.base import ProviderUnavailable  # noqa: E402
 from forge.storage import SqliteStore  # noqa: E402
 
@@ -259,6 +259,21 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--sleep",
+        type=float,
+        default=0.0,
+        metavar="SECONDS",
+        help=(
+            "Minimum seconds between model calls. Proactive pacing, not "
+            "backoff: FORGE_LLM_MAX_RETRIES only reacts once the limit is "
+            "already hit, and measured on Groq 2026-09-06 raising it to 5 "
+            "made things worse, forty minutes of 60s backoffs and a run that "
+            "scored 1 of 21. Waiting counts against the interval, so a call "
+            "that took longer than SECONDS does not sleep at all, and the "
+            "wait is subtracted from the reported per-case latency."
+        ),
+    )
+    parser.add_argument(
         "--corroborate",
         action="store_true",
         help=(
@@ -270,6 +285,13 @@ def main() -> int:
     args = parser.parse_args()
     if args.repeat < 1:
         parser.error("--repeat must be at least 1")
+    if args.sleep < 0:
+        parser.error("--sleep must not be negative")
+    if args.sleep and args.provider == "scripted":
+        parser.error(
+            "--sleep needs a real provider: the scripted one makes no network "
+            "calls and pacing it only makes the run slower"
+        )
     if args.model and args.provider == "scripted":
         parser.error(
             "--model needs a real provider: the scripted one answers from the "
@@ -314,6 +336,9 @@ def main() -> int:
             shutil.rmtree(workdir, ignore_errors=True)
             return 2
         provider_id, model_id = provider_identity(provider, "analysis")
+        # Wrapped *after* identity is read, so the throttle can never be the
+        # reason a derivation key records the model as "unknown".
+        provider = throttled(provider, args.sleep)
 
     reports: list[AssessmentReport] = []
     total = len(dataset)
@@ -393,6 +418,7 @@ def main() -> int:
 
             result = CaseResult(case_id=case.id, expected=case.expected_classification.value)
             started = time.perf_counter()
+            slept_before = getattr(provider, "slept_seconds", 0.0)
             try:
                 batch = assessor.assess([evidence_span], [claim])
             except ProviderUnavailable as exc:
@@ -401,7 +427,11 @@ def main() -> int:
                 note(result, index + 1)
                 store.close()
                 continue
-            result.latency_ms = (time.perf_counter() - started) * 1000
+            # Throttle wait is not model latency. Without this subtraction a
+            # --sleep 5 run reports every case as five seconds slower than it
+            # was, and the ms/case column stops meaning anything.
+            waited = getattr(provider, "slept_seconds", 0.0) - slept_before
+            result.latency_ms = (time.perf_counter() - started - waited) * 1000
 
             if not batch.ok:
                 result.detail = f"{batch.outcome.value}: {batch.detail[:120]}"
@@ -456,6 +486,8 @@ def main() -> int:
 
     report = reports[0]
     payload: dict = report.to_dict()
+    payload["min_call_interval_seconds"] = args.sleep
+    payload["throttle_waited_seconds"] = round(getattr(provider, "slept_seconds", 0.0), 1)
     if args.repeat > 1:
         payload = {
             "repeat": args.repeat,
@@ -464,6 +496,8 @@ def main() -> int:
             "scripted": scripted,
             "runs": [r.to_dict() for r in reports],
             "stability": stability(reports),
+            "min_call_interval_seconds": args.sleep,
+            "throttle_waited_seconds": round(getattr(provider, "slept_seconds", 0.0), 1),
         }
 
     if args.as_json:
@@ -475,8 +509,15 @@ def main() -> int:
         print(
             "corroborate: "
             + ("on (second pass over SUPPORTS/REFINES)" if corroborate else "OFF")
-            + "\n"
         )
+        if args.sleep:
+            waited = getattr(provider, "slept_seconds", 0.0)
+            print(
+                f"throttle   : >= {args.sleep:g}s between calls, "
+                f"{waited / 60:.1f} min waited in total "
+                f"(subtracted from the per-case latency below)"
+            )
+        print()
         if aborted:
             print("  *** ABANDONED MID-SET, NOT A MEASUREMENT ***\n")
         for index, run in enumerate(reports):
