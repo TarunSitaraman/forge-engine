@@ -560,6 +560,42 @@ class TestIdentityConfig:
         with pytest.raises(ValueError, match="not an identity"):
             service.decide("Heap", "invented/Heap")
 
+    def test_an_alias_written_by_the_cli_is_honoured_by_the_matcher(self, tmp_path):
+        """The matcher has always followed aliases; nothing could write one.
+
+        The first real extraction run made the gap concrete: `rag.md` becomes
+        the concept `rag`, a model reading that page calls the same thing
+        `Retrieval-Augmented Generation`, and with no alias between them the
+        extractor proposes a second concept for a page that already has one.
+        """
+        from typer.testing import CliRunner
+
+        from forge.cli.main import app
+        from forge.identity import IdentityConfig
+
+        vault = tmp_path / "vault"
+        (vault / ".forge").mkdir(parents=True)
+        (vault / "config").mkdir()
+
+        result = CliRunner().invoke(
+            app,
+            [
+                "identity",
+                "alias",
+                "--vault",
+                str(vault),
+                "Retrieval-Augmented Generation",
+                "rag",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        saved = IdentityConfig.load(vault / "config" / "concept-identity.yaml")
+        assert saved.alias_target("Retrieval-Augmented Generation") == "rag"
+        assert saved.alias_target("retrieval augmented generation") == "rag", (
+            "the alias must be stored normalized, or only one spelling resolves"
+        )
+
     def test_clear_returns_to_undecided(self):
         service = IdentityService(IdentityConfig())
         service.scaffold({"heap": ["DSA/01_Patterns/Heap.md", "DSA/03_DataStructures/Heap.md"]})

@@ -17,7 +17,7 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them, `1,409 passed, 42 skipped` becomes `1,451 passed`. See
+   to run them, `1,410 passed, 42 skipped` becomes `1,452 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine*, architecture, ADRs, research,
@@ -44,6 +44,24 @@ are measurement records: renaming the corpus a number was measured
 against would falsify it.
 
 ## Known Stale/Legacy Items
+
+**`forge identity alias`, 2026-09-07.** The matcher has consulted
+config-declared aliases since Phase 3 — `ConceptMatcher.match` checks
+`IdentityState.ALIAS_MATCH` before anything else — and `IdentityConfig` could
+store and round-trip them. **Nothing could write one but a hand edit**, so the
+map was empty on the only vault that exists, and the feature was dead in
+practice while looking alive in the code.
+
+The first extraction run made the cost concrete. `Technologies/Docs/rag.md`
+becomes the concept `rag` by filename. A model reading that page calls the same
+thing `Retrieval-Augmented Generation`. `normalize()` maps those to `rag` and
+`retrievalaugmentedgeneration`, so no lexical route connects them, and the
+extractor correctly proposed a **new** concept for a page that already had one
+— the vault's one-canonical-home rule broken by the tool built to enforce it.
+
+Worth separating the two failures, because only one is the engine's: matching
+did exactly what it should with the configuration it had. The defect was that
+the configuration could not be written.
 
 **The first real extraction run, and what it measured, 2026-09-07.**
 `Technologies/Docs/rag.md` through `openai/gpt-oss-120b` on Groq: 4 spans, 8
@@ -1093,7 +1111,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine, distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,451 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,452 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -1118,12 +1136,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 1,409 passed, 42 skipped, offline, no model
+python -m pytest tests           # 1,410 passed, 42 skipped, offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,451 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,452 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.

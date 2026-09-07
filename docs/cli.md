@@ -1225,16 +1225,30 @@ milliseconds.
 Record explicit decisions about colliding concept names. No LLM is involved.
 
 ```bash
-forge identity scaffold                          # document collisions, decide none
+forge identity scaffold
 forge identity list
 forge identity decide Heap data-structure/Heap
-forge identity clear Heap                        # back to undecided
+forge identity clear Heap
+forge identity alias "Retrieval-Augmented Generation" rag
 ```
 
 `scaffold` writes `config/concept-identity.yaml` with every collision found in
 the vault and **no defaults set**. Re-running it preserves decisions already
 made. `decide` refuses a qualified name that is not one of the collision's
-actual identities.
+actual identities, and `clear` returns one to undecided.
+
+**`alias` is what you need after a real extraction run.** A page named
+`rag.md` becomes the concept `rag`; a model reading that page calls the same
+thing `Retrieval-Augmented Generation`. Nothing connects the two names, so the
+extractor proposes a *second* concept for a page that already has one — the
+one-canonical-home rule broken by the tool meant to enforce it. An alias says
+the two names are one thing, and the matcher has honoured aliases since Phase
+3; until 2026-09-07 nothing but a hand edit could write one.
+
+Aliases are stored normalized, so `Retrieval Augmented Generation` and
+`retrieval-augmented generation` resolve through the same entry. Recording one
+changes what the name means from then on; proposals already raised are still
+yours to approve or reject.
 
 ---
 

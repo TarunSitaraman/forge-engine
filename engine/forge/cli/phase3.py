@@ -752,6 +752,38 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             typer.echo(f"{name!r} now resolves to {qualified!r}")
             typer.echo(f"recorded in {path}")
 
+    @identity_app.command("alias")
+    def identity_alias(
+        alias: str = typer.Argument(..., help="The other name, e.g. 'Retrieval-Augmented Generation'."),
+        canonical: str = typer.Argument(..., help="What it means, e.g. 'rag'."),
+        vault: Optional[Path] = typer.Option(None),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Record that one name means an existing concept.
+
+        The matcher has always honoured aliases; nothing could write one but a
+        hand edit. The first real extraction run made the gap obvious: a page
+        named `rag.md` becomes the concept `rag`, a model reading that page
+        calls the same thing `Retrieval-Augmented Generation`, and with no
+        alias between them the extractor proposes a *second* concept for a page
+        that already has one — which is the vault's one-canonical-home rule
+        broken by the tool meant to enforce it.
+
+        Nothing is merged retroactively. This decides what the name means from
+        here on; proposals already raised are still yours to approve or reject.
+        """
+        settings = settings_factory(vault)
+        service = _identity_service(settings)
+        if not alias.strip() or not canonical.strip():
+            typer.echo("both names are required", err=True)
+            raise typer.Exit(code=2)
+        service.config.record_alias(alias, canonical)
+        path = service.config.save(settings.vault_path / "config" / "concept-identity.yaml")
+
+        if not _emit({"alias": alias, "canonical": canonical, "path": str(path)}, json_out):
+            typer.echo(f"{alias!r} now means {canonical!r}")
+            typer.echo(f"recorded in {path}")
+
     @identity_app.command("clear")
     def identity_clear(
         name: str = typer.Argument(...),
