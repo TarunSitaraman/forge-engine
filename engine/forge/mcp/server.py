@@ -30,19 +30,26 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from ..api import queries
 from ..api.models import (
+    BeliefResponse,
+    ChangeResponse,
     ClaimDetail,
     ClaimPage,
     ConceptDetail,
     ConceptPage,
     EvidenceItem,
+    GapResponse,
     NeighborItem,
     PathResponse,
+    QuestionDetail,
+    QuestionEvidenceItem,
+    QuestionSummary,
     RevisionItem,
     SearchHit,
     SourcePage,
     SourceSummary,
     SpanDetail,
     StatsResponse,
+    SynthesisSummary,
 )
 from ..config import Settings
 from ..storage import SqliteStore
@@ -60,6 +67,16 @@ it: a model's inference and a human's assertion are different kinds of thing.
 
 To go from a claim to what supports it, call `get_claim`, which returns the
 evidence chain and each span's verbatim text in one call.
+
+The research tools answer questions a search box cannot. `get_belief` gives
+what is held about a concept *and* what disagrees with it; `list_gaps` reports
+what the model does not hold, by graph query rather than by guessing;
+`get_changes` reads the revision log. None of them calls a model, so none of
+them can invent a finding.
+
+There are no confidence scores anywhere, deliberately. A number a model emits
+about its own certainty is not a measurement. Judge a claim by its provenance
+tier and its evidence, and say so that way.
 
 Everything here is read-only. Knowledge changes only through Forge's proposal
 and activation path, which requires a human decision.
@@ -234,5 +251,97 @@ def create_server(settings: Settings | None = None, *, db_path: Path | None = No
         """
         with opened() as store:
             return guard(queries.find_path, store, source, target, max_depth=max_depth)
+
+    # -- research intelligence (Phase 9) -----------------------------------
+
+    @server.tool(name="get_belief")
+    def get_belief(concept_id: str) -> BeliefResponse:
+        """What is currently believed about a concept, and what disagrees.
+
+        Use this rather than `list_claims` when the user asks what they think
+        about something. It separates claims still held from ones disputed or
+        superseded, lists the sources the held ones rest on, and reports
+        dissent: disputed claims, superseded ones, and conflicts still awaiting
+        a human. Report the dissent; a belief presented without it is the
+        failure this system exists to prevent.
+
+        There is no confidence score, on purpose. Judge by provenance tier and
+        by how many sources support a claim.
+        """
+        with opened() as store:
+            return guard(queries.get_belief, store, concept_id)
+
+    @server.tool(name="list_questions")
+    def list_questions(status: str | None = None) -> list[QuestionSummary]:
+        """Research questions the user has recorded.
+
+        `status` is `open`, `partially_answered` or `answered`. Omit it for all
+        of them. Questions are always asked by a human; Forge does not invent
+        them.
+        """
+        with opened() as store:
+            return guard(queries.list_questions, store, status=status)
+
+    @server.tool(name="get_question")
+    def get_question(question_id: str) -> QuestionDetail:
+        """One research question with the claims that answer it."""
+        with opened() as store:
+            return guard(queries.get_question, store, question_id)
+
+    @server.tool(name="get_question_evidence")
+    def get_question_evidence(question_id: str, limit: int = 10) -> list[QuestionEvidenceItem]:
+        """Source spans bearing on a question that are not yet cited in an answer.
+
+        Retrieval scoped by the question rather than by a keyword, and it
+        deliberately excludes evidence already used, so what comes back is what
+        has not been read into the answer yet.
+        """
+        with opened() as store:
+            return guard(queries.get_question_evidence, store, question_id, limit=limit)
+
+    @server.tool(name="list_gaps")
+    def list_gaps(kinds: str | None = None, limit: int = 50) -> GapResponse:
+        """What the knowledge model does not hold, by deterministic graph query.
+
+        Every finding is a structural fact: a concept with no claims, an open
+        question with no answers, a claim resting on one source, an unresolved
+        dispute, a concept with no edges. Whether a gap matters is the user's
+        call, so report them and do not act on them.
+
+        `weight` orders the report and is not a probability. `saturated` names
+        kinds that describe the whole corpus rather than any one subject; pass
+        that kind in `kinds` (comma-separated) to list its instances.
+        """
+        with opened() as store:
+            return guard(queries.list_gaps, store, kinds=kinds, limit=limit)
+
+    @server.tool(name="get_changes")
+    def get_changes(days: int = 30) -> ChangeResponse:
+        """What changed in the knowledge model over the last `days` days.
+
+        Read from the revision log, so a claim created, disputed and superseded
+        inside the window shows as three movements rather than one net diff.
+        `causes` says what triggered the changes.
+        """
+        with opened() as store:
+            return guard(queries.get_changes, store, days=days)
+
+    @server.tool(name="list_syntheses")
+    def list_syntheses(stale: bool | None = None) -> list[SynthesisSummary]:
+        """Generated aggregates over claims, with whether each has gone stale.
+
+        A synthesis is the object most likely to be mistaken for evidence. It
+        is not evidence. If `stale` is true the claims it was written from have
+        since changed, and `stale_reason` says which; do not repeat a stale
+        synthesis without saying so.
+        """
+        with opened() as store:
+            return guard(queries.list_syntheses, store, stale=stale)
+
+    @server.tool(name="get_synthesis")
+    def get_synthesis(synthesis_id: str) -> SynthesisSummary:
+        """One synthesis by id, with its staleness and the claims behind it."""
+        with opened() as store:
+            return guard(queries.get_synthesis, store, synthesis_id)
 
     return server

@@ -543,10 +543,84 @@ Where the vision's questions become answerable.
   changed this month"), relevance-to-open-question retrieval.
 - W3 re-synthesis workflow.
 
+**Delivered, 2026-09-07**
+- `Question` and `Synthesis` entities, schema v5, with a tested v4 upgrade.
+- `KnowledgeGap` **computed, never stored**: a stored gap is wrong the moment
+  the missing claim arrives and nothing would notice. The cost is that a user
+  cannot yet dismiss a gap they disagree with, which is a real follow-up.
+- `forge.research`: belief, change and gap queries plus question-scoped
+  retrieval. Zero model calls anywhere in the package.
+- `forge question add|list`, `forge gaps`, `forge changes`, `forge belief`, and
+  eight new capabilities in **both** the HTTP API and MCP, which the Phase 8
+  parity tests now hold to 22.
+
 **Gate**
-- [ ] All six vision questions answerable with sources and dissent
-- [ ] Gap detection produces findings a human agrees are real gaps
-- [ ] Syntheses auto-mark stale when constituent claims change
+- [x] **All six vision questions answerable with sources and dissent.** One
+      test per question, named for it.
+
+      "Dissent" needed care. Forge has no `CONTRADICTS` edge on purpose: Phase
+      4 produces `POTENTIAL_CONFLICT` and routes it to a human rather than
+      asserting a contradiction a model detected. So dissent is reported as the
+      three real things it can be, a disputed claim, a superseded one, and a
+      conflict proposal awaiting review, and never as a verdict.
+
+      There is also **no confidence score**, which the vision's table asks for
+      as "claims with confidence". `forge.evolution.impact` refuses to invent
+      one, and it is right: a number a model emits about its own certainty is
+      not a measurement. A belief returns every held claim with how it was
+      derived, which is strictly more information than a single score. Building
+      this found that the Phase 6 API had been publishing a `confidence` field
+      read off a `Provenance` that has no such attribute, so it was `null` in
+      every response ever served, quietly suggesting the system calibrates.
+      Removed.
+- [ ] **Gap detection produces findings a human agrees are real gaps.** *The
+      code half is done and the judgement half is not mine to make.* Five
+      deterministic rules, each tested to fire on exactly the structure it
+      claims and stay silent otherwise. Run over the real vault graph:
+
+      | finding | count |
+      | ---- | ---- |
+      | `concept_without_claims` | 544 of 545 |
+      | `isolated_concept` | **72** |
+      | `claim_with_single_source` | 1 |
+
+      That run changed the design. 544 of 545 is *one* fact about the state of
+      extraction, not 544 gaps, and printing it buries the 72 isolated concepts
+      underneath it, which are individually actionable. A kind that applies to
+      most of its population is now summarised in one line, with the instances
+      still counted and still listable by naming that kind. A second run found
+      the corner: at a population of one, any finding is trivially "100%
+      saturated", so a legitimate single-source finding was summarised away.
+      There is now a minimum population.
+
+      **What is left is a human reading the 72 and saying whether they are real
+      gaps.** No test can establish that, and this box stays open until it
+      happens.
+- [x] **Syntheses auto-mark stale when constituent claims change.** Computed
+      deterministically, never by a model: the store snapshots a fingerprint of
+      every constituent claim at generation, and a later write compares.
+
+      The fingerprint is status, tier, statement and supersession, not a hash
+      of the whole claim: `created_at` and provenance bookkeeping move without
+      changing what a claim asserts, and staleness that fires on those would
+      cry wolf until nobody read it. A test pins both directions, including
+      that an identical rewrite does *not* stale anything, which matters
+      because re-ingestion rewrites claims constantly.
+
+      Writing the tests found the hole: `supersede_claim` writes through raw
+      SQL rather than `put_claim`, so it bypassed the hook entirely. A
+      superseded claim is the clearest case for staling work written from it,
+      and it was the one case that missed. Fixed and pinned.
+      `recheck_synthesis_staleness` also re-derives the invariant from the data
+      alone, for the paths no hook can see: a restore, an external edit, a bug
+      in the hook.
+
+**Not built: the W3 re-synthesis workflow.** Staleness detection is the gated
+half and is done; *generating* a replacement synthesis needs a model, a prompt,
+and an eval to know whether the output is worth trusting. Shipping generation
+without measuring it is the thing this project has repeatedly refused to do,
+and there is no reason to start here. `list_syntheses --stale` is the queue W3
+would consume.
 
 ---
 

@@ -22,29 +22,39 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from ..domain import EntityType
+from ..domain import EntityType, GapKind, QuestionStatus
 from ..graph import KnowledgeGraph
 from ..storage import SqliteStore
 from .models import (
+    BeliefResponse,
+    ChangeResponse,
     ClaimDetail,
     ClaimPage,
     ClaimSummary,
     ConceptDetail,
     ConceptPage,
     ConceptSummary,
+    DissentItem,
     EvidenceItem,
+    GapItem,
+    GapResponse,
     NeighborItem,
     OriginProposal,
     OriginSpan,
     PathEdge,
     PathResponse,
     Provenance,
+    QuestionDetail,
+    QuestionEvidenceItem,
+    QuestionSummary,
     RevisionItem,
+    SaturatedKind,
     SearchHit,
     SourcePage,
     SourceSummary,
     SpanDetail,
     StatsResponse,
+    SynthesisSummary,
 )
 
 #: Ceiling on any listing, whatever a caller asks for. The vault has 545
@@ -80,7 +90,6 @@ def _provenance(prov: Any) -> Provenance:
     return Provenance(
         tier=prov.tier.value,
         derivation=prov.derivation.value,
-        confidence=getattr(prov, "confidence", None),
         model_id=getattr(prov, "model_id", None),
         agent=getattr(prov, "agent", None),
     )
@@ -429,6 +438,219 @@ def find_path(
     )
 
 
+# --------------------------------------------------------------------------
+# Phase 9: research intelligence
+# --------------------------------------------------------------------------
+
+
+def _question_summary(question: Any, answer_count: int = 0) -> QuestionSummary:
+    return QuestionSummary(
+        id=question.id,
+        text=question.text,
+        status=question.status.value,
+        tags=list(question.tags),
+        note=question.note,
+        concept_ids=list(question.concept_ids),
+        created_at=question.created_at.isoformat(),
+        resolved_at=question.resolved_at.isoformat() if question.resolved_at else None,
+        provenance=_provenance(question.provenance),
+        answer_count=answer_count,
+    )
+
+
+def _synthesis_summary(synthesis: Any) -> SynthesisSummary:
+    return SynthesisSummary(
+        id=synthesis.id,
+        scope=synthesis.scope.value,
+        scope_id=synthesis.scope_id,
+        body=synthesis.body,
+        source_claim_ids=list(synthesis.source_claim_ids),
+        provenance=_provenance(synthesis.provenance),
+        prompt_version=synthesis.prompt_version,
+        generated_at=synthesis.generated_at.isoformat(),
+        stale=synthesis.stale,
+        stale_reason=synthesis.stale_reason,
+        superseded_by=synthesis.superseded_by,
+    )
+
+
+def get_belief(store: SqliteStore, concept_id: str) -> BeliefResponse:
+    """What is currently believed about one concept, with supports and dissent.
+
+    Questions 1 and 2 of the vision's six, answered together because they are
+    one question: a belief with no account of what disagrees with it is the
+    failure mode the whole system exists to prevent.
+    """
+    from ..research import belief_for_concept
+
+    belief = belief_for_concept(store, concept_id)
+    if belief is None:
+        raise NotFound("concept", concept_id)
+
+    def summarise(claims):
+        return [_claim_summary(c, len(store.evidence_for_claim(c.id))) for c in claims]
+
+    return BeliefResponse(
+        concept_id=belief.concept_id,
+        concept_name=belief.concept_name,
+        held=summarise(belief.held),
+        disputed=summarise(belief.disputed),
+        superseded=summarise(belief.superseded),
+        supporting_sources=belief.supporting_sources,
+        dissent=[DissentItem(**d.to_dict()) for d in belief.dissent],
+        unevidenced=belief.unevidenced,
+        is_settled=belief.is_settled,
+    )
+
+
+def list_questions(store: SqliteStore, *, status: str | None = None) -> list[QuestionSummary]:
+    """Research questions, optionally filtered by status.
+
+    Question 4 of the six is `status="open"`.
+    """
+    if status is not None:
+        try:
+            wanted = QuestionStatus(status)
+        except ValueError:
+            raise BadRequest(
+                f"unknown question status {status!r}; expected one of "
+                f"{', '.join(s.value for s in QuestionStatus)}"
+            ) from None
+    else:
+        wanted = None
+    return [
+        _question_summary(q, len(store.answers_for_question(q.id)))
+        for q in store.list_questions(wanted)
+    ]
+
+
+def get_question(store: SqliteStore, question_id: str) -> QuestionDetail:
+    """One question with the claims that answer it."""
+    question = store.get_question(question_id)
+    if question is None:
+        raise NotFound("question", question_id)
+    answers = list(store.answers_for_question(question_id))
+    return QuestionDetail(
+        **_question_summary(question, len(answers)).model_dump(),
+        answers=[_claim_summary(c, len(store.evidence_for_claim(c.id))) for c in answers],
+    )
+
+
+def get_question_evidence(
+    store: SqliteStore, question_id: str, *, limit: int = 10
+) -> list[QuestionEvidenceItem]:
+    """Spans that bear on an open question and are not yet cited in an answer.
+
+    Question 6 of the six. Retrieval scoped by the question rather than by a
+    keyword, and deliberately excluding what has already been read into the
+    answer: returning that would be a search box with extra steps.
+    """
+    from ..research import evidence_for_question
+
+    if store.get_question(question_id) is None:
+        raise NotFound("question", question_id)
+    limit, _ = _bounds(limit, 0)
+
+    out: list[QuestionEvidenceItem] = []
+    for span_id, score, citation in evidence_for_question(store, question_id, limit=limit):
+        span = store.get_span(span_id)
+        document = store.get_document(span.document_id) if span else None
+        source = store.get_source(document.source_id) if document else None
+        out.append(
+            QuestionEvidenceItem(
+                span_id=span_id,
+                score=score,
+                citation=citation,
+                text=span.text if span else "",
+                source_locator=source.locator if source else None,
+                trust_tier=source.trust_tier.value if source else None,
+            )
+        )
+    return out
+
+
+def list_gaps(
+    store: SqliteStore, *, kinds: str | None = None, limit: int = 50
+) -> GapResponse:
+    """What the model does not hold, by deterministic graph query.
+
+    Question 5 of the six. `kinds` is a comma-separated list; naming a kind
+    explicitly enumerates it even when it saturates the corpus.
+    """
+    from ..research import gap_report
+
+    wanted: list[GapKind] | None = None
+    if kinds:
+        wanted = []
+        for raw in kinds.split(","):
+            name = raw.strip()
+            if not name:
+                continue
+            try:
+                wanted.append(GapKind(name))
+            except ValueError:
+                raise BadRequest(
+                    f"unknown gap kind {name!r}; expected one of "
+                    f"{', '.join(k.value for k in GapKind)}"
+                ) from None
+
+    limit, _ = _bounds(limit, 0)
+    report = gap_report(store, kinds=wanted or None, limit=limit)
+    return GapResponse(
+        total=report.total,
+        returned=report.returned,
+        by_kind=report.by_kind,
+        saturated=[SaturatedKind(**s) for s in report.saturated],
+        gaps=[
+            GapItem(
+                id=g.id,
+                kind=g.kind.value,
+                subject_id=g.subject_id,
+                subject_type=g.subject_type,
+                subject_label=g.subject_label,
+                detail=g.detail,
+                weight=round(g.weight, 3),
+                evidence=list(g.evidence),
+                detected_by=f"forge.research.gaps:{g.kind.value}",
+            )
+            for g in report.gaps
+        ],
+    )
+
+
+def get_changes(store: SqliteStore, *, days: int = 30) -> ChangeResponse:
+    """What changed in the model over the last `days` days.
+
+    Question 3 of the six. Read from the revision log rather than by diffing
+    snapshots, because a diff shows only the endpoints: a claim created,
+    disputed and superseded inside the window is three facts about how
+    understanding moved, and a diff would show one.
+    """
+    from ..research import changes_since
+
+    if days < 1:
+        raise BadRequest("a change window needs at least one day")
+    report = changes_since(store, days=days)
+    return ChangeResponse(**report.to_dict())
+
+
+def list_syntheses(store: SqliteStore, *, stale: bool | None = None) -> list[SynthesisSummary]:
+    """Generated aggregates, with whether each has gone stale.
+
+    A stale synthesis is never hidden and never silently trusted: it is
+    returned, marked, with the deterministic reason it went stale.
+    """
+    return [_synthesis_summary(s) for s in store.list_syntheses(stale=stale)]
+
+
+def get_synthesis(store: SqliteStore, synthesis_id: str) -> SynthesisSummary:
+    """One synthesis by id."""
+    synthesis = store.get_synthesis(synthesis_id)
+    if synthesis is None:
+        raise NotFound("synthesis", synthesis_id)
+    return _synthesis_summary(synthesis)
+
+
 #: Every knowledge capability, named once. Both interfaces are checked against
 #: this, so an addition that reaches only one of them fails the suite.
 #:
@@ -451,4 +673,13 @@ CAPABILITIES: dict[str, Callable[..., Any]] = {
     "list_recent_revisions": list_recent_revisions,
     "search_spans": search_spans,
     "find_path": find_path,
+    # Phase 9 — the six vision questions.
+    "get_belief": get_belief,
+    "list_questions": list_questions,
+    "get_question": get_question,
+    "get_question_evidence": get_question_evidence,
+    "list_gaps": list_gaps,
+    "get_changes": get_changes,
+    "list_syntheses": list_syntheses,
+    "get_synthesis": get_synthesis,
 }

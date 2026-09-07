@@ -265,6 +265,11 @@ def test_gate_one_every_tool_result_carries_some_provenance(server, http):
     """
     concept_id, claim_id, span_id = ids(http)
     source_id = http.get("/sources").json()["items"][0]["id"]
+    # What counts as attribution differs by kind of result, and each of these
+    # is a real answer to "where did this come from": derived knowledge has a
+    # provenance tier, quoted source material has a trust tier and a locator, a
+    # revision has the cause that triggered it, and a derived *report* names the
+    # deterministic procedure that produced it.
     attribution = {
         "provenance",
         "trust_tier",
@@ -273,6 +278,9 @@ def test_gate_one_every_tool_result_carries_some_provenance(server, http):
         "citation",
         "cause",
         "op",
+        "detected_by",
+        "derived_by",
+        "supporting_sources",
     }
 
     invocations = {
@@ -287,12 +295,28 @@ def test_gate_one_every_tool_result_carries_some_provenance(server, http):
         "list_entity_revisions": {"entity_type": "Concept", "entity_id": concept_id},
         "list_recent_revisions": {},
         "search_spans": {"q": "leaves"},
+        # Phase 9.
+        "get_belief": {"concept_id": concept_id},
+        "list_gaps": {},
+        "get_changes": {},
     }
     # Three capabilities cannot be swept on this fixture, and each has its own
     # test rather than being skipped silently: `get_stats` returns counts
     # rather than entities, and `find_path` and `list_concept_neighbors` need
     # an edge, which the `linked` fixture supplies.
-    uncovered = {"get_stats", "find_path", "list_concept_neighbors"}
+    # Phase 9 adds five more that this fixture cannot sweep: it has no
+    # questions and no syntheses, so those capabilities correctly return
+    # nothing. Each has its own test rather than being skipped silently.
+    uncovered = {
+        "get_stats",
+        "find_path",
+        "list_concept_neighbors",
+        "list_questions",
+        "get_question",
+        "get_question_evidence",
+        "list_syntheses",
+        "get_synthesis",
+    }
     assert set(invocations) | uncovered == set(queries.CAPABILITIES)
 
     def attributed(record: dict) -> bool:

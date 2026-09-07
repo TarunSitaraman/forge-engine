@@ -38,9 +38,12 @@ from ..domain import (
     Proposal,
     ProposalStatus,
     ProposalType,
+    Question,
+    QuestionStatus,
     Revision,
     Source,
     Span,
+    Synthesis,
     WorkflowRun,
     WorkflowStatus,
     record_change,
@@ -54,7 +57,7 @@ from ..domain import (
 
 log = get_logger(__name__)
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -218,6 +221,60 @@ CREATE TABLE IF NOT EXISTS workflows (
 );
 CREATE INDEX IF NOT EXISTS idx_workflows_status ON workflows(status);
 CREATE INDEX IF NOT EXISTS idx_workflows_source ON workflows(source_id);
+
+-- Phase 9. `questions` and `syntheses` are stored; KnowledgeGap deliberately
+-- is not, because a stored gap is wrong the moment the missing claim arrives
+-- and nothing would notice. Gaps are recomputed from the graph on demand.
+CREATE TABLE IF NOT EXISTS questions (
+    id         TEXT PRIMARY KEY,
+    status     TEXT NOT NULL,
+    text       TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    data       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_questions_status ON questions(status);
+
+CREATE TABLE IF NOT EXISTS syntheses (
+    id           TEXT PRIMARY KEY,
+    scope        TEXT NOT NULL,
+    scope_id     TEXT,
+    stale        INTEGER NOT NULL DEFAULT 0,
+    generated_at TEXT NOT NULL,
+    data         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_syntheses_scope ON syntheses(scope, scope_id);
+CREATE INDEX IF NOT EXISTS idx_syntheses_stale ON syntheses(stale);
+
+-- One row per constituent claim, holding the claim's state *at generation*.
+-- Staleness is then a comparison rather than a judgement: if the claim differs
+-- from what is recorded here, the synthesis was written from something that
+-- has since moved.
+--
+-- The canonical model says "status or confidence". Forge has no confidences:
+-- `forge.evolution.impact` refuses to invent one, because a number a model
+-- emits about its own certainty is not a measurement. So the fingerprint is
+-- what a claim actually has and what actually changes its meaning: its status,
+-- its tier, its text, and whether it has been superseded. That is strictly
+-- more than status alone, and none of it is invented.
+CREATE TABLE IF NOT EXISTS synthesis_claims (
+    synthesis_id TEXT NOT NULL REFERENCES syntheses(id) ON DELETE CASCADE,
+    claim_id     TEXT NOT NULL,
+    status       TEXT NOT NULL,
+    fingerprint  TEXT NOT NULL,
+    PRIMARY KEY (synthesis_id, claim_id)
+);
+CREATE INDEX IF NOT EXISTS idx_synthesis_claims_claim ON synthesis_claims(claim_id);
+
+-- Claims that answer a question. The edge is a human's or a workflow's
+-- assertion that this claim bears on that question, kept separate from
+-- claim_links because its endpoints are different kinds of thing.
+CREATE TABLE IF NOT EXISTS question_answers (
+    question_id TEXT NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    claim_id    TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (question_id, claim_id)
+);
+CREATE INDEX IF NOT EXISTS idx_question_answers_claim ON question_answers(claim_id);
 """
 
 
@@ -599,6 +656,11 @@ class SqliteStore:
                 )
             if existing is None:
                 self._append(record_create(EntityType.CLAIM, claim.id, _as_dict(claim)))
+        # "The moment any constituent claim changes status or confidence."
+        # Outside the transaction above so a synthesis update cannot roll back
+        # the claim write that caused it: the claim is the fact, staleness is
+        # bookkeeping about it.
+        self._mark_dependent_syntheses_stale(claim)
 
     def get_claim(self, claim_id: str) -> Claim | None:
         row = self._one("SELECT data FROM claims WHERE id = ?", (claim_id,))
@@ -659,6 +721,11 @@ class SqliteStore:
                 )
             )
             self._append(record_create(EntityType.CLAIM, new_claim.id, _as_dict(new_claim)))
+        # Supersession writes the retired claim through raw SQL rather than
+        # `put_claim`, so the staleness hook there never sees it. A superseded
+        # claim is the clearest case there is for staling work written from it,
+        # and it was the one case the hook missed. Found by a Phase 9 test.
+        self._mark_dependent_syntheses_stale(retired)
 
     # -- links -------------------------------------------------------------
 
@@ -1005,6 +1072,201 @@ class SqliteStore:
 
     # -- helpers -----------------------------------------------------------
 
+    # -- Phase 9: questions ------------------------------------------------
+
+    def put_question(self, question: Question) -> None:
+        existing = self.get_question(question.id)
+        with self._conn:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO questions(id, status, text, created_at, data)"
+                " VALUES(?,?,?,?,?)",
+                (
+                    question.id,
+                    question.status.value,
+                    question.text,
+                    question.created_at.isoformat(),
+                    _dump(question),
+                ),
+            )
+            if existing is None:
+                self._append(record_create(EntityType.QUESTION, question.id, _as_dict(question)))
+            elif _as_dict(existing) != _as_dict(question):
+                self._append(
+                    record_change(
+                        EntityType.QUESTION,
+                        question.id,
+                        _as_dict(existing),
+                        _as_dict(question),
+                    )
+                )
+
+    def get_question(self, question_id: str) -> Question | None:
+        row = self._one("SELECT data FROM questions WHERE id = ?", (question_id,))
+        return Question.model_validate_json(row["data"]) if row else None
+
+    def list_questions(self, status: QuestionStatus | None = None) -> Sequence[Question]:
+        if status is None:
+            rows = self._all("SELECT data FROM questions ORDER BY created_at")
+        else:
+            rows = self._all(
+                "SELECT data FROM questions WHERE status = ? ORDER BY created_at",
+                (status.value,),
+            )
+        return [Question.model_validate_json(r["data"]) for r in rows]
+
+    def link_answer(self, question_id: str, claim_id: str) -> None:
+        """Record that a claim bears on a question. Idempotent."""
+        with self._conn:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO question_answers(question_id, claim_id, created_at)"
+                " VALUES(?,?,?)",
+                (question_id, claim_id, utc_now().isoformat()),
+            )
+
+    def answers_for_question(self, question_id: str) -> Sequence[Claim]:
+        rows = self._all(
+            "SELECT c.data AS data FROM question_answers qa"
+            " JOIN claims c ON c.id = qa.claim_id"
+            " WHERE qa.question_id = ? ORDER BY qa.created_at",
+            (question_id,),
+        )
+        return [Claim.model_validate_json(r["data"]) for r in rows]
+
+    # -- Phase 9: syntheses and the staleness invariant ---------------------
+
+    def put_synthesis(self, synthesis: Synthesis) -> None:
+        """Store a synthesis and snapshot the state of every claim it rests on.
+
+        The snapshot is what makes staleness a comparison rather than a
+        judgement: a later check asks whether any constituent claim's status or
+        confidence differs from what was recorded here.
+        """
+        existing = self.get_synthesis(synthesis.id)
+        with self._conn:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO syntheses(id, scope, scope_id, stale, generated_at, data)"
+                " VALUES(?,?,?,?,?,?)",
+                (
+                    synthesis.id,
+                    synthesis.scope.value,
+                    synthesis.scope_id,
+                    int(synthesis.stale),
+                    synthesis.generated_at.isoformat(),
+                    _dump(synthesis),
+                ),
+            )
+            self._conn.execute(
+                "DELETE FROM synthesis_claims WHERE synthesis_id = ?", (synthesis.id,)
+            )
+            for claim_id in synthesis.source_claim_ids:
+                claim = self.get_claim(claim_id)
+                self._conn.execute(
+                    "INSERT INTO synthesis_claims(synthesis_id, claim_id, status, fingerprint)"
+                    " VALUES(?,?,?,?)",
+                    (
+                        synthesis.id,
+                        claim_id,
+                        claim.status.value if claim else "missing",
+                        claim_fingerprint(claim) if claim else "missing",
+                    ),
+                )
+            if existing is None:
+                self._append(
+                    record_create(EntityType.SYNTHESIS, synthesis.id, _as_dict(synthesis))
+                )
+
+    def get_synthesis(self, synthesis_id: str) -> Synthesis | None:
+        row = self._one("SELECT data FROM syntheses WHERE id = ?", (synthesis_id,))
+        return Synthesis.model_validate_json(row["data"]) if row else None
+
+    def list_syntheses(self, *, stale: bool | None = None) -> Sequence[Synthesis]:
+        if stale is None:
+            rows = self._all("SELECT data FROM syntheses ORDER BY generated_at DESC")
+        else:
+            rows = self._all(
+                "SELECT data FROM syntheses WHERE stale = ? ORDER BY generated_at DESC",
+                (int(stale),),
+            )
+        return [Synthesis.model_validate_json(r["data"]) for r in rows]
+
+    def syntheses_for_claim(self, claim_id: str) -> Sequence[Synthesis]:
+        rows = self._all(
+            "SELECT s.data AS data FROM synthesis_claims sc"
+            " JOIN syntheses s ON s.id = sc.synthesis_id WHERE sc.claim_id = ?",
+            (claim_id,),
+        )
+        return [Synthesis.model_validate_json(r["data"]) for r in rows]
+
+    def _mark_dependent_syntheses_stale(self, claim: Claim) -> None:
+        """Stale every synthesis whose snapshot of this claim no longer matches.
+
+        Deterministic and cheap: a status string and a float, compared. Never a
+        model call, which is the point of the invariant — "does this make an
+        existing synthesis outdated?" is answered by software.
+        """
+        rows = self._all(
+            "SELECT synthesis_id, status, fingerprint FROM synthesis_claims WHERE claim_id = ?",
+            (claim.id,),
+        )
+        if not rows:
+            return
+        current = claim_fingerprint(claim)
+        for row in rows:
+            if row["fingerprint"] == current:
+                continue
+            self.mark_synthesis_stale(
+                row["synthesis_id"], _describe_drift(claim.id, row["fingerprint"], current)
+            )
+
+    def mark_synthesis_stale(self, synthesis_id: str, reason: str) -> bool:
+        """Mark one synthesis stale, recording why. Returns whether it changed."""
+        synthesis = self.get_synthesis(synthesis_id)
+        if synthesis is None or synthesis.stale:
+            return False
+        updated = synthesis.model_copy(update={"stale": True, "stale_reason": reason})
+        with self._conn:
+            self._conn.execute(
+                "UPDATE syntheses SET stale = 1, data = ? WHERE id = ?",
+                (_dump(updated), synthesis_id),
+            )
+            self._append(
+                record_change(
+                    EntityType.SYNTHESIS,
+                    synthesis_id,
+                    _as_dict(synthesis),
+                    _as_dict(updated),
+                    note=reason,
+                )
+            )
+        return True
+
+    def recheck_synthesis_staleness(self) -> list[str]:
+        """Re-derive staleness for every synthesis. Returns the ids newly stale.
+
+        The write-time hook catches claims that change through `put_claim`.
+        This catches everything else: a claim deleted out from under a
+        synthesis, a database restored from a backup, a bug in the hook. The
+        invariant is worth being able to re-establish from the data alone.
+        """
+        newly: list[str] = []
+        for synthesis in self.list_syntheses(stale=False):
+            for row in self._all(
+                "SELECT claim_id, fingerprint FROM synthesis_claims WHERE synthesis_id = ?",
+                (synthesis.id,),
+            ):
+                claim = self.get_claim(row["claim_id"])
+                if claim is None:
+                    reason = f"claim {row['claim_id']} is gone"
+                else:
+                    current = claim_fingerprint(claim)
+                    if row["fingerprint"] == current:
+                        continue
+                    reason = _describe_drift(claim.id, row["fingerprint"], current)
+                if self.mark_synthesis_stale(synthesis.id, reason):
+                    newly.append(synthesis.id)
+                break
+        return newly
+
     def counts(self) -> dict[str, int]:
         return {
             table: int(self._one(f"SELECT COUNT(*) AS n FROM {table}")["n"])  # type: ignore[index]
@@ -1021,6 +1283,8 @@ class SqliteStore:
                 "proposals",
                 "derivations",
                 "embeddings",
+                "questions",
+                "syntheses",
             )
         }
 
@@ -1029,6 +1293,40 @@ class SqliteStore:
 
     def _all(self, sql: str, params: tuple[Any, ...] = ()) -> list[sqlite3.Row]:
         return self._conn.execute(sql, params).fetchall()
+
+
+def claim_fingerprint(claim: Claim) -> str:
+    """What a synthesis was written from, reduced to a comparable string.
+
+    Status, tier, statement and supersession. A change in any of them changes
+    what the claim asserts or how strongly, which is exactly when text written
+    from it stops being safe to trust.
+
+    Not a content hash of the whole claim: `created_at` and provenance
+    bookkeeping move without changing what the claim says, and staleness that
+    fires on those would cry wolf until nobody read it.
+    """
+    return "|".join(
+        [
+            claim.status.value,
+            claim.provenance.tier.value,
+            claim.statement.strip(),
+            claim.superseded_by or "",
+        ]
+    )
+
+
+def _describe_drift(claim_id: str, before: str, after: str) -> str:
+    """Name the parts that moved, so `stale_reason` is readable by a human."""
+    labels = ("status", "tier", "statement", "superseded_by")
+    old = before.split("|")
+    new = after.split("|")
+    moved = [
+        f"{label} {o!r} -> {n!r}"
+        for label, o, n in zip(labels, old, new)
+        if o != n
+    ]
+    return f"claim {claim_id} changed: {', '.join(moved) if moved else 'content differs'}"
 
 
 def _dump(model: Any) -> str:

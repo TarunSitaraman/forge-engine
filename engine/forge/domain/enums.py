@@ -169,6 +169,49 @@ class RevisionOp(str, Enum):
     SPLIT = "split"
 
 
+class QuestionStatus(str, Enum):
+    """Where a research question stands. Phase 9.
+
+    `PARTIALLY_ANSWERED` is not a courtesy value: a question with some
+    answering claims but unresolved dissent among them is a different state
+    from one nobody has touched, and gap detection treats them differently.
+    """
+
+    OPEN = "open"
+    PARTIALLY_ANSWERED = "partially_answered"
+    ANSWERED = "answered"
+
+
+class GapKind(str, Enum):
+    """The kinds of gap deterministic graph queries can find. Phase 9.
+
+    Each is a *structural* observation, never a judgement: "this concept has no
+    claims" is a fact about the graph. Whether that matters is the user's call,
+    which is why a gap is reported and never acted on.
+    """
+
+    #: A concept nothing is claimed about. The vault has a page for it and the
+    #: knowledge model knows nothing beyond its name.
+    CONCEPT_WITHOUT_CLAIMS = "concept_without_claims"
+    #: An open question no claim answers.
+    QUESTION_WITHOUT_ANSWERS = "question_without_answers"
+    #: A claim resting on exactly one source. Not wrong, but unreplicated.
+    CLAIM_WITH_SINGLE_SOURCE = "claim_with_single_source"
+    #: A claim marked disputed and left that way past a threshold.
+    UNRESOLVED_DISPUTE = "unresolved_dispute"
+    #: A concept with no edges at all. Present in the graph, connected to
+    #: nothing, so no traversal will ever reach it.
+    ISOLATED_CONCEPT = "isolated_concept"
+
+
+class SynthesisScope(str, Enum):
+    """What a synthesis is *about*. Phase 9."""
+
+    CONCEPT = "concept"
+    QUESTION = "question"
+    TOPIC = "topic"
+
+
 class EntityType(str, Enum):
     SOURCE = "Source"
     DOCUMENT = "Document"
@@ -185,6 +228,11 @@ class EntityType(str, Enum):
     #: decision. Without it, an approved change is unexplainable after the
     #: fact, which defeats the point of provenance.
     WORKFLOW = "Workflow"
+    #: Phase 9. A research question, asked by a human, answered by claims.
+    QUESTION = "Question"
+    #: Phase 9. A generated aggregate over claims, and the object most likely
+    #: to be mistaken for evidence, which is why it carries staleness.
+    SYNTHESIS = "Synthesis"
 
 
 # --------------------------------------------------------------------------

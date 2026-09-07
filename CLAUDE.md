@@ -17,7 +17,7 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them, `1,276 passed, 42 skipped` becomes `1,318 passed`. See
+   to run them, `1,307 passed, 42 skipped` becomes `1,349 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine*, architecture, ADRs, research,
@@ -44,6 +44,60 @@ are measurement records: renaming the corpus a number was measured
 against would falsify it.
 
 ## Known Stale/Legacy Items
+
+**Phase 9, research intelligence, 2026-09-07.** `Question` and `Synthesis`
+entities (schema v5, with a tested v4 upgrade), `forge.research` for the belief,
+change and gap queries, and eight new capabilities in both interfaces. Zero
+model calls in the whole package: a generated gap report or belief summary would
+be fluent, plausible and unfalsifiable, which is what this system exists to
+avoid.
+
+**Three things the canonical model asks for that Forge deliberately does not
+have, and what was done instead.**
+
+- *"Claims with confidence."* There are no confidences.
+  `forge.evolution.impact` refuses to invent one and is right. A belief returns
+  every held claim with its tier and sources, which is more information than a
+  score. **This found a live defect**: the Phase 6 API published a
+  `confidence` field read through `getattr(prov, "confidence", None)` against a
+  `Provenance` that has no such attribute, so it was `null` in every response
+  ever served, quietly implying the system calibrates. Removed.
+- *"Typed SUPPORTS/CONTRADICTS edges."* There is no `CONTRADICTS`: Phase 4
+  produces `POTENTIAL_CONFLICT` and routes it to a human. Dissent is therefore
+  reported as a disputed claim, a superseded claim, or a conflict proposal
+  awaiting review, never as a verdict.
+- *Synthesis staleness on "status or confidence".* No confidences, so the
+  fingerprint is status, tier, statement and supersession. Not a hash of the
+  whole claim: `created_at` and provenance bookkeeping move without changing
+  what a claim asserts, and staleness that fires on those would cry wolf.
+
+**`KnowledgeGap` is computed, never stored.** A stored gap is wrong the moment
+the missing claim arrives and nothing would notice. The cost, which is real: a
+user cannot yet dismiss a gap they disagree with.
+
+**Two defects found by writing the tests, both in existing code.**
+`supersede_claim` writes the retired claim through raw SQL rather than
+`put_claim`, so it bypassed the staleness hook entirely, and a superseded claim
+is the clearest case for staling work written from it. Fixed. And `put_claim`
+records a revision only on *create*: the activation layer owns the "why" and
+writes the CHANGE itself, so a store that also wrote one would double-record
+every approved change. Left alone, but it means a status change made outside
+the proposal path is invisible to `forge changes`, which is now documented in
+`forge/research/changes.py` rather than left to be rediscovered.
+
+**Running gap detection over the real vault changed its design**, twice. 544 of
+545 concepts had no claims, which is one fact about extraction state and buries
+the 72 isolated concepts that are individually actionable; a saturated kind is
+now summarised in one line. Then a population of one made any finding "100%
+saturated" and summarised away a legitimate single-source finding; there is now
+a minimum population. **Run the detector on the real corpus before trusting its
+shape** is the general lesson.
+
+**Still open in Phase 9:** the gate "gap detection produces findings a human
+agrees are real gaps" needs a human, and the W3 re-synthesis workflow is not
+built. Staleness detection is the gated half; generating a replacement
+synthesis needs a model, a prompt and an eval, and shipping generation without
+measuring it is what this project keeps refusing to do.
 
 **Phase 8, the MCP server, 2026-09-07, and the refactor that made its gate
 real.** `forge mcp` (`forge.mcp`, behind the `mcp` extra) exposes 14 read-only
@@ -783,7 +837,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine, distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,318 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,349 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -808,12 +862,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 1,276 passed, 42 skipped, offline, no model
+python -m pytest tests           # 1,307 passed, 42 skipped, offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,318 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,349 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.

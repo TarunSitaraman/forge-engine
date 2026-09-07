@@ -25,11 +25,22 @@ class Provenance(BaseModel):
     asks first.
     """
 
-    tier: str = Field(description="SOURCE_FACT | EXTRACTED_CLAIM | MODEL_INFERENCE | SYNTHESIS | USER_ASSERTION")
+    tier: str = Field(
+        description="SOURCE_FACT | EXTRACTED_CLAIM | MODEL_INFERENCE | SYNTHESIS | USER_ASSERTION"
+    )
     derivation: str
-    confidence: float | None = None
     model_id: str | None = None
     agent: str | None = None
+
+    # **No confidence field, deliberately.** The first version of this model
+    # published one, read through `getattr(prov, "confidence", None)` against a
+    # `Provenance` that has no such attribute, so it was `null` in every
+    # response ever served. Worse than useless: a nullable confidence in a
+    # published schema suggests the system calibrates and merely declined to
+    # this time. It does not. `forge.evolution.impact` states the reason: a
+    # number a model emits about its own certainty is not a measurement, and
+    # attaching one makes output look calibrated when it is not. Outcomes are
+    # categorical and provenance carries the rest.
 
     @property
     def is_model_generated(self) -> bool:
@@ -238,3 +249,156 @@ class StatsResponse(BaseModel):
     #: Asserted, not assumed. The whole API is deterministic; a non-zero value
     #: here means a route reached a model, which this phase forbids.
     llm_calls: int = 0
+
+
+# --------------------------------------------------------------------------
+# Phase 9: research intelligence
+# --------------------------------------------------------------------------
+
+
+class QuestionSummary(BaseModel):
+    """A research question. Always `USER_ASSERTION`: a human asked it."""
+
+    id: str
+    text: str
+    status: str
+    tags: list[str] = Field(default_factory=list)
+    note: str | None = None
+    concept_ids: list[str] = Field(default_factory=list)
+    created_at: str
+    resolved_at: str | None = None
+    provenance: Provenance
+    answer_count: int = 0
+
+
+class QuestionDetail(QuestionSummary):
+    answers: list[ClaimSummary] = Field(default_factory=list)
+
+
+class DissentItem(BaseModel):
+    """One reason to doubt a belief, and what raised it.
+
+    Forge has no `CONTRADICTS` edge on purpose, so `kind` is never a model's
+    verdict: `disputed_claim` and `superseded_claim` are states a human created,
+    and `open_conflict` is a proposal awaiting one.
+    """
+
+    kind: str
+    detail: str
+    claim_id: str | None = None
+    proposal_id: str | None = None
+    raised_by: str | None = None
+
+
+class BeliefResponse(BaseModel):
+    """What is currently held about one concept, with its supports and dissent.
+
+    There is no confidence number here and there will not be: outcomes are
+    categorical and provenance carries the rest. What a reader gets instead is
+    every held claim with how it was derived, which is strictly more information
+    than a single score.
+    """
+
+    concept_id: str
+    concept_name: str
+    held: list[ClaimSummary] = Field(default_factory=list)
+    disputed: list[ClaimSummary] = Field(default_factory=list)
+    superseded: list[ClaimSummary] = Field(default_factory=list)
+    supporting_sources: list[str] = Field(default_factory=list)
+    dissent: list[DissentItem] = Field(default_factory=list)
+    #: Held claims resting on no evidence. Only USER_ASSERTION may legitimately
+    #: do that; anything else listed here is a defect worth seeing.
+    unevidenced: list[str] = Field(default_factory=list)
+    is_settled: bool = False
+
+
+class GapItem(BaseModel):
+    """A structural observation about what the model does not hold.
+
+    Never a judgement: "this concept has no claims" is a fact about the graph,
+    and whether it matters is the reader's call. `weight` orders a report and
+    is not a probability.
+    """
+
+    id: str
+    kind: str
+    subject_id: str
+    subject_type: str
+    subject_label: str
+    detail: str
+    weight: float
+    evidence: list[str] = Field(default_factory=list)
+    #: The rule that produced this finding. A derived result still has to say
+    #: where it came from: an agent handed a gap should be able to report that
+    #: Forge computed it by a named deterministic rule, rather than presenting
+    #: it as an opinion someone formed.
+    detected_by: str
+
+
+class SaturatedKind(BaseModel):
+    """A gap kind that describes the corpus rather than any one subject."""
+
+    kind: str
+    count: int
+    population: int
+    detail: str
+
+
+class GapResponse(BaseModel):
+    total: int
+    returned: int
+    #: How the whole report was produced. Same reason as `GapItem.detected_by`:
+    #: the provenance of a derived report is the procedure that derived it.
+    derived_by: str = "forge.research.gaps.gap_report (deterministic graph queries)"
+    by_kind: dict[str, int] = Field(default_factory=dict)
+    saturated: list[SaturatedKind] = Field(default_factory=list)
+    gaps: list[GapItem] = Field(default_factory=list)
+
+
+class ChangeResponse(BaseModel):
+    """What moved in the model over a window, read from the revision log."""
+
+    derived_by: str = "forge.research.changes.changes_since (the revision log)"
+    since: str
+    until: str
+    total: int
+    #: True when the scan hit its ceiling, so the counts are a floor. Reported
+    #: rather than silently truncated.
+    truncated: bool = False
+    by_entity: dict[str, dict[str, int]] = Field(default_factory=dict)
+    claims_created: list[str] = Field(default_factory=list)
+    claims_superseded: list[str] = Field(default_factory=list)
+    claims_disputed: list[str] = Field(default_factory=list)
+    concepts_created: list[str] = Field(default_factory=list)
+    syntheses_staled: list[str] = Field(default_factory=list)
+    causes: list[str] = Field(default_factory=list)
+
+
+class SynthesisSummary(BaseModel):
+    """A generated aggregate over claims, and the object most likely to be
+    mistaken for evidence, which is why staleness is published beside it."""
+
+    id: str
+    scope: str
+    scope_id: str | None = None
+    body: str
+    source_claim_ids: list[str] = Field(default_factory=list)
+    provenance: Provenance
+    prompt_version: str | None = None
+    generated_at: str
+    stale: bool
+    #: What made it stale, in the words of the deterministic check. A bare
+    #: `stale = true` tells a reader nothing about what moved underneath it.
+    stale_reason: str | None = None
+    superseded_by: str | None = None
+
+
+class QuestionEvidenceItem(BaseModel):
+    """A span that bears on an open question and is not yet cited in an answer."""
+
+    span_id: str
+    score: float
+    citation: str
+    text: str
+    source_locator: str | None = None
+    trust_tier: str | None = None

@@ -350,6 +350,36 @@ measurement on record: 5/5 on the assessment set, 2026-08-14: is Qwen3 8B via
 Ollama and describes *only* that. Moving the Mac to a hosted open-weights model
 does not inherit it, and the two must not be pooled.
 
+## Asking the six questions
+
+The vision names six questions as the product's real acceptance criteria. These
+answer them, deterministically, with zero model calls:
+
+```bash
+forge belief "RAG"                       # what you believe, and what disagrees
+forge question add "Does retrieval reduce hallucination?" --concept RAG
+forge question list                      # what remains unanswered
+forge gaps                               # what the model does not hold
+forge changes --days 30                  # what changed, from the revision log
+```
+
+`forge gaps` reports and never acts. Every finding is a structural fact about
+the graph: a concept with no claims, an open question with no answers, a claim
+resting on one source, an unresolved dispute, a concept with no edges. Whether
+one matters is your call.
+
+A kind that applies to most of the corpus is summarised in one line rather than
+listed, because one fact repeated 544 times buries the findings that name a
+single thing. Pass `--kind` to list it anyway:
+
+```bash
+forge gaps --kind concept_without_claims --limit 50
+```
+
+`forge belief` returns no confidence score and never will. A number a model
+emits about its own certainty is not a measurement; what you get instead is
+every held claim with the tier it was derived at and the sources behind it.
+
 ## Serving the API and explorer
 
 ```bash

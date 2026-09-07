@@ -32,19 +32,26 @@ from ..config import Settings
 from ..storage import SqliteStore
 from . import API_VERSION, queries
 from .models import (
+    BeliefResponse,
+    ChangeResponse,
     ClaimDetail,
     ClaimPage,
     ConceptDetail,
     ConceptPage,
     EvidenceItem,
+    GapResponse,
     NeighborItem,
     PathResponse,
+    QuestionDetail,
+    QuestionEvidenceItem,
+    QuestionSummary,
     RevisionItem,
     SearchHit,
     SourcePage,
     SourceSummary,
     SpanDetail,
     StatsResponse,
+    SynthesisSummary,
 )
 from .queries import MAX_PAGE_SIZE, BadRequest, NotFound
 
@@ -261,6 +268,90 @@ def create_app(settings: Settings | None = None, *, db_path: FilePath | None = N
         max_depth: int = Query(4, ge=1, le=6),
     ):
         return queries.find_path(store, source, target, max_depth=max_depth)
+
+    # -- research intelligence (Phase 9) -----------------------------------
+
+    @app.get(
+        "/beliefs/{concept_id}",
+        response_model=BeliefResponse,
+        tags=["research"],
+        operation_id="get_belief",
+    )
+    def get_belief(concept_id: str, store: SqliteStore = Depends(get_store)):
+        """What is currently believed about a concept, with supports and dissent."""
+        return queries.get_belief(store, concept_id)
+
+    @app.get(
+        "/questions",
+        response_model=list[QuestionSummary],
+        tags=["research"],
+        operation_id="list_questions",
+    )
+    def list_questions(
+        store: SqliteStore = Depends(get_store),
+        status: str | None = Query(None, description="open | partially_answered | answered"),
+    ):
+        return queries.list_questions(store, status=status)
+
+    @app.get(
+        "/questions/{question_id}",
+        response_model=QuestionDetail,
+        tags=["research"],
+        operation_id="get_question",
+    )
+    def get_question(question_id: str, store: SqliteStore = Depends(get_store)):
+        return queries.get_question(store, question_id)
+
+    @app.get(
+        "/questions/{question_id}/evidence",
+        response_model=list[QuestionEvidenceItem],
+        tags=["research"],
+        operation_id="get_question_evidence",
+    )
+    def get_question_evidence(
+        question_id: str,
+        store: SqliteStore = Depends(get_store),
+        limit: int = Query(10, ge=1, le=MAX_PAGE_SIZE),
+    ):
+        return queries.get_question_evidence(store, question_id, limit=limit)
+
+    @app.get("/gaps", response_model=GapResponse, tags=["research"], operation_id="list_gaps")
+    def list_gaps(
+        store: SqliteStore = Depends(get_store),
+        kinds: str | None = Query(None, description="Comma-separated gap kinds."),
+        limit: int = Query(50, ge=1, le=MAX_PAGE_SIZE),
+    ):
+        return queries.list_gaps(store, kinds=kinds, limit=limit)
+
+    @app.get(
+        "/changes", response_model=ChangeResponse, tags=["research"], operation_id="get_changes"
+    )
+    def get_changes(
+        store: SqliteStore = Depends(get_store),
+        days: int = Query(30, ge=1, le=3650),
+    ):
+        return queries.get_changes(store, days=days)
+
+    @app.get(
+        "/syntheses",
+        response_model=list[SynthesisSummary],
+        tags=["research"],
+        operation_id="list_syntheses",
+    )
+    def list_syntheses(
+        store: SqliteStore = Depends(get_store),
+        stale: bool | None = Query(None),
+    ):
+        return queries.list_syntheses(store, stale=stale)
+
+    @app.get(
+        "/syntheses/{synthesis_id}",
+        response_model=SynthesisSummary,
+        tags=["research"],
+        operation_id="get_synthesis",
+    )
+    def get_synthesis(synthesis_id: str, store: SqliteStore = Depends(get_store)):
+        return queries.get_synthesis(store, synthesis_id)
 
     # -- the explorer ------------------------------------------------------
 
