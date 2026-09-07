@@ -595,7 +595,19 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             store.set_concept_inbound(plan.inbound_links)
             written = len(plan.concepts) + len(plan.links)
 
-        payload = {**plan.to_dict(), "applied": apply, "written": written, "llm_calls": CALLS.count}
+        # Concepts the store holds that this pass did not see: their page was
+        # deleted or renamed. Bootstrap does not remove them — a concept may
+        # carry claims and human decisions, and dropping it silently would take
+        # those with it — so the count is reported instead.
+        stale = len({c.id for c in store.list_concepts()} - {c.id for c in plan.concepts})
+
+        payload = {
+            **plan.to_dict(),
+            "applied": apply,
+            "written": written,
+            "stale_concepts": stale,
+            "llm_calls": CALLS.count,
+        }
         if not _emit(payload, json_out):
             typer.echo(f"concepts     : {len(plan.concepts)}")
             typer.echo(f"edges        : {len(plan.links)} (RELATED_TO, score 1.0)")
@@ -604,6 +616,11 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
                 f"unreferenced : {plan.unreferenced()} concept page(s) that nothing "
                 "in the vault links to"
             )
+            if stale:
+                typer.echo(
+                    f"stale        : {stale} concept(s) in the store whose page is no "
+                    "longer in the vault (not removed: they may carry claims)"
+                )
             typer.echo(f"llm calls    : {CALLS.count}")
             typer.echo("\nby kind:")
             for kind, n in plan.by_kind().items():

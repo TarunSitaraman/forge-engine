@@ -315,6 +315,28 @@ class TestTheCommandWritesThem:
         finally:
             store.close()
 
+    def test_a_concept_whose_page_disappears_is_reported_not_removed(self, fixture_vault):
+        """A concept may carry claims and human decisions, so bootstrap does not
+        delete it when its page goes. Silence would be worse: the store would
+        hold a concept for a page nobody can open, with nothing saying so."""
+        from forge.cli.main import app
+        from typer.testing import CliRunner
+
+        self._run(fixture_vault)
+        page = next(fixture_vault.glob("DSA/01_Patterns/*.md"))
+        page.unlink()
+
+        output = CliRunner().invoke(
+            app,
+            ["index", "--vault", str(fixture_vault)],
+        ).output
+        output = CliRunner().invoke(
+            app, ["bootstrap", "--vault", str(fixture_vault), "--apply"]
+        ).output
+
+        assert "stale" in output
+        assert "1 concept(s)" in output
+
     def test_a_preview_reports_what_nothing_links_to(self, fixture_vault):
         from forge.cli.main import app
         from typer.testing import CliRunner

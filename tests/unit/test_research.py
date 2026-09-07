@@ -650,6 +650,32 @@ def test_without_counted_inbound_links_the_finding_admits_it(vault: Vault):
     assert "forge bootstrap --apply" in gap.detail
 
 
+def test_a_concept_whose_page_was_deleted_is_not_reported_as_isolated(vault: Vault):
+    """The counts are replaced wholesale each bootstrap, so a concept with no
+    row was not seen in the last pass — its page is gone. Bootstrap leaves the
+    concept alone (it may carry claims) and reports the count separately;
+    saying "nothing links to this page" about a page that no longer exists is a
+    false statement dressed as a finding.
+    """
+    live = vault.concept("RAG", path="Technologies/Docs/rag.md")
+    deleted = vault.concept("Handoff", path="Projects/gone.md")
+    vault.store.set_concept_inbound({live.id: (1, ["Technologies/Docs/_index.md"])})
+
+    gaps = detect_gaps(vault.store, kinds=[GapKind.ISOLATED_CONCEPT])
+
+    assert [g.subject_id for g in gaps] == []
+    assert deleted.id not in {g.subject_id for g in gaps}
+
+
+def test_no_inbound_row_is_not_the_same_answer_as_a_row_of_zero(vault: Vault):
+    counted = vault.concept("A", path="a.md")
+    uncounted = vault.concept("B", path="b.md")
+    vault.store.set_concept_inbound({counted.id: (0, [])})
+
+    assert vault.store.concept_inbound(counted.id) == (0, [])
+    assert vault.store.concept_inbound(uncounted.id) is None
+
+
 def test_counting_inbound_links_replaces_the_previous_count(vault: Vault):
     """The input is one pass over the vault, so a concept whose last inbound
     link was deleted must lose its row — an update that only wrote what it saw

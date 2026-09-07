@@ -248,10 +248,17 @@ def _concept_gaps(store: SqliteStore, claims_by_concept: dict, wanted: set) -> l
         if GapKind.ISOLATED_CONCEPT in wanted:
             degree = len(store.links_from(concept.id)) + len(store.links_to(concept.id))
             if inbound_known:
+                counted = store.concept_inbound(concept.id)
+                if counted is None:
+                    # Not seen by the last bootstrap: the page behind this
+                    # concept is gone. A leftover row is a staleness problem,
+                    # and calling it isolated would report a page nobody can
+                    # act on. `forge bootstrap` counts these separately.
+                    continue
                 # Isolation is about arriving, not leaving. A page with twenty
                 # outgoing links that nothing points at is exactly as
                 # unreachable as one with none.
-                inbound, _ = store.concept_inbound(concept.id)
+                inbound, _ = counted
                 isolated = inbound == 0
                 detail = (
                     "no page in the vault links to this one, so nothing but a "

@@ -17,7 +17,7 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them, `1,399 passed, 42 skipped` becomes `1,441 passed`. See
+   to run them, `1,402 passed, 42 skipped` becomes `1,444 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine*, architecture, ADRs, research,
@@ -100,6 +100,17 @@ A store bootstrapped before v6 cannot tell "nothing links here" from "nobody
 looked", so the detector falls back to degree and **says so in the finding's
 own text** rather than making the stronger claim. `SqliteStore.
 unreferenced_concepts()` returns `None` in that case, never `[]`.
+
+**A missing row is not a row of zero**, and conflating them produced the one
+defect this fix introduced. The counts are replaced wholesale each bootstrap, so
+a concept without a row was not seen in the last pass: its page has been deleted
+or renamed. Deleting a vault page and re-bootstrapping then reported the
+leftover concept as isolated — "nothing links to this page", about a page that
+no longer exists. `concept_inbound` now returns `None` for a missing row, the
+detector skips those, and `forge bootstrap` reports them on their own line
+(`stale: N concept(s) in the store whose page is no longer in the vault`).
+Bootstrap still does not delete them: a concept can carry claims and human
+decisions, and dropping it silently would take those with it.
 
 The dashboard's overview was wrong in the same way and was corrected with it:
 the stat labelled `isolated` in warning colour is now `no edges`, muted,
@@ -991,7 +1002,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine, distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,441 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,444 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -1016,12 +1027,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 1,399 passed, 42 skipped, offline, no model
+python -m pytest tests           # 1,402 passed, 42 skipped, offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,441 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,444 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.

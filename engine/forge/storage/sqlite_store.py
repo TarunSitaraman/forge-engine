@@ -1180,19 +1180,22 @@ class SqliteStore:
             )
         return len(counts)
 
-    def concept_inbound(self, concept_id: str) -> tuple[int, list[str]]:
+    def concept_inbound(self, concept_id: str) -> tuple[int, list[str]] | None:
         """How many pages link to this concept's page, and a few of them.
 
-        Returns `(0, [])` for a concept with no row, which is the same answer
-        as a row of zero — but only meaningful once `inbound_counted()` is
-        true. Ask that first.
+        `None` means no row, which is **not** the same as a row of zero: the
+        counts are replaced wholesale on every bootstrap, so a concept without
+        one was not seen in the last pass — its page has been deleted or
+        renamed and the concept is a leftover. Saying "nothing links to this
+        page" about a page that no longer exists is a false statement dressed
+        as a finding, so callers must tell the two apart.
         """
         row = self._one(
             "SELECT inbound, sources FROM concept_inbound_links WHERE concept_id = ?",
             (concept_id,),
         )
         if row is None:
-            return 0, []
+            return None
         return int(row["inbound"]), list(json.loads(row["sources"]))
 
     def unreferenced_concepts(self) -> list[str] | None:
