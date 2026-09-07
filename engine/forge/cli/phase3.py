@@ -573,6 +573,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         and it is a preview until `--apply`.
         """
         from ..bootstrap import build_plan
+        from ..bootstrap.seed import BOOTSTRAP_VERSION
         from ..corpus.indexer import CorpusIndexer
 
         settings = settings_factory(vault)
@@ -583,12 +584,31 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         indexer = CorpusIndexer(settings)
         plan = build_plan(indexer.build_index(), decided=indexer._decided_targets())
 
+        # Edges this vault no longer produces, that bootstrap itself wrote.
+        # `put_link` is an upsert and nothing ever removed, so fixing a wrong
+        # wikilink left the old edge in the graph for ever: the 24 pattern
+        # pages that used to point at `Binary Search Representative Problems`
+        # were corrected in the vault on 2026-09-07 and the store still served
+        # all 23 of those relationships afterwards. A derived edge whose source
+        # link is gone is not history, it is a false statement about the vault.
+        #
+        # Scoped by provenance agent: only edges bootstrap authored are
+        # candidates. A relationship a human approved or a model proposed is
+        # superseded through activation, never deleted here.
+        planned = {link.id for link in plan.links}
+        pruned_ids = [
+            link.id
+            for link in store.all_links()
+            if link.id not in planned and link.provenance.agent == BOOTSTRAP_VERSION
+        ]
+
         written = 0
         if apply:
             for concept in plan.concepts:
                 store.put_concept(concept)
             for link in plan.links:
                 store.put_link(link)
+            store.delete_links(pruned_ids)
             # Written after the concepts, which the rows reference. This is
             # what lets `forge gaps` tell a page nothing links to from one
             # linked only by its folder's index.
@@ -606,6 +626,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             "applied": apply,
             "written": written,
             "stale_concepts": stale,
+            "pruned_links": len(pruned_ids),
             "llm_calls": CALLS.count,
         }
         if not _emit(payload, json_out):
@@ -616,6 +637,12 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
                 f"unreferenced : {plan.unreferenced()} concept page(s) that nothing "
                 "in the vault links to"
             )
+            if pruned_ids:
+                typer.echo(
+                    f"pruned       : {len(pruned_ids)} edge(s) "
+                    f"{'removed' if apply else 'to remove'} — the wikilink behind "
+                    "each one is gone from the vault"
+                )
             if stale:
                 typer.echo(
                     f"stale        : {stale} concept(s) in the store whose page is no "

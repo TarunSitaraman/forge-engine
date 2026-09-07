@@ -17,7 +17,7 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them, `1,405 passed, 42 skipped` becomes `1,447 passed`. See
+   to run them, `1,407 passed, 42 skipped` becomes `1,449 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine*, architecture, ADRs, research,
@@ -44,6 +44,40 @@ are measurement records: renaming the corpus a number was measured
 against would falsify it.
 
 ## Known Stale/Legacy Items
+
+**Bootstrap added edges and never removed them, 2026-09-07.** `put_link` is
+an upsert and nothing pruned, so an edge derived from a wikilink survived the
+wikilink. The 24 pattern pages that pointed at the wrong problem index were
+corrected in the vault that afternoon; the store went on serving all 23 of
+those relationships afterwards, to `forge graph path`, to the dashboard's
+RELATED list, and to the MCP neighbour queries. **A derived edge whose source
+link is gone is not history, it is a false statement about the vault.**
+
+Two things about how it was found are worth keeping.
+
+It was found **on a second machine**. The same vault, freshly bootstrapped
+there, reported 2,799 edges where this checkout reported 2,822 — and the
+difference was exactly the 23 corrected links. A store that has only ever been
+bootstrapped once cannot show this; it takes a store with history, or a second
+one without.
+
+And it had already been published. "2,752 edges to 2,822" went into the vault's
+`CLAUDE.md` and into a commit message, quoting a **store** count as if it
+measured the vault. That is precisely the failure the vault's own
+"recount, don't carry forward" rule exists to prevent, committed while writing
+about that rule. Corrected in place, with the reason.
+
+`forge bootstrap --apply` now deletes the bootstrap-authored edges the current
+plan does not produce, and reports the count on a `pruned` line. Scoped by
+provenance agent: only edges whose agent is `BOOTSTRAP_VERSION` are candidates,
+so a relationship a human approved or a model proposed is untouched — those are
+superseded through activation, never deleted here. A test asserts a
+hand-authored edge survives a re-bootstrap.
+
+Concepts are deliberately **not** pruned the same way, and the asymmetry is the
+point: a derived edge carries nothing of its own, while a concept can carry
+claims, evidence and decisions. A concept whose page is gone is reported on the
+`stale` line and left alone.
 
 **`isolated_concept` was 99% false positive on a hub-and-spoke vault,
 found and fixed 2026-09-07.** Phase 9's gate was "gap detection produces findings a human
@@ -1025,7 +1059,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine, distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,447 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,449 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -1050,12 +1084,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 1,405 passed, 42 skipped, offline, no model
+python -m pytest tests           # 1,407 passed, 42 skipped, offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,447 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,449 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.

@@ -10,7 +10,7 @@ believed, it *tells you* instead of silently overwriting it.
 [![PyPI](https://img.shields.io/pypi/v/forge-kb.svg)](https://pypi.org/project/forge-kb/)
 [![Python](https://img.shields.io/pypi/pyversions/forge-kb.svg)](https://pypi.org/project/forge-kb/)
 
-~29,500 lines of Python, 1,447 offline tests, no paid API required.
+~29,500 lines of Python, 1,449 offline tests, no paid API required.
 
 ```bash
 pip install "forge-kb[tui]"
@@ -183,14 +183,14 @@ evidence changes what it already knows, pausing for approval before anything
 changes. Phases 5-10 are not started; see [`docs/roadmap.md`](docs/roadmap.md).
 
 ```bash
-python -m pytest tests           # 1,447 tests, fully offline, no model needed
+python -m pytest tests           # 1,449 tests, fully offline, no model needed
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by running them
 python scripts/phase4_demo.py    # the end-to-end story
 ```
 
-In this repository 1,405 pass and 42 skip: those 42 are integration tests that
+In this repository 1,407 pass and 42 skip: those 42 are integration tests that
 run against the private Markdown vault, and they skip when it is not checked
-out. Point them at a checkout to run the full 1,447:
+out. Point them at a checkout to run the full 1,449:
 
 ```bash
 FORGE_TEST_VAULT=/path/to/forge python -m pytest tests
@@ -212,7 +212,7 @@ The suite is otherwise complete and requires no model. CI and every test run
 | `engine/forge/evolution/` | LangGraph workflow evaluating new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering documentation: architecture, ADRs, research, test strategy. |
-| `tests/`, `scripts/` | 1,447 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,449 tests; demos and per-phase validation scripts. |
 
 Start with [`docs/`](docs/README.md): the
 [current-state audit](docs/architecture/forge-current-state.md),

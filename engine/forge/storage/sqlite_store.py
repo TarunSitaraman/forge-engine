@@ -791,6 +791,23 @@ class SqliteStore:
     def count_links(self) -> int:
         return int(self._one("SELECT COUNT(*) AS n FROM claim_links")["n"])  # type: ignore[index]
 
+    def delete_links(self, link_ids: Sequence[str]) -> int:
+        """Remove relationships outright. Returns how many rows went.
+
+        Deliberately a hard delete rather than `active = 0`: the only caller is
+        bootstrap pruning edges it derived from wikilinks that no longer exist,
+        and a deactivated row for a link the vault has forgotten is a tombstone
+        nobody will ever read. Anything a human or a model asserted is
+        superseded, never deleted, which is a different path entirely.
+        """
+        if not link_ids:
+            return 0
+        with self._conn:
+            cur = self._conn.executemany(
+                "DELETE FROM claim_links WHERE id = ?", [(i,) for i in link_ids]
+            )
+        return cur.rowcount if cur.rowcount and cur.rowcount > 0 else len(link_ids)
+
     # -- revisions ---------------------------------------------------------
 
     def append_revision(self, revision: Revision) -> None:

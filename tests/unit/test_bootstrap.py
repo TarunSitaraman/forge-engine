@@ -8,6 +8,8 @@ returned `RAM`, `Answer`, `Fluency` and `VARCHAR(n)` as concepts.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from forge.bootstrap import build_plan, is_concept_page, kind_for
 from forge.bootstrap.seed import BOOTSTRAP_VERSION
@@ -312,6 +314,84 @@ class TestTheCommandWritesThem:
         try:
             assert store.inbound_counted(), "bootstrap --apply stored no counts"
             assert store.unreferenced_concepts() is not None
+        finally:
+            store.close()
+
+    def test_an_edge_whose_wikilink_is_gone_is_pruned(self, fixture_vault):
+        """`put_link` is an upsert and nothing ever removed, so a corrected
+        wikilink left its old edge in the graph for ever.
+
+        Measured on the real corpus 2026-09-07: 24 pattern pages had pointed at
+        the wrong problem index, the vault was fixed, and the store still
+        served all 23 of those relationships afterwards — `forge graph path`,
+        the dashboard's RELATED list and the MCP neighbour queries all reported
+        a relationship the vault denies. A derived edge whose source link is
+        gone is not history; it is a false statement about the vault.
+        """
+        from forge.config import Settings
+        from forge.storage import SqliteStore
+
+        self._run(fixture_vault)
+        settings = Settings.load(fixture_vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        before = store.count_links()
+        store.close()
+        assert before, "the fixture vault produced no edges to prune"
+
+        # Remove every wikilink from one page: its edges must not survive.
+        page = next(
+            p
+            for p in fixture_vault.glob("DSA/01_Patterns/*.md")
+            if "[[" in p.read_text(encoding="utf-8")
+        )
+        text = re.sub(r"\[\[[^\]]*\]\]", "(removed)", page.read_text(encoding="utf-8"))
+        page.write_text(text, encoding="utf-8")
+
+        output = self._run(fixture_vault)
+
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        try:
+            assert store.count_links() < before, "the stale edges survived"
+            assert "pruned" in output
+        finally:
+            store.close()
+
+    def test_pruning_leaves_alone_what_bootstrap_did_not_write(self, fixture_vault):
+        """A relationship a human approved or a model proposed is superseded
+        through activation, never deleted by a re-bootstrap."""
+        from forge.config import Settings
+        from forge.domain import ClaimLink, Derivation, LinkType, Provenance, ProvenanceTier
+        from forge.storage import SqliteStore
+
+        self._run(fixture_vault)
+        settings = Settings.load(fixture_vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        concepts = list(store.list_concepts())[:2]
+        theirs = ClaimLink(
+            id=ClaimLink.make_id(concepts[0].id, concepts[1].id, LinkType.RELATED_TO),
+            from_id=concepts[0].id,
+            to_id=concepts[1].id,
+            type=LinkType.RELATED_TO,
+            provenance=Provenance(
+                tier=ProvenanceTier.USER_ASSERTION,
+                derivation=Derivation.HUMAN,
+                agent="a person, not bootstrap",
+            ),
+            score=1.0,
+            rationale="asserted by hand",
+        )
+        store.put_link(theirs)
+        store.close()
+
+        self._run(fixture_vault)
+
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+        try:
+            assert store.get_link(theirs.id) is not None, "pruning ate a human's edge"
         finally:
             store.close()
 
