@@ -24,8 +24,10 @@ from ..domain import (
     ProvenanceTier,
     Question,
     QuestionStatus,
+    utc_now,
 )
 from ..research import belief_for_concept, changes_since, gap_report
+from ..storage.backup import BackupError, create_backup, restore_backup
 from ..storage.sqlite_store import SqliteStore
 
 question_app = typer.Typer(no_args_is_help=True, help="Record and review research questions.")
@@ -294,3 +296,73 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
                 typer.echo(f"    [{item.kind}] {item.detail}")
         elif result.held:
             typer.echo("\n  nothing outstanding against this.")
+
+
+    # -- backup and restore (ADR-001 R5) -----------------------------------
+
+    @app.command()
+    def backup(
+        vault: Path | None = typer.Option(None),
+        out: Path | None = typer.Option(None, help="Directory to write into."),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Back up the derived store: decisions, history, questions, syntheses.
+
+        Forge's rule is that everything it derives is rebuildable from the
+        vault, and that rule is almost true. A rebuild cannot reproduce a
+        proposal you rejected, the revision log, the questions you asked, or
+        the exact wording of a model-derived claim. Those are what this copies.
+
+        The copy is transactionally consistent even under a concurrent writer,
+        and carries a checksum, so a corrupted backup is refused on restore
+        rather than silently restored.
+        """
+        settings = settings_factory(vault)
+        destination = out or (settings.state_dir / "backups" / utc_now().strftime("%Y%m%dT%H%M%SZ"))
+        try:
+            manifest = create_backup(settings.db_path, destination)
+        except BackupError as exc:
+            typer.echo(f"{exc}", err=True)
+            raise typer.Exit(code=2) from None
+
+        payload = {**manifest.to_dict(), "destination": str(destination)}
+        if not _emit(payload, json_out):
+            typer.echo(f"backed up to {destination}")
+            typer.echo(f"  schema  : v{manifest.schema_version}")
+            typer.echo(f"  size    : {manifest.bytes:,} bytes")
+            typer.echo(f"  sha256  : {manifest.sha256[:16]}...")
+            interesting = {
+                k: v
+                for k, v in manifest.counts.items()
+                if k in ("proposals", "revisions", "questions", "syntheses", "claims")
+            }
+            for name, count in sorted(interesting.items()):
+                typer.echo(f"  {name:<10}: {count}")
+
+    @app.command()
+    def restore(
+        source: Path = typer.Argument(..., help="A backup directory."),
+        vault: Path | None = typer.Option(None),
+        force: bool = typer.Option(
+            False, "--force", help="Replace an existing store. Destructive."
+        ),
+        json_out: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Restore a backup over the derived store. Destructive; needs --force.
+
+        Refuses a backup whose checksum does not match its manifest, and one
+        written by a newer schema than this build understands. Both would
+        destroy knowledge quietly.
+        """
+        settings = settings_factory(vault)
+        try:
+            manifest = restore_backup(source, settings.db_path, force=force)
+        except BackupError as exc:
+            typer.echo(f"{exc}", err=True)
+            raise typer.Exit(code=2) from None
+
+        payload = {**manifest.to_dict(), "restored_to": str(settings.db_path)}
+        if not _emit(payload, json_out):
+            typer.echo(f"restored {source} -> {settings.db_path}")
+            typer.echo(f"  taken   : {manifest.created_at}")
+            typer.echo(f"  schema  : v{manifest.schema_version}")

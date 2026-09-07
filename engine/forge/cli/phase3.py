@@ -608,6 +608,18 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
                 for name, paths in sorted(plan.undecided_collisions.items())[:10]:
                     typer.echo(f"  {name}: {', '.join(paths)}")
                 typer.echo("  Resolve with `forge identity decide \"<name>\" <qualified-name>`.")
+            if plan.skipped_links:
+                total = sum(plan.skipped_links.values())
+                typer.echo(
+                    f"\n{total} link(s) did not become edges, because acting on them "
+                    "would mean guessing:"
+                )
+                for reason, count in sorted(plan.skipped_links.items()):
+                    typer.echo(f"  {count:5}  {reason}")
+                typer.echo(
+                    "  `forge diagnostics` lists them with the page each one probably "
+                    "meant. Fixing the link in the vault turns it into an edge."
+                )
             typer.echo(
                 f"\n{'written to the store' if apply else 'preview only — re-run with --apply to write'}"
             )

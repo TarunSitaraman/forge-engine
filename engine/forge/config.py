@@ -510,8 +510,19 @@ def _optional_bool(raw: str | None) -> bool | None:
     raise ConfigError(f"expected a boolean or an unset value, got {raw!r}")
 
 
+#: Directories whose presence means "a human deliberately made this a vault".
+#:
+#: `.git` alone was the rule until 2026-09-07, when a clean-room install showed
+#: what it costs: a plain folder of Markdown notes is not a git repository, and
+#: a first-time user following the README got a configuration error before
+#: reaching anything Forge does. `.obsidian` and `.forge` are equally
+#: deliberate markers, and accepting them removes the barrier **without**
+#: weakening the guarantee below: an unmarked directory is still not a vault.
+VAULT_MARKERS: tuple[str, ...] = (".git", ".obsidian", ".forge")
+
+
 def _find_vault_root(start: Path) -> Path | None:
-    """Walk upward from ``start`` for a repository root (a directory containing .git).
+    """Walk upward from ``start`` for a directory carrying a vault marker.
 
     Returns ``None`` rather than a fallback: "no vault here" is a real answer the
     caller has to handle, and the previous silent fallback to the current
@@ -519,7 +530,7 @@ def _find_vault_root(start: Path) -> Path | None:
     """
     here = start.resolve()
     for candidate in [here, *here.parents]:
-        if (candidate / ".git").exists():
+        if any((candidate / marker).exists() for marker in VAULT_MARKERS):
             return candidate
     return None
 
@@ -554,9 +565,12 @@ def _resolve_vault_root() -> Path:
         return found
     raise ConfigError(
         "could not locate a Forge vault. Forge looks upward from the current "
-        "directory for one containing .git, and found none. The engine lives in "
-        "its own repository, so it cannot infer where your vault is.\n"
+        f"directory for one containing any of {', '.join(VAULT_MARKERS)}, and "
+        "found none. The engine lives in its own repository, so it cannot infer "
+        "where your vault is.\n"
         "Fix this by pointing Forge at the vault explicitly:\n"
-        "  export FORGE_VAULT_PATH=/path/to/forge   # persist it in ~/.zshrc\n"
-        "  forge index --vault /path/to/forge       # or per-command, where supported"
+        "  export FORGE_VAULT_PATH=/path/to/vault   # persist it in ~/.zshrc\n"
+        "  forge index --vault /path/to/vault       # or per-command, where supported\n"
+        "Or mark the folder as a vault once:\n"
+        "  mkdir /path/to/vault/.forge"
     )

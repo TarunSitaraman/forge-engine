@@ -22,14 +22,14 @@ from __future__ import annotations
 import json as jsonlib
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import typer
 
 from ..config import ConfigError, Settings, env_file_path
 from ..corpus import IndexPipeline, analyze_conventions, compute_stats, load_store
 from ..corpus.diagnostics import frontmatter_report, link_report
-from ..corpus.indexer import CorpusIndexer, detect_changes
+from ..corpus.indexer import CorpusIndexer
 from ..llm import CALLS, ProviderUnavailable, get_provider
 from ..logging import bind_run, configure_logging, new_run_id
 from ..spike import render_markdown, run_spike
@@ -45,7 +45,44 @@ app = typer.Typer(
 err = typer.echo
 
 
-def _settings(vault: Optional[Path], log_level: str = "WARNING") -> Settings:
+def _version() -> str:
+    """The installed distribution's version, or a marker that it is not installed.
+
+    Read from package metadata rather than a constant, so it cannot disagree
+    with what `pip` reports: a version string maintained by hand is a version
+    string that goes stale the first time someone forgets it.
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("forge-kb")
+    except PackageNotFoundError:  # pragma: no cover - running from a checkout
+        return "unknown (not installed as a package)"
+
+
+def _show_version(value: bool) -> None:
+    if not value:
+        return
+    from .. import api as _api  # noqa: F401  (import only to read its version)
+    from ..api import API_VERSION
+    from ..storage import SCHEMA_VERSION
+
+    typer.echo(f"forge-kb {_version()}")
+    typer.echo(f"  store schema : v{SCHEMA_VERSION}")
+    typer.echo(f"  api          : {API_VERSION}")
+    raise typer.Exit()
+
+
+@app.callback()
+def _main(
+    version: bool = typer.Option(
+        False, "--version", callback=_show_version, is_eager=True, help="Show the version."
+    ),
+) -> None:
+    """Forge Knowledge OS engine. Read-only with respect to the vault."""
+
+
+def _settings(vault: Path | None, log_level: str = "WARNING") -> Settings:
     try:
         settings = Settings.load(vault)
     except ConfigError as exc:
@@ -69,7 +106,7 @@ def _emit(payload: dict[str, Any], as_json: bool) -> bool:
 
 @app.command()
 def index(
-    vault: Optional[Path] = typer.Option(None, help="Vault path (defaults to repo root)."),
+    vault: Path | None = typer.Option(None, help="Vault path (defaults to repo root)."),
     persist: bool = typer.Option(True, help="Write sources/documents/spans to derived state."),
     reports: bool = typer.Option(True, help="Write JSON reports to .forge/reports/."),
     reset: bool = typer.Option(False, help="Drop derived state first (safe: it rebuilds)."),
@@ -109,7 +146,7 @@ def index(
 
 @app.command()
 def status(
-    vault: Optional[Path] = typer.Option(None),
+    vault: Path | None = typer.Option(None),
     json_out: bool = typer.Option(False, "--json"),
 ) -> None:
     """Show engine, derived-state, and provider status."""
@@ -218,7 +255,7 @@ def status(
 
 @app.command(name="corpus-stats")
 def corpus_stats(
-    vault: Optional[Path] = typer.Option(None),
+    vault: Path | None = typer.Option(None),
     json_out: bool = typer.Option(False, "--json"),
     top: int = typer.Option(10, help="How many entries in 'top' lists."),
 ) -> None:
@@ -255,13 +292,13 @@ def corpus_stats(
 @app.command()
 def diagnostics(
     what: str = typer.Argument("all", help="all | frontmatter | links | conventions | graph"),
-    vault: Optional[Path] = typer.Option(None),
+    vault: Path | None = typer.Option(None),
     json_out: bool = typer.Option(False, "--json"),
     limit: int = typer.Option(15, help="Rows shown in text mode."),
-    html: Optional[Path] = typer.Option(
+    html: Path | None = typer.Option(
         None, "--html", help="Write a self-contained HTML report to this path."
     ),
-    markdown: Optional[Path] = typer.Option(
+    markdown: Path | None = typer.Option(
         None, "--markdown", help="Write a Markdown report to this path."
     ),
 ) -> None:
@@ -358,7 +395,7 @@ def diagnostics(
 @app.command()
 def inspect(
     path: str = typer.Argument(..., help="Vault-relative path of a Markdown file."),
-    vault: Optional[Path] = typer.Option(None),
+    vault: Path | None = typer.Option(None),
     json_out: bool = typer.Option(False, "--json"),
     spans: bool = typer.Option(False, help="Also show derived spans."),
 ) -> None:
@@ -366,7 +403,7 @@ def inspect(
     settings = _settings(vault)
     indexer = CorpusIndexer(settings)
 
-    target = path[2:] if path.startswith("./") else path
+    target = path.removeprefix("./")
     if not (settings.vault_path / target).is_file():
         err(f"not a file in the vault: {target}", err=True)
         raise typer.Exit(code=1)
@@ -435,7 +472,7 @@ def inspect(
 
 @app.command(name="model-test")
 def model_test(
-    vault: Optional[Path] = typer.Option(None),
+    vault: Path | None = typer.Option(None),
     repetitions: int = typer.Option(3, help="Runs per task; reliability needs more than one."),
     role: str = typer.Option("extraction", help="Model role to exercise."),
     write: bool = typer.Option(True, help="Write docs/research/local-model-capability-spike.md."),
@@ -502,10 +539,10 @@ def model_test(
 
 # Phase 2 commands (ingest, search, concepts, documents, proposals) are
 # registered here so Phase 1's commands stay exactly as they were.
-from .phase2 import register as _register_phase2  # noqa: E402
-from .phase3 import register as _register_phase3  # noqa: E402
+from .phase2 import register as _register_phase2
+from .phase3 import register as _register_phase3
 from .phase4 import register as _register_phase4
-from .phase9 import register as _register_phase9  # noqa: E402
+from .phase9 import register as _register_phase9
 
 _register_phase2(app, _settings)
 _register_phase3(app, _settings)
@@ -515,7 +552,7 @@ _register_phase9(app, _settings)
 
 @app.command()
 def serve(
-    vault: Optional[Path] = typer.Option(None),
+    vault: Path | None = typer.Option(None),
     host: str = typer.Option("127.0.0.1", help="Bind address. Localhost by default."),
     port: int = typer.Option(8000),
     reload: bool = typer.Option(False, "--reload", help="Auto-reload on code changes."),
@@ -560,7 +597,7 @@ def serve(
 
 @app.command()
 def mcp(
-    vault: Optional[Path] = typer.Option(None),
+    vault: Path | None = typer.Option(None),
 ) -> None:
     """Serve the knowledge model to an agent over MCP (needs the `mcp` extra).
 
@@ -600,7 +637,7 @@ def mcp(
 # it is given, so every command above must already be attached when it runs.
 @app.command()
 def shell(
-    vault: Optional[Path] = typer.Option(None),
+    vault: Path | None = typer.Option(None),
 ) -> None:
     """Open an interactive Forge shell with slash commands."""
     from .shell import run as _run_shell
@@ -614,7 +651,7 @@ def shell(
 
 @app.command()
 def tui(
-    vault: Optional[Path] = typer.Option(None),
+    vault: Path | None = typer.Option(None),
 ) -> None:
     """Open the full-screen Forge TUI (needs the `tui` extra)."""
     from .tui import Stats, run_tui

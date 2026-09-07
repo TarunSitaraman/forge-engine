@@ -631,10 +631,63 @@ would consume.
   end-user documentation, backup/restore for derived stores.
 
 **Gate**
-- [ ] Fresh-machine setup works from documentation alone, with no paid
-      API
-- [ ] Full rebuild from Markdown reproduces the derived model
-- [ ] Backup/restore covers state Markdown cannot express (ADR-001 R5)
+- [x] **Fresh-machine setup works from documentation alone, with no paid API.**
+      Verified 2026-09-07 by installing into an empty virtualenv and following
+      the docs on a vault that did not exist beforehand. It did not work the
+      first time, and the four things that stopped it are the useful output of
+      this gate:
+
+      1. **`forge --version` was `No such option`.** Found in the first minute,
+         which is roughly how long it takes a new user to find it.
+      2. **A vault had to contain `.git`.** A plain folder of Markdown notes is
+         not a git repository, so the first documented command failed before
+         reaching anything Forge does. `.obsidian` and `.forge` are now
+         accepted as equally deliberate markers. The guarantee is unchanged: an
+         *unmarked* directory is still not a vault, because silently indexing
+         the wrong directory is the failure that rule exists to prevent.
+      3. **`bootstrap` reported `edges: 0` and said nothing about why.** The
+         one wikilink in the test vault, `[[Vector Databases]]` against
+         `vector-databases.md`, is a `renamed_candidate`, and acting on it
+         would be the engine guessing what the user meant. The conservatism is
+         right; the silence was not. Bootstrap now reports what it declined and
+         points at `forge diagnostics`.
+      4. **The documented install was `pip install -e ".[dev]"`**, which is the
+         contributor path, not the user path. There is now a Quickstart written
+         from the verified transcript.
+
+      A fifth was found by re-running the walkthrough after building the gate
+      itself: `forge backup` raised `NameError: utc_now` on its first line,
+      because a lint autofix had removed the import as unused before the
+      command that needed it existed. Every unit test passed, because they call
+      `create_backup` directly. Only running the command found it, which is the
+      whole argument for the clean-room exercise. There is now a CLI-level test.
+- [x] **Full rebuild from Markdown reproduces the derived model.** Two rebuilds
+      from the same vault into two empty stores produce identical concept ids,
+      link ids and counts. What that really tests is whether anything
+      non-deterministic leaked into the derivation: a timestamp in an id, a set
+      iterated in hash order. Re-running into a populated store is idempotent
+      rather than additive.
+- [x] **Backup/restore covers state Markdown cannot express (ADR-001 R5).**
+      `forge backup` / `forge restore`, using SQLite's own backup API so the
+      copy is transactionally consistent under a concurrent writer rather than
+      a file copied out from under a live WAL.
+
+      A test states the gap before closing it: a rebuild is *expected* to lose
+      a question the user asked, and asserted to. What a rebuild cannot
+      reproduce is a proposal you rejected and why, the revision log, your
+      questions, syntheses and their staleness, and the wording of a
+      model-derived claim.
+
+      Restore refuses three things rather than guessing, because each destroys
+      knowledge quietly: a backup whose contents do not match its manifest
+      checksum, one written by a newer schema than the build understands, and
+      an existing store without `--force`. It also clears stale `-wal` sidecars,
+      without which a restore appears to succeed and then serves the old data
+      back.
+
+      **`docs/cli.md` said `.forge/` "can be deleted at any time: `forge index`
+      rebuilds it".** That was wrong, and R5 is the risk it was understating.
+      Corrected.
 
 ---
 

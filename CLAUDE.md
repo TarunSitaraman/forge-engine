@@ -17,7 +17,7 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them, `1,307 passed, 42 skipped` becomes `1,349 passed`. See
+   to run them, `1,326 passed, 42 skipped` becomes `1,368 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine*, architecture, ADRs, research,
@@ -44,6 +44,47 @@ are measurement records: renaming the corpus a number was measured
 against would falsify it.
 
 ## Known Stale/Legacy Items
+
+**Phase 10, release readiness, 2026-09-07, and what a clean-room install
+found.** The gate "fresh-machine setup works from documentation alone" was
+tested by doing it: an empty virtualenv, the built wheel, and a vault that did
+not exist beforehand. **It did not work**, and the five defects are worth
+keeping because none of them was visible from inside the repository:
+
+1. `forge --version` was `No such option`. Now reads the installed
+   distribution's metadata rather than a hand-maintained constant.
+2. A vault had to contain `.git`, so a plain folder of Markdown notes failed
+   the first documented command. `VAULT_MARKERS` is now `.git`, `.obsidian`,
+   `.forge`. The guarantee is unchanged: an unmarked directory is still not a
+   vault, because silently indexing the wrong directory is what that rule
+   exists to prevent.
+3. `bootstrap` printed `edges: 0` and said nothing. The vault's one wikilink
+   was a `renamed_candidate`, which bootstrap correctly refuses to act on. The
+   conservatism was right and the silence was not; `SeedPlan.skipped_links`
+   now carries it and the CLI reports it.
+4. The documented install was `pip install -e ".[dev]"`, the contributor path.
+   There is now a Quickstart written from the verified transcript.
+5. `forge backup` raised `NameError: utc_now` on its first line, because a
+   ruff autofix had removed the import as unused *before* the command that
+   needed it was written. Every unit test passed: they call `create_backup`
+   directly. **Library tests do not test commands**; there is now a CLI-level
+   test, and this is the argument for re-running the walkthrough after every
+   change to a command.
+
+**`.forge/` is not disposable, and the docs said it was.** `docs/cli.md` read
+"derived state and can be deleted at any time: `forge index` rebuilds it". A
+rebuild cannot reproduce a rejected proposal, the revision log, the questions
+the user asked, syntheses and their staleness, or the wording of a
+model-derived claim. That is ADR-001 R5, and `forge backup` / `forge restore`
+is the mitigation it asks for. A test asserts the loss *before* asserting the
+recovery, so the gap is stated rather than implied.
+
+**Backup uses SQLite's own backup API**, not a file copy: copying a database
+out from under a live WAL produces a backup that restores to a torn file, which
+is worse than none because it looks like one. Restore refuses a checksum
+mismatch, a newer schema, and an existing store without force, and clears stale
+`-wal` sidecars, without which a restore appears to succeed and then serves the
+old data back.
 
 **Phase 9, research intelligence, 2026-09-07.** `Question` and `Synthesis`
 entities (schema v5, with a tested v4 upgrade), `forge.research` for the belief,
@@ -837,7 +878,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine, distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,349 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,368 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -862,12 +903,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 1,307 passed, 42 skipped, offline, no model
+python -m pytest tests           # 1,326 passed, 42 skipped, offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,349 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,368 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.

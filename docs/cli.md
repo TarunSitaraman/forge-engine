@@ -4,12 +4,51 @@
 
 **Commands are read-only with respect to the Markdown vault**, with one
 explicit exception: `forge proposals approve --apply`. Everything else writes
-only to `.forge/`, which is derived state and can be deleted at any time:
-`forge index` rebuilds it.
+only to `.forge/`.
+
+**`.forge/` is derived, but it is not disposable.** `forge index` rebuilds the
+part that comes from your Markdown: sources, spans, concepts, links. It cannot
+rebuild what was never in the Markdown, which is a proposal you rejected, the
+revision log, the questions you asked, or the exact wording of a model-derived
+claim. Back it up with `forge backup` before deleting it. (This paragraph used
+to say `.forge/` could be deleted at any time, which was wrong; ADR-001 R5 is
+the risk it was understating.)
 
 ---
 
-## Install
+## Quickstart
+
+Verified in a clean virtual environment on 2026-09-07, on a vault that did not
+exist beforehand. No API key, no model, no paid service.
+
+```bash
+python3 -m venv venv && source venv/bin/activate
+pip install forge-kb
+forge --version
+
+mkdir -p ~/notes && cd ~/notes
+mkdir .forge                       # marks the folder as a vault
+# ... put some Markdown in it ...
+
+forge index                        # deterministic; reports "LLM calls: 0"
+forge bootstrap --apply            # filenames become concepts, links become edges
+forge diagnostics                  # what is quietly broken
+forge search "some phrase"         # evidence with citations, not generated prose
+forge gaps                         # what the model does not hold
+```
+
+**Forge needs to know which folder is your vault**, and will not guess: it
+looks upward from the current directory for one containing `.git`, `.obsidian`
+or `.forge`. An Obsidian vault or a git repository already qualifies; for a
+plain folder of notes, `mkdir .forge` is the one-time marker. Otherwise set
+`FORGE_VAULT_PATH`, which is what you want if you run Forge from anywhere else.
+
+**Nothing above needs a model.** Extraction, `forge ask`, and the evolution
+workflow do; everything else is deterministic and stays that way.
+
+---
+
+## Install (for working on the engine)
 
 Forge is **two repositories**: this engine, and the Markdown vault it reads.
 They were separate as of 2026-09-01, so the engine no longer sits inside your
@@ -349,6 +388,25 @@ the default when no preset is set) if a key ever exists; nothing requires it.
 measurement on record: 5/5 on the assessment set, 2026-08-14: is Qwen3 8B via
 Ollama and describes *only* that. Moving the Mac to a hosted open-weights model
 does not inherit it, and the two must not be pooled.
+
+## Backing up the derived store
+
+```bash
+forge backup                       # into .forge/backups/<timestamp>/
+forge backup --out ~/forge-backup
+forge restore ~/forge-backup --force
+```
+
+A backup is a transactionally consistent copy plus a manifest carrying a
+checksum, the schema version and the row counts. `forge restore` refuses a
+backup whose contents do not match its checksum, one written by a newer schema
+than the installed build understands, and an existing store unless `--force`.
+Each of those refusals is a case where going ahead destroys knowledge quietly.
+
+What this is for: the derived state your Markdown does not contain. Rejected
+proposals and why, the revision log, your questions, syntheses and their
+staleness, and the wording of model-derived claims. A rebuild reproduces the
+rest.
 
 ## Asking the six questions
 

@@ -5,10 +5,10 @@ from .seed import BOOTSTRAP_VERSION, SeedPlan, build_plan, is_concept_page
 
 __all__ = [
     "BOOTSTRAP_VERSION",
+    "FOLDER_KINDS",
+    "KIND_NAMESPACES",
     "SeedPlan",
     "build_plan",
     "is_concept_page",
     "kind_for",
-    "FOLDER_KINDS",
-    "KIND_NAMESPACES",
 ]

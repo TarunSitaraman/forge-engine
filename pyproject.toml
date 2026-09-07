@@ -10,7 +10,7 @@ build-backend = "hatchling.build"
 # between its users and this tool's is close enough to zero to accept.
 name = "forge-kb"
 version = "0.1.0"
-description = "Find what is quietly broken in a Markdown knowledge vault: dead wikilinks, missing frontmatter, contradictory conventions."
+description = "A knowledge engine for Markdown vaults: traceable claims with provenance, a graph you can question, and a record of how your understanding changed."
 readme = "README.md"
 authors = [{ name = "Tarun Sitaraman", email = "tarunsitaraman134@gmail.com" }]
 keywords = [

@@ -34,13 +34,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Iterable
 
 from ..corpus.model import CorpusIndex
 from ..domain import (
     ClaimLink,
     Concept,
-    ConceptKind,
     Derivation,
     LinkType,
     Provenance,
@@ -89,7 +87,7 @@ def is_concept_page(rel_path: str) -> bool:
     if rel_path.startswith(EXCLUDED_FOLDERS):
         return False
     stem = rel_path.rsplit("/", 1)[-1]
-    stem = stem[:-3] if stem.endswith(".md") else stem
+    stem = stem.removesuffix(".md")
     if stem.casefold() in EXCLUDED_STEMS:
         return False
     if _NUMBERED_SECTION_RE.match(stem.casefold()):
@@ -109,6 +107,13 @@ class SeedPlan:
     #: Left out of the graph entirely — the engine must not pick one.
     undecided_collisions: dict[str, list[str]] = field(default_factory=dict)
     skipped_pages: list[str] = field(default_factory=list)
+    #: Links that did not become edges, counted by why. Reported rather than
+    #: dropped in silence: a clean-room run on 2026-09-07 produced a two-page
+    #: vault whose one wikilink was a `renamed_candidate`, so bootstrap wrote
+    #: **0 edges** and said nothing about it. The conservatism is right, the
+    #: silence was not: a user reading "edges: 0" has no way to learn that one
+    #: link is a rename away from working.
+    skipped_links: dict[str, int] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -116,6 +121,7 @@ class SeedPlan:
             "links": len(self.links),
             "undecided_collisions": self.undecided_collisions,
             "skipped_pages": len(self.skipped_pages),
+            "skipped_links": self.skipped_links,
             "by_kind": self.by_kind(),
         }
 
@@ -170,42 +176,59 @@ def build_plan(index: CorpusIndex, decided: dict[str, str] | None = None) -> See
             plan.concepts.append(concept)
             path_to_concept[path] = concept
 
-    plan.links = list(_links(pages, path_to_concept))
+    plan.links, plan.skipped_links = _links(pages, path_to_concept)
     return plan
 
 
-def _links(pages, path_to_concept: dict[str, Concept]) -> Iterable[ClaimLink]:
-    """One MENTIONS edge per resolved link between two concept pages.
+def _links(
+    pages, path_to_concept: dict[str, Concept]
+) -> tuple[list[ClaimLink], dict[str, int]]:
+    """One edge per resolved link between two concept pages, plus what was skipped.
 
     Deduplicated: a page linking to the same target five times is one edge, not
-    five. Self-links are dropped — the domain rejects them, and a page
+    five. Self-links are dropped: the domain rejects them, and a page
     mentioning itself carries no information.
+
+    Only `RESOLVED` and `CASE_MISMATCH` links become edges. A
+    `renamed_candidate` is a *suggestion* that a link points at a page whose
+    name has drifted, and acting on it would be the engine guessing what the
+    user meant. It is counted and returned so the caller can say so.
     """
     seen: set[tuple[str, str]] = set()
+    edges: list[ClaimLink] = []
+    skipped: dict[str, int] = {}
+
     for f in pages:
         source = path_to_concept.get(f.path)
         if source is None:
             continue
         for link in f.links:
             if link.status not in (LinkStatus.RESOLVED, LinkStatus.CASE_MISMATCH):
+                skipped[link.status.value] = skipped.get(link.status.value, 0) + 1
                 continue
             target = path_to_concept.get(link.resolved_path or "")
             if target is None or target.id == source.id:
+                # Resolved, but to something outside the concept graph: a
+                # skipped navigation page, or the page itself.
+                skipped["outside_the_graph"] = skipped.get("outside_the_graph", 0) + 1
                 continue
             key = (source.id, target.id)
             if key in seen:
                 continue
             seen.add(key)
             where = "related: field" if link.in_frontmatter else "body"
-            yield ClaimLink(
-                id=ClaimLink.make_id(source.id, target.id, LinkType.RELATED_TO),
-                from_id=source.id,
-                to_id=target.id,
-                type=LinkType.RELATED_TO,
-                provenance=_provenance(),
-                score=1.0,
-                rationale=(
-                    f"human-authored link in {f.path} ({where}) -> "
-                    f"{target.vault_path}; not a computed similarity"
-                ),
+            edges.append(
+                ClaimLink(
+                    id=ClaimLink.make_id(source.id, target.id, LinkType.RELATED_TO),
+                    from_id=source.id,
+                    to_id=target.id,
+                    type=LinkType.RELATED_TO,
+                    provenance=_provenance(),
+                    score=1.0,
+                    rationale=(
+                        f"human-authored link in {f.path} ({where}) -> "
+                        f"{target.vault_path}; not a computed similarity"
+                    ),
+                )
             )
+    return edges, skipped
