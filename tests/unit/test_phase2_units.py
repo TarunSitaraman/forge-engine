@@ -668,3 +668,120 @@ class TestNavigationSpansAreNotExtracted:
         extractor = CandidateExtractor(MockProvider(default_response="{}"))
         selected = extractor._select([make_span(self.PROSE, "sp-prose")])
         assert len(selected) == 1
+
+
+class TestReviewingAProposalShowsWhatWasChecked:
+    """`forge proposals show` is where a human decides. What it prints has to
+    be the thing the decision rests on.
+
+    It printed the first 110 characters of the span instead of the quote. On
+    the first real extraction run every claim drawn from one span therefore
+    showed the same document header — "# RAG (Retrieval-Augmented Generation)
+    *One authoritative reference…" — under two claims that had nothing in
+    common, and a reviewer could not tell whether either was supported. The
+    quote was in the proposal the whole time.
+    """
+
+    QUOTE = "Retrieval failures cannot be fixed by prompt engineering."
+    SPAN = (
+        "# RAG (Retrieval-Augmented Generation) One authoritative reference. "
+        + "Filler about chunking and embeddings. " * 12
+        + QUOTE
+        + " More filler about rerankers and evaluation. " * 12
+    )
+
+    def _show(self, tmp_path):
+        from typer.testing import CliRunner
+
+        from forge.cli.main import app
+        from forge.config import Settings
+        from forge.domain import (
+            Derivation,
+            Document,
+            Provenance,
+            ProvenanceTier,
+            Source,
+            SourceKind,
+            Span,
+            TrustTier,
+        )
+        from forge.extraction.extractor import ClaimCandidate
+        from forge.proposals.service import claim_proposal
+        from forge.storage import SqliteStore
+
+        vault = tmp_path / "vault"
+        (vault / ".forge").mkdir(parents=True)
+        settings = Settings.load(vault)
+        store = SqliteStore(settings.db_path)
+        store.initialize()
+
+        source = Source.for_path(
+            "Technologies/Docs/rag.md",
+            kind=SourceKind.MARKDOWN,
+            content_hash="h1",
+            trust_tier=TrustTier.USER_AUTHORED,
+        )
+        store.put_source(source)
+        document = Document(
+            id=Document.make_id(source.id, "h1"),
+            source_id=source.id,
+            parser="test",
+            parser_version="1",
+            content_hash="h1",
+        )
+        store.put_document(document)
+        span = Span(
+            id=Span.make_id(document.id, 0, "L1"),
+            document_id=document.id,
+            ordinal=0,
+            locator="L1-L40",
+            start_line=1,
+            end_line=40,
+            text=self.SPAN,
+            content_hash="s1",
+        )
+        store.put_spans([span])
+
+        proposal = claim_proposal(
+            ClaimCandidate(
+                statement="Retrieval failures cannot be fixed by prompt engineering.",
+                evidence_quote=self.QUOTE,
+                span_id=span.id,
+                concept="RAG",
+            ),
+            Provenance(
+                tier=ProvenanceTier.EXTRACTED_CLAIM,
+                derivation=Derivation.MODEL,
+                agent="CandidateExtractor",
+                model_id="test-model",
+            ),
+            source_id=source.id,
+        )
+        store.put_proposal(proposal)
+        store.close()
+
+        result = CliRunner().invoke(
+            app, ["proposals", "show", "--vault", str(vault), proposal.id]
+        )
+        assert result.exit_code == 0, result.output
+        return result.output
+
+    def test_the_quote_is_printed_as_the_evidence(self, tmp_path):
+        """On its own line, not merely somewhere in the output — the statement
+        is printed too, and here they read alike."""
+        output = self._show(tmp_path)
+        quoted = [line for line in output.splitlines() if line.strip().startswith("quote")]
+        assert quoted, "no quote line in the evidence block"
+        assert self.QUOTE in quoted[0]
+
+    def test_the_span_is_windowed_on_the_quote_not_truncated_from_the_start(
+        self, tmp_path
+    ):
+        """The document header is not evidence for anything."""
+        output = self._show(tmp_path)
+        context = next(line for line in output.splitlines() if line.strip().startswith("in "))
+        assert self.QUOTE in context
+        assert "One authoritative reference" not in context
+
+    def test_the_concept_the_claim_is_about_is_named(self, tmp_path):
+        assert "RAG" in self._show(tmp_path)

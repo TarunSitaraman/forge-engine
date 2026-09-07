@@ -588,6 +588,8 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         typer.echo(f"target   : {proposal.operation.target}")
         typer.echo(f"action   : {proposal.operation.action}")
         typer.echo(f"reason   : {proposal.reason}")
+        if concept := proposal.operation.details.get("concept"):
+            typer.echo(f"about    : {concept}")
         typer.echo(
             f"origin   : {proposal.provenance.derivation.value} via {proposal.provenance.agent}"
             + (f" ({proposal.provenance.model_id})" if proposal.provenance.model_id else "")
@@ -599,11 +601,19 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         if proposal.evidence_span_ids:
             typer.echo("\nevidence:")
             service = SearchService(store)
+            # The quote is what was checked against the span, so it is what a
+            # reviewer has to see. Printing the span's opening instead showed
+            # the same document header under every claim drawn from that span.
+            quote = str(proposal.operation.details.get("evidence_quote") or "")
             for span_id in proposal.evidence_span_ids:
                 hit = service.span(span_id)
                 if hit:
                     typer.echo(f"  {hit.citation}")
-                    typer.echo(f"    {_excerpt(hit.span.text)}")
+                    if quote:
+                        typer.echo(f'    quote  "{quote}"')
+                        typer.echo(f"    in     {_around(hit.span.text, quote)}")
+                    else:
+                        typer.echo(f"    {_excerpt(hit.span.text)}")
         details = proposal.operation.details
         if details.get("affected_links"):
             typer.echo(f"\naffected links: {details['affected_links']}")
@@ -916,3 +926,23 @@ def _index_embeddings(settings: Settings, store: SqliteStore, report: Any) -> No
 def _excerpt(text: str, limit: int = 110) -> str:
     flat = " ".join(text.split())
     return flat if len(flat) <= limit else flat[: limit - 1] + "…"
+
+
+def _around(text: str, quote: str, width: int = 200) -> str:
+    """The span, windowed on the quote rather than truncated from the start.
+
+    A span is a couple of thousand characters. Showing its first 110 tells a
+    reviewer what the document opens with, which is the same for every claim
+    drawn from it and settles nothing. Showing the quote in its own
+    surroundings is what makes "is this claim supported?" answerable at a
+    glance, which is the only reason the evidence is printed at all.
+    """
+    flat = " ".join(text.split())
+    needle = " ".join(quote.split())
+    at = flat.find(needle)
+    if at < 0:
+        return _excerpt(flat, width)
+    pad = max(0, (width - len(needle)) // 2)
+    start = max(0, at - pad)
+    end = min(len(flat), at + len(needle) + pad)
+    return ("…" if start else "") + flat[start:end] + ("…" if end < len(flat) else "")

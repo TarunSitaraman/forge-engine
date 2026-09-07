@@ -17,7 +17,7 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them, `1,410 passed, 42 skipped` becomes `1,452 passed`. See
+   to run them, `1,413 passed, 42 skipped` becomes `1,455 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine*, architecture, ADRs, research,
@@ -44,6 +44,33 @@ are measurement records: renaming the corpus a number was measured
 against would falsify it.
 
 ## Known Stale/Legacy Items
+
+**`forge proposals show` printed the wrong evidence, 2026-09-07.** It showed
+the first 110 characters of the evidence span instead of the quote that
+grounds the claim — and the quote was in the proposal all along, in
+`operation.details["evidence_quote"]`, put there by `claim_proposal` and
+verified by `_grounded` before the proposal existed.
+
+The cost is precise. A span is a couple of thousand characters, so on the first
+real extraction run two claims with nothing in common —
+*"Retrieval failures cannot be fixed by prompt engineering"* and *"In
+ingestion, source documents are chunked, then embedded, then stored in a vector
+database"* — both displayed the same document header,
+`# RAG (Retrieval-Augmented Generation) *One authoritative reference…`. A
+reviewer had nothing to decide on. **This is the command where a human approves
+model output**, and it was showing them a header.
+
+The gate "from a claim, reach the exact source span in one interaction" was
+tested and passing the whole time — `test_gate_one_a_claim_reaches_its_exact_
+source_span_in_one_request` asserts the API returns the span's verbatim text.
+The API was right and the CLI was wrong, and no test covered
+`proposals show` at all. **A gate proved on one interface is not proved on the
+others**, which is the same lesson as the throttle reachable only from two
+scripts, on the same day.
+
+Now prints the quote, and the span *windowed on it* rather than truncated from
+the start, plus the concept the claim is about. Three tests, checked by
+reverting.
 
 **`forge identity alias`, 2026-09-07.** The matcher has consulted
 config-declared aliases since Phase 3 — `ConceptMatcher.match` checks
@@ -1111,7 +1138,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine, distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,452 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,455 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -1136,12 +1163,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 1,410 passed, 42 skipped, offline, no model
+python -m pytest tests           # 1,413 passed, 42 skipped, offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,452 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,455 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.
