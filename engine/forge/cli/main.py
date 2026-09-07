@@ -511,6 +511,51 @@ _register_phase3(app, _settings)
 _register_phase4(app, _settings)
 
 
+@app.command()
+def serve(
+    vault: Optional[Path] = typer.Option(None),
+    host: str = typer.Option("127.0.0.1", help="Bind address. Localhost by default."),
+    port: int = typer.Option(8000),
+    reload: bool = typer.Option(False, "--reload", help="Auto-reload on code changes."),
+) -> None:
+    """Serve the read-only HTTP API and graph explorer (needs the `api` extra).
+
+    Binds to localhost by default and on purpose. The API publishes a vault's
+    entire contents, spans included, and it has no authentication; exposing it
+    on 0.0.0.0 publishes your notes to the network. Pass `--host 0.0.0.0`
+    deliberately or not at all.
+    """
+    settings = _settings(vault)
+    try:
+        import uvicorn
+
+        from ..api import create_app
+    except ModuleNotFoundError as exc:
+        err(f"{exc}", err=True)
+        raise typer.Exit(code=2) from None
+
+    store = load_store(settings)
+    counts = store.counts()
+    store.close()
+    if not counts.get("concepts") and not counts.get("sources"):
+        err(
+            "the store is empty, so the explorer will have nothing to show. "
+            "Run `forge bootstrap --apply` or `forge ingest` first.",
+            err=True,
+        )
+
+    typer.echo(f"vault    : {settings.vault_path}")
+    typer.echo(f"store    : {settings.db_path}")
+    typer.echo(f"explorer : http://{host}:{port}/")
+    typer.echo(f"api docs : http://{host}:{port}/docs")
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        typer.echo(
+            f"\nWARNING: bound to {host}, not localhost. This API is unauthenticated "
+            "and serves the full text of every ingested source."
+        )
+    uvicorn.run(create_app(settings), host=host, port=port, reload=reload)
+
+
 # Registered last, deliberately: the shell enumerates the commands of the group
 # it is given, so every command above must already be attached when it runs.
 @app.command()

@@ -75,6 +75,12 @@ agent = ["langgraph>=1.0", "langgraph-checkpoint-sqlite>=3.0"]
 # `forge shell` offers every command with nothing beyond the standard library
 # and what typer already brings.
 tui = ["textual>=1.0"]
+# `forge serve` — the read-only HTTP API and graph explorer. An extra for the
+# same reason as the others: the API is a *view* over the store, and every
+# command that builds the store must keep working without a web framework
+# installed. `forge.api` is imported lazily so a missing FastAPI is a clear
+# message from one command rather than an ImportError at startup.
+api = ["fastapi>=0.110", "uvicorn>=0.29"]
 # Static word vectors, for measuring whether *semantic* matching beats
 # vocabulary overlap. An extra for the same reason as the others: retrieval
 # must work with no model at all, and `hashing` remains the zero-dependency
@@ -84,6 +90,8 @@ vectors = ["spacy>=3.7"]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
     "textual>=1.0",
     "langgraph>=1.0",
     "langgraph-checkpoint-sqlite>=3.0",
@@ -111,3 +119,18 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency injection *is* a call in an argument default, which is
+# what B008 exists to catch in ordinary code. These four are the documented
+# idiom and are evaluated once at import, so the mutable-default hazard the
+# rule guards against does not apply.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    # Typer's is the same idiom, and every CLI command in this package uses it.
+    "typer.Option",
+    "typer.Argument",
+]

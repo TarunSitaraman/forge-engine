@@ -350,6 +350,27 @@ measurement on record: 5/5 on the assessment set, 2026-08-14: is Qwen3 8B via
 Ollama and describes *only* that. Moving the Mac to a hosted open-weights model
 does not inherit it, and the two must not be pooled.
 
+## Serving the API and explorer
+
+```bash
+pip install 'forge-kb[api]'
+forge serve                      # http://127.0.0.1:8000/
+forge serve --port 9000
+```
+
+`/` is the graph explorer, `/docs` is the generated OpenAPI reference. Every
+route is a GET and the whole API makes zero model calls; `/stats` publishes the
+call counter so that is checkable rather than asserted.
+
+**It binds to localhost by default and on purpose.** The API is
+unauthenticated and serves the full text of every ingested span, so exposing it
+on `0.0.0.0` publishes your notes to the network. `--host 0.0.0.0` prints a
+warning; there is no configuration that removes it.
+
+The explorer needs something to show. On an empty store `forge serve` says so
+and still starts; run `forge bootstrap --apply` for the deterministic graph, or
+`forge ingest` for sources and spans, first.
+
 The evaluation is reproducible, so re-run it rather than estimating:
 
 ```bash

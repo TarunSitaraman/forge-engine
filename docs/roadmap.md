@@ -398,11 +398,57 @@ false-positive rate is measured.
 - FastAPI read endpoints; graph explorer; concept → claims → evidence →
   source drill-down; provenance tier always visible; revision timeline.
 
+**Delivered, 2026-09-07**
+- `forge serve`: a read-only HTTP API (`forge.api`) and a graph explorer, both
+  behind the `api` extra so indexing a vault never needs a web framework.
+- Endpoints for concepts, claims, evidence, spans, sources, revisions, lexical
+  search, graph neighbours and bounded path search, plus `/stats`.
+- A single-file explorer served at `/`, vanilla JS over that JSON API. No build
+  step and no framework: it is a client of the API and nothing else, so a view
+  that needs data the API does not publish is a gap in the API.
+
 **Gate**
-- [ ] From any claim, reach the exact source span in one interaction
-- [ ] Generated content is **visually distinguishable** from source
-      evidence, a UI requirement derived from Principle 10
-- [ ] The model is comprehensible with no chat interface present
+- [x] **From any claim, reach the exact source span in one interaction.**
+      `GET /claims/{id}` returns the claim *and* its evidence chain, with each
+      span's verbatim text, its citation and its source locator. The test
+      asserts the request count, not merely that the data is reachable: an API
+      that returned span ids and made the client fetch each one would satisfy a
+      weaker reading of this and fail the gate.
+- [x] **Generated content is visually distinguishable from source evidence.**
+      Every payload that can carry provenance does, and the explorer keys its
+      styling on it. Colour is not the only signal: model-derived objects also
+      carry a dashed left edge and the word "model" spelled out, and the
+      overview states the mapping rather than leaving a reader to infer it.
+
+      Building this found a real instance of the failure the gate exists to
+      prevent. `Derivation` serializes lower-case (`model`) while
+      `ProvenanceTier` serializes upper-case (`EXTRACTED_CLAIM`), and the
+      explorer's first version compared `derivation === "MODEL"`, which never
+      matched. Model-derived content was marked only when its tier happened to
+      give it away. Caught by the gate test, fixed with a case-insensitive
+      comparison, and the serialized casing of all three fields a client styles
+      on is now pinned by its own test.
+- [x] **The model is comprehensible with no chat interface present.** There is
+      no prompt box, asserted structurally rather than by searching for the
+      word "chat": no `<textarea>`, no `<form>`, exactly one `<input>` (the
+      concept name filter), and nothing on the page issues anything but a GET.
+      A word search would fail on the page's own comment explaining the absence
+      and pass on a prompt box named something else.
+
+**Read-only is enforced, not promised.** A test walks the OpenAPI schema and
+fails on any non-GET route. Knowledge changes through proposal and activation,
+which require a human decision; an HTTP write path would be a second way in
+without that gate. The API also makes **zero model calls**, asserted across
+every route the way the rest of the engine asserts it, and `/stats` publishes
+the counter so a reader can see it.
+
+**One defect found on the first smoke run, worth recording.** `sqlite3`
+connections are bound to their creating thread and FastAPI runs sync endpoints
+in a threadpool, so a single shared store raised `ProgrammingError` on the
+first route that touched the database. Fixed by opening a connection per
+request rather than passing `check_same_thread=False`, which silences the check
+without making the connection safe to share. Two tests pin it, including one
+that issues eight concurrent requests.
 
 ---
 

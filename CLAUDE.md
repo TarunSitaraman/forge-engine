@@ -17,7 +17,7 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them, `1,224 passed, 42 skipped` becomes `1,266 passed`. See
+   to run them, `1,253 passed, 42 skipped` becomes `1,295 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine*, architecture, ADRs, research,
@@ -44,6 +44,48 @@ are measurement records: renaming the corpus a number was measured
 against would falsify it.
 
 ## Known Stale/Legacy Items
+
+**Phase 6, the read-only API and explorer, 2026-09-07.** `forge serve`
+(`forge.api`, behind the `api` extra). Three things are enforced rather than
+promised, because each is the kind of claim that stops being true quietly:
+
+- **Every route is a GET**, asserted by walking the OpenAPI schema. Knowledge
+  changes through proposal and activation, which need a human decision; an HTTP
+  write path would be a second way in without that gate.
+- **Zero model calls**, asserted across every route the way the rest of the
+  engine asserts it, with `/stats` publishing the counter.
+- **A connection per request.** `sqlite3` connections are bound to their
+  creating thread and FastAPI runs sync endpoints in a threadpool, so a single
+  shared store raised `ProgrammingError` on the first route that touched the
+  database. Found on the first smoke run, on `/stats`. Fixed by opening per
+  request, *not* by `check_same_thread=False`, which silences the check without
+  making the connection safe to share. Pinned, including eight concurrent
+  requests.
+
+**The gate-two test caught a real Principle 10 bug in the explorer.**
+`Derivation` serializes lower-case (`model`) while `ProvenanceTier` serializes
+upper-case (`EXTRACTED_CLAIM`) and `TrustTier` lower-case (`user_authored`).
+Three enums, three conventions. The explorer compared `derivation === "MODEL"`,
+which never matched, so model-derived content was marked only when its tier
+happened to give it away. **Never assume the casing**; the serialization of all
+three fields a client styles on is now pinned by its own test.
+
+**The explorer is one static file of vanilla JS over the JSON API**, no build
+step and no framework, deliberately: it is a client of the API and nothing
+else, so a view needing data the API does not publish is a gap in the API
+rather than a private query. Its gate assertions are structural, not textual.
+Searching the page for the word "chat" failed on the page's own comment
+explaining why there is no chat interface, and would have passed on a prompt
+box named something else; it now asserts no `<textarea>`, no `<form>`, exactly
+one `<input>`, and no non-GET fetch.
+
+**Two things worth knowing before touching it.** `GraphMetrics.to_dict` calls
+the field `isolated_nodes`; the explorer first read `g.isolated` and rendered a
+dash against a 545-node graph, which looks plausible and nothing else catches,
+so a test now pins that the explorer only reads metric names the API publishes.
+And `get_claim_evidence`'s `citation` already includes the source locator, so
+publishing `span_citation` separately is what stops a client printing the path
+twice.
 
 **Raising `FORGE_LLM_MAX_RETRIES` made rate limiting worse, 2026-09-06, and
 `--sleep` is the answer.** Same model, prompt and set on Groq: `--repeat 2` at
@@ -699,7 +741,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine, distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,266 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,295 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -724,12 +766,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 1,224 passed, 42 skipped, offline, no model
+python -m pytest tests           # 1,253 passed, 42 skipped, offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,266 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,295 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.

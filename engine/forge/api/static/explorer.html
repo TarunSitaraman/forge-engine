@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forge</title>
+<!-- Inline, so the page issues no second request. Without it every view
+     logged a 404 for /favicon.ico in the console. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='13' font-size='13'%3E%E2%97%86%3C/text%3E%3C/svg%3E">
+<!--
+  The graph explorer. One file, no build step, no framework: it is a client of
+  the JSON API and nothing else, which keeps the API honest. If a view here
+  needs data the API does not publish, the API is incomplete.
+
+  Two rules this page exists to satisfy:
+
+  * Principle 10, generated content must be visually distinguishable from
+    source evidence. Every object carries a provenance tier and this page keys
+    its styling on it: model-derived objects get a dashed marker and an
+    explicit "model" label, human assertions and quoted source spans do not.
+    The legend on the home view states the mapping rather than assuming a
+    reader infers it from colour, and colour is never the only signal.
+  * The model must be comprehensible with no chat interface present. There is
+    no prompt box on this page, deliberately. Everything is reached by
+    navigating: concept, its claims, each claim's evidence, the exact span.
+-->
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fbfaf8; --panel: #ffffff; --ink: #1a1a1a; --muted: #5f6368;
+  --rule: #e2e0dc; --accent: #245b8f; --accent-soft: #eaf1f8;
+  --model: #7a4b12; --model-soft: #fdf3e6; --human: #1d5f3f; --human-soft: #eaf5ee;
+  --source: #3a3a3a; --source-soft: #f2f1ee;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16171a; --panel: #1e2024; --ink: #e8e6e3; --muted: #9aa0a6;
+    --rule: #32353b; --accent: #7fb2e5; --accent-soft: #1b2a3a;
+    --model: #e0a763; --model-soft: #2c2317; --human: #7fc9a0; --human-soft: #16271e;
+    --source: #c9c7c3; --source-soft: #24262a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+header {
+  position: sticky; top: 0; z-index: 5; background: var(--panel);
+  border-bottom: 1px solid var(--rule); padding: 10px 20px;
+  display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+}
+header .brand { font-weight: 700; letter-spacing: .02em; }
+header nav a { margin-right: 14px; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+main { max-width: 900px; margin: 0 auto; padding: 22px 20px 64px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .06em;
+     color: var(--muted); margin: 26px 0 10px; font-weight: 600; }
+.sub { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
+.card { background: var(--panel); border: 1px solid var(--rule);
+        border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; }
+.row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.muted { color: var(--muted); }
+input[type=search] {
+  width: 100%; padding: 9px 12px; border: 1px solid var(--rule);
+  border-radius: 6px; background: var(--panel); color: var(--ink); font-size: 15px;
+}
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+td, th { text-align: left; padding: 5px 10px 5px 0; vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+
+/* ---- Principle 10: provenance is visible, and never by colour alone ---- */
+.tier {
+  display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .04em;
+  padding: 1px 7px; border-radius: 10px; border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.tier-USER_ASSERTION { color: var(--human); background: var(--human-soft); }
+.tier-SOURCE_FACT    { color: var(--source); background: var(--source-soft); }
+.tier-EXTRACTED_CLAIM,
+.tier-MODEL_INFERENCE,
+.tier-SYNTHESIS      { color: var(--model); background: var(--model-soft); }
+
+/* A model-derived object is marked structurally as well as by colour: a
+   dashed left edge, and the word "model" spelled out. */
+.generated { border-left: 3px dashed var(--model); padding-left: 13px; }
+.asserted  { border-left: 3px solid var(--human); padding-left: 13px; }
+.evidence  { border-left: 3px solid var(--source); padding-left: 13px; }
+
+.quote {
+  background: var(--source-soft); border-radius: 6px; padding: 10px 12px;
+  margin: 8px 0 6px; white-space: pre-wrap; font-size: 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.legend { display: grid; gap: 8px; }
+.legend div { display: flex; gap: 10px; align-items: baseline; }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px;
+        font-size: 11px; background: var(--accent-soft); color: var(--accent); }
+.err { color: #b3261e; }
+.empty { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <span class="brand">Forge</span>
+  <nav>
+    <a href="#/">Overview</a>
+    <a href="#/concepts">Concepts</a>
+    <a href="#/claims">Claims</a>
+    <a href="#/sources">Sources</a>
+    <a href="#/history">History</a>
+  </nav>
+  <span class="muted mono" id="apiVersion"></span>
+</header>
+<main id="view">Loading…</main>
+
+<script>
+const view = document.getElementById("view");
+
+// ---- helpers -------------------------------------------------------------
+
+async function api(path) {
+  const res = await fetch(path, { headers: { "Accept": "application/json" } });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${path}`);
+  return res.json();
+}
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
+  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// Provenance is a property of the object, so the class comes from the data
+// rather than from whichever view happens to render it.
+// `Derivation` serializes lower-case ("model") while `ProvenanceTier` serializes
+// upper-case ("MODEL_INFERENCE"). The first version of this compared
+// `derivation === "MODEL"` and never matched, so a model-derived object was
+// marked only if its *tier* gave it away. Compared case-insensitively now:
+// getting this wrong renders generated content as though a human wrote it,
+// which is the one thing Principle 10 forbids.
+const MODEL_TIERS = new Set(["EXTRACTED_CLAIM", "MODEL_INFERENCE", "SYNTHESIS"]);
+const isGenerated = (p) =>
+  !!p && (String(p.derivation).toUpperCase() === "MODEL" || MODEL_TIERS.has(p.tier));
+
+function tierBadge(p) {
+  if (!p) return "";
+  const generated = isGenerated(p);
+  const note = generated ? "model" : (p.tier === "USER_ASSERTION" ? "human" : "source");
+  return `<span class="tier tier-${esc(p.tier)}" title="${esc(p.derivation)}">`
+       + `${esc(p.tier)} · ${note}</span>`;
+}
+const provClass = (p) => (!p ? "" : isGenerated(p) ? "generated" : "asserted");
+
+function card(inner, cls = "") {
+  return `<div class="card ${cls}">${inner}</div>`;
+}
+function fail(err) {
+  view.innerHTML = `<h1>Not available</h1><p class="err mono">${esc(err.message)}</p>
+    <p class="muted">The API is read-only; nothing was changed.</p>`;
+}
+
+// ---- views ---------------------------------------------------------------
+
+async function overview() {
+  const s = await api("/stats");
+  document.getElementById("apiVersion").textContent = s.api_version;
+  const c = s.counts || {};
+  const g = s.graph;
+  view.innerHTML = `
+    <h1>What is in this store</h1>
+    <p class="sub">Every view here is read-only. Knowledge changes through
+      proposal and activation, which need a human decision.</p>
+    ${card(`<table>
+      ${Object.entries(c).map(([k, v]) =>
+        `<tr><th>${esc(k)}</th><td class="mono">${v}</td></tr>`).join("")}
+      <tr><th>model calls made by this API</th><td class="mono">${s.llm_calls}</td></tr>
+    </table>`)}
+    ${g ? `<h2>Graph</h2>${card(`<table>
+      <tr><th>nodes</th><td class="mono">${g.nodes ?? "-"}</td></tr>
+      <tr><th>edges</th><td class="mono">${g.edges ?? "-"}</td></tr>
+      <tr><th>mean degree</th><td class="mono">${(g.mean_degree ?? 0).toFixed(2)}</td></tr>
+      <tr><th>max degree</th><td class="mono">${g.max_degree ?? "-"}</td></tr>
+      <tr><th>isolated nodes</th><td class="mono">${g.isolated_nodes ?? "-"}</td></tr>
+      <tr><th>neighbour query</th><td class="mono">${g.neighbor_query_ms ?? "-"} ms</td></tr>
+    </table>`)}` : ""}
+    <h2>Reading provenance</h2>
+    <p class="sub">Generated content is marked, always. Colour is never the only
+      signal: model-derived objects also carry a dashed edge and the word
+      &ldquo;model&rdquo;.</p>
+    ${card(`<div class="legend">
+      <div class="asserted">${tierBadge({tier: "USER_ASSERTION", derivation: "DETERMINISTIC"})}
+        <span>a human asserted this, by writing the page</span></div>
+      <div class="evidence">${tierBadge({tier: "SOURCE_FACT", derivation: "DETERMINISTIC"})}
+        <span>quoted verbatim from a source document</span></div>
+      <div class="generated">${tierBadge({tier: "EXTRACTED_CLAIM", derivation: "MODEL"})}
+        <span>a model produced this from a span</span></div>
+      <div class="generated">${tierBadge({tier: "MODEL_INFERENCE", derivation: "MODEL"})}
+        <span>a model inferred this; it is not evidence</span></div>
+      <div class="generated">${tierBadge({tier: "SYNTHESIS", derivation: "MODEL"})}
+        <span>a model combined several sources</span></div>
+    </div>`)}`;
+}
+
+async function concepts(query) {
+  const q = query || "";
+  const page = await api(`/concepts?limit=100${q ? `&q=${encodeURIComponent(q)}` : ""}`);
+  view.innerHTML = `
+    <h1>Concepts</h1>
+    <p class="sub">${page.total} total, showing ${page.returned}.</p>
+    <p><input type="search" id="cq" placeholder="Filter by name" value="${esc(q)}"></p>
+    <div id="list">${page.items.map((c) => card(`
+      <div class="row">
+        <a href="#/concepts/${encodeURIComponent(c.id)}"><strong>${esc(c.canonical_name)}</strong></a>
+        ${tierBadge(c.provenance)}
+      </div>
+      <div class="muted mono">${esc(c.kind)}${c.vault_path ? " · " + esc(c.vault_path) : ""}</div>
+    `, provClass(c.provenance))).join("") || `<p class="empty">No concepts match.</p>`}</div>`;
+  const box = document.getElementById("cq");
+  box.addEventListener("change", () => { location.hash = `#/concepts?q=${encodeURIComponent(box.value)}`; });
+}
+
+async function concept(id) {
+  const d = await api(`/concepts/${encodeURIComponent(id)}`);
+  const c = d.concept;
+  view.innerHTML = `
+    <h1>${esc(c.canonical_name)}</h1>
+    <p class="sub">${esc(c.kind)}${c.namespace ? " · namespace " + esc(c.namespace) : ""}
+      ${c.vault_path ? " · <span class='mono'>" + esc(c.vault_path) + "</span>" : ""}</p>
+    ${card(`<div class="row"><span>How this concept came to exist</span>${tierBadge(c.provenance)}</div>
+      <div class="muted" style="margin-top:6px">
+        derivation <span class="mono">${esc(c.provenance.derivation)}</span>
+        ${c.provenance.agent ? " · agent <span class='mono'>" + esc(c.provenance.agent) + "</span>" : ""}
+        ${c.provenance.model_id ? " · model <span class='mono'>" + esc(c.provenance.model_id) + "</span>" : ""}
+      </div>
+      ${d.origin_proposal ? `<div class="muted" style="margin-top:6px">
+        proposal <span class="mono">${esc(d.origin_proposal.type)}</span>,
+        ${esc(d.origin_proposal.status)}${d.origin_proposal.decided_by
+          ? ", decided by " + esc(d.origin_proposal.decided_by) : ""}</div>` : ""}`,
+      provClass(c.provenance))}
+
+    <h2>Claims about this concept</h2>
+    ${d.claims.length ? d.claims.map((cl) => card(`
+      <div class="row">
+        <a href="#/claims/${encodeURIComponent(cl.id)}">${esc(cl.statement)}</a>
+        ${tierBadge(cl.provenance)}
+      </div>
+      <div class="muted mono">${cl.evidence_count} evidence span(s)</div>
+    `, provClass(cl.provenance))).join("")
+      : `<p class="empty">No claims recorded yet. The graph was seeded from vault
+         structure; claims arrive with extraction.</p>`}
+
+    <h2>Related concepts</h2>
+    ${d.relationships.length ? card(`<table>
+      <tr><th>concept</th><th>link</th><th>direction</th><th>why</th></tr>
+      ${d.relationships.map((n) => `<tr>
+        <td><a href="#/concepts/${encodeURIComponent(n.concept_id)}">${esc(n.label || n.concept_id)}</a></td>
+        <td class="mono">${esc(n.link_type)}</td>
+        <td class="mono">${esc(n.direction)}</td>
+        <td class="muted">${esc(n.rationale || "")}</td>
+      </tr>`).join("")}
+    </table>`) : `<p class="empty">No relationships.</p>`}
+
+    <h2>History</h2>
+    <p><a href="#/history/Concept/${encodeURIComponent(c.id)}">Revision timeline for this concept</a></p>`;
+}
+
+async function claims() {
+  const page = await api("/claims?limit=100");
+  view.innerHTML = `
+    <h1>Claims</h1>
+    <p class="sub">${page.total} total, showing ${page.returned}.</p>
+    ${page.items.map((cl) => card(`
+      <div class="row">
+        <a href="#/claims/${encodeURIComponent(cl.id)}">${esc(cl.statement)}</a>
+        ${tierBadge(cl.provenance)}
+      </div>
+      <div class="muted mono">${cl.evidence_count} evidence span(s)</div>
+    `, provClass(cl.provenance))).join("")
+      || `<p class="empty">No claims yet. Run <span class="mono">forge ingest --extract</span>.</p>`}`;
+}
+
+async function claim(id) {
+  // One request. The phase gate is reaching the exact source span from a claim
+  // in a single interaction, so the evidence arrives with the claim.
+  const d = await api(`/claims/${encodeURIComponent(id)}`);
+  view.innerHTML = `
+    <h1>Claim</h1>
+    ${card(`<div class="row"><strong>${esc(d.statement)}</strong>${tierBadge(d.provenance)}</div>
+      <div class="muted" style="margin-top:6px">
+        status <span class="mono">${esc(d.status || "-")}</span>
+        ${d.provenance.model_id ? " · produced by <span class='mono'>" + esc(d.provenance.model_id) + "</span>" : ""}
+      </div>
+      ${d.subject_concept_id ? `<div style="margin-top:6px">about
+        <a href="#/concepts/${encodeURIComponent(d.subject_concept_id)}">this concept</a></div>` : ""}`,
+      provClass(d.provenance))}
+
+    <h2>Evidence — the exact source text</h2>
+    ${d.evidence.length ? d.evidence.map((e) => card(`
+      <div class="row">
+        <span class="mono">${esc(e.source_locator || e.source_id || "unknown source")}</span>
+        <span class="pill">${esc(e.relation)}</span>
+      </div>
+      <div class="muted mono">${esc(e.span_citation || e.citation || "")}${e.trust_tier ? " · trust " + esc(e.trust_tier) : ""}</div>
+      <div class="quote">${esc(e.text || "")}</div>
+      <a class="mono" href="#/spans/${encodeURIComponent(e.span_id)}">span ${esc(e.span_id)}</a>
+    `, "evidence")).join("")
+      : `<p class="empty">No evidence links. A claim in a tier that requires
+         evidence cannot be stored without one, so this is either a
+         USER_ASSERTION or a defect worth reporting.</p>`}`;
+}
+
+async function span(id) {
+  const s = await api(`/spans/${encodeURIComponent(id)}`);
+  view.innerHTML = `
+    <h1>Source span</h1>
+    <p class="sub mono">${esc(s.source_locator || "")} ${esc(s.citation)}</p>
+    ${card(`<div class="quote">${esc(s.text)}</div>
+      <div class="muted mono">lines ${s.start_line ?? "?"}-${s.end_line ?? "?"}
+        ${s.page ? " · page " + s.page : ""} · ordinal ${s.ordinal}</div>`, "evidence")}
+    <p class="muted">This is the document's own text, quoted verbatim. Nothing
+      on this page was generated.</p>`;
+}
+
+async function sources() {
+  const page = await api("/sources?limit=200");
+  view.innerHTML = `
+    <h1>Sources</h1>
+    <p class="sub">${page.total} total, showing ${page.returned}.</p>
+    ${page.items.length ? card(`<table>
+      <tr><th>locator</th><th>kind</th><th>trust</th><th>lines</th></tr>
+      ${page.items.map((s) => `<tr>
+        <td class="mono">${esc(s.locator)}</td>
+        <td class="mono">${esc(s.kind)}</td>
+        <td class="mono">${esc(s.trust_tier)}</td>
+        <td class="mono">${s.line_count ?? "-"}</td>
+      </tr>`).join("")}
+    </table>`) : `<p class="empty">No sources ingested.</p>`}`;
+}
+
+async function history(entityType, entityId) {
+  const path = entityType
+    ? `/revisions/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`
+    : "/revisions?limit=100";
+  const rows = await api(path);
+  view.innerHTML = `
+    <h1>${entityType ? "History of one " + esc(entityType) : "Recent changes"}</h1>
+    <p class="sub">Every recorded change, with what caused it.</p>
+    ${rows.length ? card(`<table>
+      <tr><th>when</th><th>entity</th><th>op</th><th>changed</th><th>cause</th></tr>
+      ${rows.map((r) => `<tr>
+        <td class="mono">${esc(r.created_at)}</td>
+        <td class="mono">${esc(r.entity_type)}</td>
+        <td class="mono">${esc(r.op)}</td>
+        <td class="muted">${esc((r.changed_fields || []).join(", "))}</td>
+        <td class="mono muted">${esc(r.cause || "")}</td>
+      </tr>`).join("")}
+    </table>`) : `<p class="empty">No revisions recorded.</p>`}`;
+}
+
+// ---- routing -------------------------------------------------------------
+
+const ROUTES = [
+  [/^\/?$/,                        () => overview()],
+  [/^\/concepts$/,                 (_, q) => concepts(q.get("q"))],
+  [/^\/concepts\/(.+)$/,           (m) => concept(decodeURIComponent(m[1]))],
+  [/^\/claims$/,                   () => claims()],
+  [/^\/claims\/(.+)$/,             (m) => claim(decodeURIComponent(m[1]))],
+  [/^\/spans\/(.+)$/,              (m) => span(decodeURIComponent(m[1]))],
+  [/^\/sources$/,                  () => sources()],
+  [/^\/history$/,                  () => history(null, null)],
+  [/^\/history\/([^/]+)\/(.+)$/,   (m) => history(decodeURIComponent(m[1]), decodeURIComponent(m[2]))],
+];
+
+function route() {
+  const raw = location.hash.replace(/^#/, "") || "/";
+  const [path, search] = raw.split("?");
+  const params = new URLSearchParams(search || "");
+  for (const [pattern, handler] of ROUTES) {
+    const m = path.match(pattern);
+    if (m) {
+      Promise.resolve(handler(m, params)).catch(fail);
+      return;
+    }
+  }
+  view.innerHTML = `<h1>No such view</h1><p class="mono">${esc(path)}</p>`;
+}
+
+window.addEventListener("hashchange", route);
+route();
+</script>
+</body>
+</html>
