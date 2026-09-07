@@ -9,7 +9,6 @@ returned `RAM`, `Answer`, `Fluency` and `VARCHAR(n)` as concepts.
 from __future__ import annotations
 
 import pytest
-
 from forge.bootstrap import build_plan, is_concept_page, kind_for
 from forge.bootstrap.seed import BOOTSTRAP_VERSION
 from forge.corpus.model import CorpusIndex, IndexedFile
@@ -212,3 +211,117 @@ class TestEdges:
             files=[_file("A.md", [_link("B", "B.md", in_fm=True)]), _file("B.md")]
         )
         assert "related: field" in build_plan(index).links[0].rationale
+
+
+class TestInboundLinks:
+    """Counting what points at each concept, over every page in the vault.
+
+    The graph cannot answer "does anything link here?", because the pages that
+    do the linking in a hub-and-spoke vault are not concepts. Measured on the
+    real corpus 2026-09-07: 115 links pointed at the 72 concepts the gap report
+    called isolated, and not one came from a page the graph counts.
+    """
+
+    def test_a_link_from_a_page_that_is_not_a_concept_still_counts(self):
+        """The whole point. `_index.md` is not a node, but it is a page, and a
+        doc reachable from its folder's index is reachable."""
+        index = CorpusIndex(
+            vault_path=".",
+            files=[
+                _file("Technologies/Docs/_index.md", [_link("azure", "Technologies/Docs/azure.md")]),
+                _file("Technologies/Docs/azure.md"),
+            ],
+        )
+        plan = build_plan(index)
+        concept = next(c for c in plan.concepts if c.vault_path.endswith("azure.md"))
+
+        assert plan.links == [], "a hub must not become a node"
+        assert plan.inbound_links[concept.id][0] == 1
+        assert plan.inbound_links[concept.id][1] == ("Technologies/Docs/_index.md",)
+        assert plan.unreferenced() == 0
+
+    def test_distinct_pages_are_counted_not_link_occurrences(self):
+        """The question is whether anything points here, and a page linking
+        five times knows about it once."""
+        index = CorpusIndex(
+            vault_path=".",
+            files=[
+                _file("A.md", [_link("B", "B.md"), _link("B", "B.md"), _link("B", "B.md")]),
+                _file("B.md"),
+            ],
+        )
+        plan = build_plan(index)
+        b = next(c for c in plan.concepts if c.vault_path == "B.md")
+        assert plan.inbound_links[b.id][0] == 1
+
+    def test_a_page_linking_to_itself_does_not_make_itself_reachable(self):
+        index = CorpusIndex(vault_path=".", files=[_file("A.md", [_link("A", "A.md")])])
+        plan = build_plan(index)
+        a = plan.concepts[0]
+        assert plan.inbound_links[a.id] == (0, ())
+        assert plan.unreferenced() == 1
+
+    def test_an_unresolved_link_points_at_nothing_and_counts_as_nothing(self):
+        index = CorpusIndex(
+            vault_path=".",
+            files=[_file("A.md", [_link("B", None, LinkStatus.MISSING)]), _file("B.md")],
+        )
+        plan = build_plan(index)
+        b = next(c for c in plan.concepts if c.vault_path == "B.md")
+        assert plan.inbound_links[b.id][0] == 0
+
+    def test_every_concept_gets_a_row_including_the_unlinked_ones(self):
+        """A concept with no row would be indistinguishable from one nobody
+        counted, which is the distinction the whole table exists to make."""
+        index = CorpusIndex(vault_path=".", files=[_file("A.md"), _file("B.md")])
+        plan = build_plan(index)
+        assert set(plan.inbound_links) == {c.id for c in plan.concepts}
+        assert plan.to_dict()["concepts_nothing_links_to"] == 2
+
+
+class TestTheCommandWritesThem:
+    """Driven through the CLI, not the library.
+
+    Every unit test above calls `build_plan` directly, so none of them would
+    notice if `forge bootstrap --apply` stored the concepts and forgot the
+    counts — the same shape of gap that let `forge backup` ship with a
+    NameError while every unit test passed.
+    """
+
+    def _run(self, vault):
+        from forge.cli.main import app
+        from typer.testing import CliRunner
+
+        runner = CliRunner()
+        for argv in (
+            ["index", "--vault", str(vault)],
+            ["bootstrap", "--vault", str(vault), "--apply"],
+        ):
+            result = runner.invoke(app, argv)
+            assert result.exit_code == 0, result.output
+        return result.output
+
+    def test_apply_records_the_inbound_counts(self, fixture_vault):
+        from forge.config import Settings
+        from forge.storage import SqliteStore
+
+        self._run(fixture_vault)
+
+        store = SqliteStore(Settings.load(fixture_vault).db_path)
+        store.initialize()
+        try:
+            assert store.inbound_counted(), "bootstrap --apply stored no counts"
+            assert store.unreferenced_concepts() is not None
+        finally:
+            store.close()
+
+    def test_a_preview_reports_what_nothing_links_to(self, fixture_vault):
+        from forge.cli.main import app
+        from typer.testing import CliRunner
+
+        self._run(fixture_vault)
+        output = CliRunner().invoke(
+            app, ["bootstrap", "--vault", str(fixture_vault)]
+        ).output
+
+        assert "unreferenced" in output

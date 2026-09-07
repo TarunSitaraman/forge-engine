@@ -426,8 +426,19 @@ forge changes --days 30                  # what changed, from the revision log
 
 `forge gaps` reports and never acts. Every finding is a structural fact about
 the graph: a concept with no claims, an open question with no answers, a claim
-resting on one source, an unresolved dispute, a concept with no edges. Whether
+resting on one source, an unresolved dispute, a page nothing links to. Whether
 one matters is your call.
+
+**`isolated_concept` needs `forge bootstrap --apply` to be trustworthy.** It
+means "no page in the vault links to this one", which the graph alone cannot
+answer: edges run between concept pages, and the `_index.md` hubs that do most
+of the linking in a vault organised hub-and-spoke are deliberately not
+concepts. Bootstrap counts inbound links over every page and records them, and
+the finding reads that count. Without it the command falls back to graph
+degree and says so in each finding rather than claiming more than it knows.
+The difference is not marginal: on a 545-concept corpus, degree reported 72
+isolated concepts of which 71 were linked perfectly well from their folder
+index, and the inbound count reports 53 that are all genuinely unreachable.
 
 A kind that applies to most of the corpus is summarised in one line rather than
 listed, because one fact repeated 544 times buries the findings that name a
@@ -644,7 +655,7 @@ Five tabs, selected with `1`-`5`:
 | **Concepts** | every concept, filterable by name; the cursor shows its origin, claims and relationships, each with its own provenance |
 | **Search** | lexical search over every indexed span, ranked, with the full text of the selected hit |
 | **Issues** | every broken wikilink and unparseable frontmatter block, with the file and, where one exists, the page it probably meant |
-| **Gaps** | what the graph can prove it does not hold: concepts with no claims, isolated concepts, questions with no answers, claims resting on a single source, unresolved disputes |
+| **Gaps** | what the graph can prove it does not hold: concepts with no claims, pages nothing links to, questions with no answers, claims resting on a single source, unresolved disputes |
 
 | | |
 |---|---|

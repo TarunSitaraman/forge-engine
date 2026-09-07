@@ -114,6 +114,17 @@ class SeedPlan:
     #: silence was not: a user reading "edges: 0" has no way to learn that one
     #: link is a rename away from working.
     skipped_links: dict[str, int] = field(default_factory=dict)
+    #: Per concept id: how many pages in the vault link to its page, and a few
+    #: of them by path — counted over **every** page, not only the ones that
+    #: became nodes.
+    #:
+    #: The graph cannot answer "does anything point here?", and mistaking that
+    #: for "nothing points here" is what made `isolated_concept` useless on a
+    #: hub-and-spoke vault: 115 links pointed at the 72 concepts it called
+    #: isolated, every one of them from an `_index.md` or another navigation
+    #: page that is deliberately not a concept. Counted here because this is
+    #: the pass that already has every resolved link in hand.
+    inbound_links: dict[str, tuple[int, tuple[str, ...]]] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -122,8 +133,14 @@ class SeedPlan:
             "undecided_collisions": self.undecided_collisions,
             "skipped_pages": len(self.skipped_pages),
             "skipped_links": self.skipped_links,
+            "inbound_counted": len(self.inbound_links),
+            "concepts_nothing_links_to": self.unreferenced(),
             "by_kind": self.by_kind(),
         }
+
+    def unreferenced(self) -> int:
+        """Concepts no page in the vault links to. The honest isolation count."""
+        return sum(1 for count, _ in self.inbound_links.values() if not count)
 
     def by_kind(self) -> dict[str, int]:
         counts: dict[str, int] = {}
@@ -177,7 +194,39 @@ def build_plan(index: CorpusIndex, decided: dict[str, str] | None = None) -> See
             path_to_concept[path] = concept
 
     plan.links, plan.skipped_links = _links(pages, path_to_concept)
+    plan.inbound_links = _inbound(index, path_to_concept)
     return plan
+
+
+def _inbound(
+    index: CorpusIndex, path_to_concept: dict[str, Concept]
+) -> dict[str, tuple[int, tuple[str, ...]]]:
+    """Count the pages linking to each concept's page, over the whole vault.
+
+    Three deliberate choices:
+
+    * **Every page counts as a source**, navigation included. A doc reachable
+      from its folder's `_index.md` is reachable; that the hub is not a concept
+      is a fact about the graph, not about the vault.
+    * **Distinct source pages**, not link occurrences. The question is whether
+      anything points here, and a page linking five times still knows about it
+      once.
+    * **Self-links do not count.** A page mentioning itself makes nothing
+      reachable.
+    """
+    sources: dict[str, set[str]] = {c.id: set() for c in path_to_concept.values()}
+    for f in index.files:
+        for link in f.links:
+            if link.status not in (LinkStatus.RESOLVED, LinkStatus.CASE_MISMATCH):
+                continue
+            target = path_to_concept.get(link.resolved_path or "")
+            if target is None or target.vault_path == f.path:
+                continue
+            sources[target.id].add(f.path)
+    return {
+        concept_id: (len(paths), tuple(sorted(paths)))
+        for concept_id, paths in sources.items()
+    }
 
 
 def _links(

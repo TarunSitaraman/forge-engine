@@ -51,7 +51,7 @@ from forge.research import (
     open_questions,
 )
 from forge.storage import SqliteStore
-from forge.storage.sqlite_store import claim_fingerprint
+from forge.storage.sqlite_store import SCHEMA_VERSION, claim_fingerprint
 
 HUMAN = Provenance(
     tier=ProvenanceTier.USER_ASSERTION, derivation=Derivation.HUMAN, agent="test"
@@ -559,6 +559,8 @@ def test_a_claim_with_two_sources_is_not_a_single_source_gap(vault: Vault):
 
 
 def test_a_linked_concept_is_not_isolated(vault: Vault):
+    """With no inbound count recorded, the detector falls back to graph degree.
+    See the counted cases below for the behaviour after `forge bootstrap`."""
     a = vault.concept("RAG")
     b = vault.concept("Vector Databases")
     vault.store.put_link(
@@ -576,6 +578,111 @@ def test_a_linked_concept_is_not_isolated(vault: Vault):
     isolated = detect_gaps(vault.store, kinds=[GapKind.ISOLATED_CONCEPT])
 
     assert isolated == []
+
+
+# -- isolation is about arriving, not leaving -------------------------------
+#
+# Reviewed against the real corpus on 2026-09-07: reporting graph degree 0 as
+# isolation produced 72 findings, 71 of them wrong. 115 links pointed at those
+# pages, every one from an `_index.md` or another page that is deliberately not
+# a concept and so has no node. Counting inbound links over the whole vault
+# moved the corpus to 53 findings that are all true.
+
+
+def test_a_concept_linked_only_from_a_page_that_is_not_a_concept_is_not_isolated(
+    vault: Vault,
+):
+    """The false positive that made the finding useless.
+
+    An `_index.md` hub is not a concept and never becomes a node, so its links
+    are not edges. The page it points at is still reachable by a human, which
+    is what isolation is supposed to be about.
+    """
+    orphan_looking = vault.concept("Azure", path="Technologies/Docs/azure.md")
+    vault.store.set_concept_inbound(
+        {orphan_looking.id: (1, ["Technologies/Docs/_index.md"])}
+    )
+
+    assert detect_gaps(vault.store, kinds=[GapKind.ISOLATED_CONCEPT]) == []
+
+
+def test_a_concept_nothing_links_to_is_isolated_even_when_it_links_out(vault: Vault):
+    """Outgoing links do not make a page reachable. A page with twenty of them
+    that nothing points at is exactly as unreachable as one with none."""
+    lonely = vault.concept("Handoff", path="Projects/handoff.md")
+    other = vault.concept("SmartResQ", path="Projects/smartresq.md")
+    vault.store.put_link(
+        ClaimLink(
+            id=ClaimLink.make_id(lonely.id, other.id, LinkType.RELATED_TO),
+            from_id=lonely.id,
+            to_id=other.id,
+            type=LinkType.RELATED_TO,
+            provenance=DETERMINISTIC,
+            score=1.0,
+            rationale="human-authored link",
+        )
+    )
+    vault.store.set_concept_inbound({lonely.id: (0, []), other.id: (1, ["Projects/handoff.md"])})
+
+    gaps = detect_gaps(vault.store, kinds=[GapKind.ISOLATED_CONCEPT])
+
+    assert [g.subject_id for g in gaps] == [lonely.id]
+    assert "links out to" in gaps[0].detail
+
+
+def test_a_concept_with_no_links_in_either_direction_says_so(vault: Vault):
+    alone = vault.concept("Orphan", path="Projects/orphan.md")
+    vault.store.set_concept_inbound({alone.id: (0, [])})
+
+    gap = detect_gaps(vault.store, kinds=[GapKind.ISOLATED_CONCEPT])[0]
+
+    assert "links to nothing either" in gap.detail
+
+
+def test_without_counted_inbound_links_the_finding_admits_it(vault: Vault):
+    """A store bootstrapped before the count existed cannot tell "nothing links
+    here" from "nobody looked". It must not claim the first."""
+    vault.concept("RAG", path="Technologies/Docs/rag.md")
+
+    gap = detect_gaps(vault.store, kinds=[GapKind.ISOLATED_CONCEPT])[0]
+
+    assert "have not been counted" in gap.detail
+    assert "forge bootstrap --apply" in gap.detail
+
+
+def test_counting_inbound_links_replaces_the_previous_count(vault: Vault):
+    """The input is one pass over the vault, so a concept whose last inbound
+    link was deleted must lose its row — an update that only wrote what it saw
+    would leave it claiming to be linked."""
+    a = vault.concept("A", path="a.md")
+    b = vault.concept("B", path="b.md")
+    vault.store.set_concept_inbound({a.id: (1, ["hub.md"]), b.id: (1, ["hub.md"])})
+    vault.store.set_concept_inbound({a.id: (1, ["hub.md"]), b.id: (0, [])})
+
+    assert vault.store.concept_inbound(b.id) == (0, [])
+    assert vault.store.unreferenced_concepts() == [b.id]
+
+
+def test_unreferenced_concepts_tells_never_counted_from_all_linked(vault: Vault):
+    """`None` and `[]` are different answers and a caller must not collapse
+    them: one means nobody has looked."""
+    a = vault.concept("A", path="a.md")
+
+    assert vault.store.unreferenced_concepts() is None
+    vault.store.set_concept_inbound({a.id: (2, ["hub.md", "other.md"])})
+    assert vault.store.unreferenced_concepts() == []
+
+
+def test_only_a_few_linking_pages_are_kept_per_concept(vault: Vault):
+    """Enough to say where a page is reachable from, not a second copy of the
+    link graph in a text column."""
+    a = vault.concept("A", path="a.md")
+    vault.store.set_concept_inbound({a.id: (40, [f"p{i}.md" for i in range(40)])})
+
+    count, sources = vault.store.concept_inbound(a.id)
+
+    assert count == 40, "the count is not capped, only the sample"
+    assert len(sources) == 5
 
 
 def test_a_gap_id_is_stable_across_runs(vault: Vault):
@@ -683,7 +790,13 @@ def test_a_v4_database_upgrades_without_losing_anything(tmp_path: Path):
     claim = vault.claim("RAG reduces hallucination.", rag, [vault.span(doc, "Retrieval grounds.")])
     before = store.counts()
 
-    for table in ("question_answers", "synthesis_claims", "syntheses", "questions"):
+    for table in (
+        "concept_inbound_links",
+        "question_answers",
+        "synthesis_claims",
+        "syntheses",
+        "questions",
+    ):
         store._conn.execute(f"DROP TABLE {table}")
     store._conn.execute("UPDATE meta SET value = '4' WHERE key = 'schema_version'")
     store._conn.commit()
@@ -692,7 +805,7 @@ def test_a_v4_database_upgrades_without_losing_anything(tmp_path: Path):
     upgraded = SqliteStore(path)
     upgraded.initialize()
 
-    assert upgraded.schema_version == 5
+    assert upgraded.schema_version == SCHEMA_VERSION
     after = upgraded.counts()
     for table, count in before.items():
         assert after[table] == count, f"{table} lost rows in the upgrade"
@@ -704,6 +817,12 @@ def test_a_v4_database_upgrades_without_losing_anything(tmp_path: Path):
     upgraded.put_question(question)
     upgraded.link_answer(question.id, claim.id)
     assert [c.id for c in upgraded.answers_for_question(question.id)] == [claim.id]
+
+    # v6's table too: an upgraded database must be able to record inbound
+    # links, or `forge gaps` keeps reporting the finding it cannot trust.
+    assert upgraded.unreferenced_concepts() is None
+    upgraded.set_concept_inbound({rag.id: (0, [])})
+    assert upgraded.unreferenced_concepts() == [rag.id]
     upgraded.close()
 
 

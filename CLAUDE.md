@@ -17,7 +17,7 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them, `1,383 passed, 42 skipped` becomes `1,425 passed`. See
+   to run them, `1,399 passed, 42 skipped` becomes `1,441 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine*, architecture, ADRs, research,
@@ -45,8 +45,8 @@ against would falsify it.
 
 ## Known Stale/Legacy Items
 
-**`isolated_concept` is 99% false positive on a hub-and-spoke vault,
-2026-09-07.** Phase 9's gate was "gap detection produces findings a human
+**`isolated_concept` was 99% false positive on a hub-and-spoke vault,
+found and fixed 2026-09-07.** Phase 9's gate was "gap detection produces findings a human
 agrees are real gaps". The 72 `isolated_concept` findings on the corpus were
 reviewed one by one and **71 are wrong**, for a reason that is structural
 rather than a matter of taste.
@@ -75,17 +75,36 @@ Re-indexing left it on the isolated list, because that index page is
 navigation. A finding a user cannot clear by doing the right thing trains them
 to ignore the report.
 
-**Not yet fixed, and the options are not equivalent.** Widening
-`is_concept_page()` to admit hubs would put 125 navigation pages into the
-graph as concepts, which is wrong. The store cannot answer "does any page link
-here?" today: it holds `ClaimLink`s between concepts and nothing about links
-from non-concept pages. So the honest fix is for bootstrap to record an
-inbound-link count per concept over *all* pages, and for
-`research.gaps` to call a concept isolated only when it has no edges **and**
-no inbound links at all — which on this corpus turns 72 findings into 1. Until
-that lands, `forge gaps --kind isolated_concept` should be read as "no other
-*concept page* links here", which is a different and much weaker statement
-than the label makes it sound.
+**Fixed the same day, and the shape of the fix matters.** Widening
+`is_concept_page()` to admit hubs would have put 125 navigation pages into the
+graph as concepts, which is wrong. The store could not answer "does any page
+link here?" at all: it holds `ClaimLink`s between concepts and nothing about
+links from non-concept pages. So `build_plan` now counts inbound links per
+concept over **every** page in the vault — the same pass that already has every
+resolved link in hand — `forge bootstrap --apply` writes them to a new
+`concept_inbound_links` table (schema v6), and `research.gaps` reads that count
+instead of graph degree.
+
+**Isolation is about arriving, not leaving**, which is the part worth
+remembering. The first version of the fix asked for degree 0 *and* inbound 0,
+and reported 1 finding on the corpus. That was too conservative: a page with
+twenty outgoing links that nothing points at is exactly as unreachable as one
+with none, and requiring degree 0 hid 52 pages that genuinely cannot be reached
+by following a link. Counting inbound alone gives **53 findings, all true**: 26
+cheat sheets and 8 templates nothing links to, 14 problem pages missing from
+their pattern's index, one interview guide, the losing side of three decided
+name collisions (`[[Heap]]` resolves to the pattern page, so the data-structure
+page is unreachable by bare name), and the one orphan.
+
+A store bootstrapped before v6 cannot tell "nothing links here" from "nobody
+looked", so the detector falls back to degree and **says so in the finding's
+own text** rather than making the stronger claim. `SqliteStore.
+unreferenced_concepts()` returns `None` in that case, never `[]`.
+
+The dashboard's overview was wrong in the same way and was corrected with it:
+the stat labelled `isolated` in warning colour is now `no edges`, muted,
+because it is a fact about graph shape and not a defect, with `unreferenced`
+beside it carrying the number that means unreachable.
 
 **The dashboard, `forge dash`, 2026-09-07.** The front door, and a
 deliberate change of direction: the engine had grown five interfaces
@@ -972,7 +991,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine, distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,425 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,441 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -997,12 +1016,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 1,383 passed, 42 skipped, offline, no model
+python -m pytest tests           # 1,399 passed, 42 skipped, offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,425 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,441 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.

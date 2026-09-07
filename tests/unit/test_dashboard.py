@@ -186,6 +186,24 @@ class TestSnapshot:
     def test_a_graph_with_no_edges_has_no_hubs(self, bare_vault):
         assert build_snapshot(bare_vault).hubs == []
 
+    def test_edgeless_and_unreferenced_are_different_numbers(self, live_vault):
+        """The overview must not present "no edges" as a problem. In a vault
+        whose `_index.md` hubs do the linking, a concept with no edges is
+        usually linked perfectly well from a page that is not a concept; the
+        number that means unreachable is the inbound count."""
+        snapshot = build_snapshot(live_vault)
+
+        assert snapshot.unreferenced_concepts is not None, "bootstrap counted nothing"
+        assert snapshot.unreferenced_concepts <= snapshot.isolated_concepts + snapshot.concepts
+
+    def test_an_unbootstrapped_vault_says_not_counted_rather_than_zero(self, bare_vault):
+        """Zero unreferenced pages and nobody having looked are different
+        claims, and only one of them is true here."""
+        snapshot = build_snapshot(bare_vault)
+
+        assert snapshot.unreferenced_concepts is None
+        assert "not counted" in render_overview(snapshot)
+
     def test_building_the_snapshot_makes_no_model_calls(self, live_vault):
         CALLS.reset()
         build_snapshot(live_vault)

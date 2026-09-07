@@ -589,6 +589,10 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
                 store.put_concept(concept)
             for link in plan.links:
                 store.put_link(link)
+            # Written after the concepts, which the rows reference. This is
+            # what lets `forge gaps` tell a page nothing links to from one
+            # linked only by its folder's index.
+            store.set_concept_inbound(plan.inbound_links)
             written = len(plan.concepts) + len(plan.links)
 
         payload = {**plan.to_dict(), "applied": apply, "written": written, "llm_calls": CALLS.count}
@@ -596,6 +600,10 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             typer.echo(f"concepts     : {len(plan.concepts)}")
             typer.echo(f"edges        : {len(plan.links)} (RELATED_TO, score 1.0)")
             typer.echo(f"pages skipped: {len(plan.skipped_pages)} (navigation, chapters, artifacts)")
+            typer.echo(
+                f"unreferenced : {plan.unreferenced()} concept page(s) that nothing "
+                "in the vault links to"
+            )
             typer.echo(f"llm calls    : {CALLS.count}")
             typer.echo("\nby kind:")
             for kind, n in plan.by_kind().items():

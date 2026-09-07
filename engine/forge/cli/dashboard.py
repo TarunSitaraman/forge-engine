@@ -241,15 +241,31 @@ def render_overview(snapshot: VaultSnapshot, width: int = 96) -> str:
         ),
         _row(
             _cell("edges", snapshot.edges),
-            _cell(
-                "isolated",
-                snapshot.isolated_concepts,
-                tone=WARN if snapshot.isolated_concepts else GOOD,
-            ),
+            # "no edges" rather than "isolated", and muted rather than warned:
+            # in a vault whose `_index.md` hubs do the linking, a concept with
+            # no edges is usually linked perfectly well from a page that is not
+            # a concept. Calling that isolated was wrong on the real corpus by
+            # 71 out of 72.
+            _cell("no edges", snapshot.isolated_concepts, tone=MUTED),
         ),
         _row(
             _cell("mean degree", f"{snapshot.mean_degree:.1f}", tone=MUTED),
             _cell("max degree", snapshot.max_degree, tone=MUTED),
+        ),
+        _row(
+            _cell(
+                "unreferenced",
+                "not counted"
+                if snapshot.unreferenced_concepts is None
+                else snapshot.unreferenced_concepts,
+                tone=(
+                    DIM
+                    if snapshot.unreferenced_concepts is None
+                    else WARN
+                    if snapshot.unreferenced_concepts
+                    else GOOD
+                ),
+            ),
         ),
         "",
     ]

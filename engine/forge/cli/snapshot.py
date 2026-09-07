@@ -83,7 +83,14 @@ class VaultSnapshot:
     spans: int = 0
     concepts: int = 0
     edges: int = 0
+    #: Concepts with no edges. A fact about the graph's shape, not a defect:
+    #: the pages that do the linking in a hub-and-spoke vault are not concepts,
+    #: so their links never become edges.
     isolated_concepts: int = 0
+    #: Concepts no page in the vault links to, from any page at all. This is
+    #: the one that means something is unreachable. `None` until
+    #: `forge bootstrap --apply` has counted.
+    unreferenced_concepts: int | None = None
     mean_degree: float = 0.0
     max_degree: int = 0
     #: The most-connected concepts, name and degree, highest first. The vault
@@ -136,6 +143,7 @@ class VaultSnapshot:
             "concepts": self.concepts,
             "edges": self.edges,
             "isolated_concepts": self.isolated_concepts,
+            "unreferenced_concepts": self.unreferenced_concepts,
             "mean_degree": round(self.mean_degree, 2),
             "max_degree": self.max_degree,
             "hubs": [{"name": n, "degree": d} for n, d in self.hubs],
@@ -272,6 +280,10 @@ def build_snapshot(
             snapshot.mean_degree = metrics.mean_degree
             snapshot.max_degree = metrics.max_degree
             snapshot.hubs = _hubs(store, limit=hub_limit)
+            unreferenced = store.unreferenced_concepts()
+            snapshot.unreferenced_concepts = (
+                None if unreferenced is None else len(unreferenced)
+            )
         if snapshot.questions:
             snapshot.open_questions = len(
                 [q for q in store.list_questions() if q.status is not QuestionStatus.ANSWERED]

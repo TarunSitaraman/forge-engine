@@ -206,8 +206,27 @@ def _concept_gaps(store: SqliteStore, claims_by_concept: dict, wanted: set) -> l
     isolated concept weighs less than a claimless one: being unlinked is a
     graph-shape observation, while having no claims means the model holds
     nothing about it at all.
+
+    **Isolation is measured by inbound links over the whole vault, not by graph
+    degree.** Edges run between concept pages, and the pages that do most of
+    the linking in a vault organised hub-and-spoke — `_index.md`, `00_Index/` —
+    are deliberately not concepts, so their links never become edges. Reporting
+    degree 0 as isolation was measured wrong on the real corpus on 2026-09-07:
+    72 findings, 115 inbound links pointing at them, and exactly **one** page
+    that nothing in the vault linked to. Worse, a genuinely unreferenced page
+    that was then linked from the index its siblings are linked from stayed on
+    the list, because that index is navigation — a finding a user cannot clear
+    by doing the right thing teaches them to ignore the report.
+
+    Counting inbound links instead moved the corpus from 72 findings, 71 of
+    them wrong, to 53 that are all true: 26 cheat sheets and 8 templates that
+    nothing links to, 14 problem pages missing from their pattern's index, the
+    losing side of three decided name collisions, and one orphaned page. Note
+    that outgoing links are irrelevant here: a page with twenty of them that
+    nothing points at is exactly as unreachable as one with none.
     """
     out: list[KnowledgeGap] = []
+    inbound_known = store.inbound_counted()
     for concept in store.list_concepts():
         has_claims = bool(claims_by_concept.get(concept.id))
         if GapKind.CONCEPT_WITHOUT_CLAIMS in wanted and not has_claims:
@@ -228,22 +247,43 @@ def _concept_gaps(store: SqliteStore, claims_by_concept: dict, wanted: set) -> l
             )
         if GapKind.ISOLATED_CONCEPT in wanted:
             degree = len(store.links_from(concept.id)) + len(store.links_to(concept.id))
-            if degree == 0:
-                out.append(
-                    KnowledgeGap(
-                        id=KnowledgeGap.make_id(GapKind.ISOLATED_CONCEPT, concept.id),
-                        kind=GapKind.ISOLATED_CONCEPT,
-                        subject_id=concept.id,
-                        subject_type="Concept",
-                        subject_label=concept.qualified_name,
-                        detail=(
-                            "no edges in either direction, so no traversal from "
-                            "anywhere else will ever reach it"
-                        ),
-                        weight=0.3,
-                        evidence=(concept.vault_path,) if concept.vault_path else (),
+            if inbound_known:
+                # Isolation is about arriving, not leaving. A page with twenty
+                # outgoing links that nothing points at is exactly as
+                # unreachable as one with none.
+                inbound, _ = store.concept_inbound(concept.id)
+                isolated = inbound == 0
+                detail = (
+                    "no page in the vault links to this one, so nothing but a "
+                    "search will reach it"
+                    + (
+                        f"; it links out to {degree} other concept(s)"
+                        if degree
+                        else ", and it links to nothing either"
                     )
                 )
+            else:
+                isolated = degree == 0
+                detail = (
+                    "no edges in either direction — but inbound links have not "
+                    "been counted for this store, and links from pages that are "
+                    "not concepts do not make edges. Run `forge bootstrap "
+                    "--apply` before trusting this finding"
+                )
+            if not isolated:
+                continue
+            out.append(
+                KnowledgeGap(
+                    id=KnowledgeGap.make_id(GapKind.ISOLATED_CONCEPT, concept.id),
+                    kind=GapKind.ISOLATED_CONCEPT,
+                    subject_id=concept.id,
+                    subject_type="Concept",
+                    subject_label=concept.qualified_name,
+                    detail=detail,
+                    weight=0.3,
+                    evidence=(concept.vault_path,) if concept.vault_path else (),
+                )
+            )
     return out
 
 

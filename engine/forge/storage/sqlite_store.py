@@ -23,10 +23,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
-from ..logging import get_logger
 from ..domain import (
     Claim,
     ClaimLink,
@@ -54,10 +54,11 @@ from ..domain import (
     validate_claim,
     validate_supersession,
 )
+from ..logging import get_logger
 
 log = get_logger(__name__)
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -275,6 +276,28 @@ CREATE TABLE IF NOT EXISTS question_answers (
     PRIMARY KEY (question_id, claim_id)
 );
 CREATE INDEX IF NOT EXISTS idx_question_answers_claim ON question_answers(claim_id);
+
+-- How many pages link to each concept's page, counted over EVERY page in the
+-- vault, including the ones that are not concepts and so have no node in the
+-- graph.
+--
+-- It exists because the graph cannot answer "does anything point here?".
+-- Edges run between concept pages, and `bootstrap.is_concept_page` excludes
+-- `_index.md` hubs and other navigation as not-concepts — correctly, a hub is
+-- not a concept. But a vault that links hub-and-spoke puts all of its inbound
+-- links on exactly those pages: reviewed on the real corpus 2026-09-07, 115
+-- links pointed at the 72 concepts the gap report called isolated, and not one
+-- came from a page the graph counts. Without this table there is no way to
+-- tell a page nothing links to from a page linked only from its index.
+--
+-- Written by `forge bootstrap --apply`, from the same index pass that builds
+-- the edges, so it is exactly as fresh as the graph and no fresher.
+CREATE TABLE IF NOT EXISTS concept_inbound_links (
+    concept_id TEXT PRIMARY KEY REFERENCES concepts(id) ON DELETE CASCADE,
+    inbound    INTEGER NOT NULL,
+    sources    TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 
@@ -1131,6 +1154,71 @@ class SqliteStore:
             (question_id,),
         )
         return [Claim.model_validate_json(r["data"]) for r in rows]
+
+    # -- inbound links, counted over the whole vault ------------------------
+
+    def set_concept_inbound(
+        self, counts: Mapping[str, tuple[int, Sequence[str]]]
+    ) -> int:
+        """Replace the inbound-link counts wholesale.
+
+        Wholesale rather than row by row because the input is one pass over the
+        vault: a concept whose last inbound link was deleted must lose its row,
+        and an update that only writes what it saw would leave that row behind
+        saying a page is linked when nothing links to it any more.
+        """
+        now = utc_now().isoformat()
+        with self._conn:
+            self._conn.execute("DELETE FROM concept_inbound_links")
+            self._conn.executemany(
+                "INSERT INTO concept_inbound_links(concept_id, inbound, sources, updated_at)"
+                " VALUES(?,?,?,?)",
+                [
+                    (concept_id, int(count), json.dumps(list(sources)[:5]), now)
+                    for concept_id, (count, sources) in counts.items()
+                ],
+            )
+        return len(counts)
+
+    def concept_inbound(self, concept_id: str) -> tuple[int, list[str]]:
+        """How many pages link to this concept's page, and a few of them.
+
+        Returns `(0, [])` for a concept with no row, which is the same answer
+        as a row of zero — but only meaningful once `inbound_counted()` is
+        true. Ask that first.
+        """
+        row = self._one(
+            "SELECT inbound, sources FROM concept_inbound_links WHERE concept_id = ?",
+            (concept_id,),
+        )
+        if row is None:
+            return 0, []
+        return int(row["inbound"]), list(json.loads(row["sources"]))
+
+    def unreferenced_concepts(self) -> list[str] | None:
+        """Concepts no page in the vault links to. `None` if nobody has counted.
+
+        `None` and `[]` are different answers and the caller must not collapse
+        them: one means nothing links to any concept was ever checked, the
+        other means everything is linked.
+        """
+        if not self.inbound_counted():
+            return None
+        rows = self._all(
+            "SELECT concept_id FROM concept_inbound_links WHERE inbound = 0"
+            " ORDER BY concept_id"
+        )
+        return [str(r["concept_id"]) for r in rows]
+
+    def inbound_counted(self) -> bool:
+        """Whether inbound links have ever been counted for this store.
+
+        A store bootstrapped before this table existed, or never bootstrapped
+        at all, cannot distinguish "nothing links here" from "nobody looked".
+        Callers must say which of those they are reporting.
+        """
+        row = self._one("SELECT COUNT(*) AS n FROM concept_inbound_links")
+        return bool(row and int(row["n"]))
 
     # -- Phase 9: syntheses and the staleness invariant ---------------------
 
