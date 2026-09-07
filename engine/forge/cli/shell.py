@@ -49,6 +49,14 @@ BUILTIN_QUIT = ("quit", "exit", "q")
 BUILTIN_CLEAR = ("clear", "cls")
 REFUSED = ("shell",)
 
+#: Full-screen applications. Not refused here — launching one from this
+#: line-oriented shell works, and returns to the prompt on exit — but refused by
+#: `forge tui`, which passes these in `refused` because it is one itself:
+#: starting a second Textual app on the same terminal, from a worker thread with
+#: stdout already redirected, leaves two applications fighting over the screen
+#: and no way back to either.
+FULLSCREEN = ("tui", "dash")
+
 #: Readline history, kept beside the settings file rather than in the vault —
 #: the vault is content, and a shell history is machine state.
 HISTORY_LIMIT = 1000
@@ -78,12 +86,27 @@ class Action:
     message: str = ""
 
 
-def parse(line: str, known: Sequence[str] = ()) -> Action:
+def _refusal(head: str) -> str:
+    if head in FULLSCREEN:
+        return (
+            f"/{head} is a full-screen application and cannot be started from "
+            f"inside one. Leave this one first."
+        )
+    return f"/{head} is not available inside the shell; you are already in it"
+
+
+def parse(
+    line: str, known: Sequence[str] = (), refused: Sequence[str] = REFUSED
+) -> Action:
     """Turn one line of input into an :class:`Action`.
 
     `known` is the set of real command names. It is only used to give a better
     message for an unknown slash command — dispatch itself is left to the CLI,
     which already reports usage errors properly and does it in one place.
+
+    `refused` is what this caller cannot run. It is a parameter because the
+    answer differs by surface: the shell can launch a full-screen application,
+    and a full-screen application cannot.
     """
     text = line.strip()
     if not text:
@@ -112,11 +135,8 @@ def parse(line: str, known: Sequence[str] = ()) -> Action:
         return Action(Kind.HELP)
     if head in BUILTIN_CLEAR:
         return Action(Kind.CLEAR)
-    if head in REFUSED:
-        return Action(
-            Kind.REFUSED,
-            message=f"/{head} is not available inside the shell; you are already in it",
-        )
+    if head in refused:
+        return Action(Kind.REFUSED, message=_refusal(head))
     if known and head not in known:
         close = [n for n in known if n.startswith(head)]
         hint = f" Did you mean /{close[0]}?" if len(close) == 1 else ""
@@ -186,14 +206,16 @@ def suggestions(
     return (starts + contains)[:limit]
 
 
-def visible_names(names: Sequence[str]) -> list[str]:
+def visible_names(
+    names: Sequence[str], refused: Sequence[str] = REFUSED
+) -> list[str]:
     """What to offer in help and completion.
 
-    `REFUSED` commands stay in `known` so that typing one gets the explanation
-    rather than "unknown command", but listing something the shell will not run
-    is a promise it breaks. Offer only what works.
+    Refused commands stay in `known` so that typing one gets the explanation
+    rather than "unknown command", but listing something this surface will not
+    run is a promise it breaks. Offer only what works.
     """
-    return [n for n in names if n not in REFUSED]
+    return [n for n in names if n not in refused]
 
 
 #: The wordmark, one string per row so it can be revealed a row at a time.

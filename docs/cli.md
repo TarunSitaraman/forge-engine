@@ -35,6 +35,9 @@ forge bootstrap --apply            # filenames become concepts, links become edg
 forge diagnostics                  # what is quietly broken
 forge search "some phrase"         # evidence with citations, not generated prose
 forge gaps                         # what the model does not hold
+
+pip install "forge-kb[tui]"
+forge dash                         # all of the above, browsable
 ```
 
 **Forge needs to know which folder is your vault**, and will not guess: it
@@ -619,6 +622,59 @@ If neither finds one, Forge **fails with exit code 2** and tells you to set
 meant `forge index` in an arbitrary directory would index that directory, write
 a `.forge/` into it, and print a success line: silently operating on the wrong
 thing instead of reporting that it could not find the right one.
+
+---
+
+## `forge dash`
+
+The dashboard, and the front door. `forge shell` and `forge tui` open on a
+prompt, which answers "what do I type?" with silence; this opens on your vault.
+
+```bash
+pip install "forge-kb[tui]"        # or: pipx inject forge-kb textual
+forge dash
+forge dash --vault /path/to/notes
+```
+
+Five tabs, selected with `1`-`5`:
+
+| | |
+|---|---|
+| **Overview** | counts for the vault, the graph and what is known; the five most-connected pages; what to do next, with the exact command |
+| **Concepts** | every concept, filterable by name; the cursor shows its origin, claims and relationships, each with its own provenance |
+| **Search** | lexical search over every indexed span, ranked, with the full text of the selected hit |
+| **Issues** | every broken wikilink and unparseable frontmatter block, with the file and, where one exists, the page it probably meant |
+| **Gaps** | what the graph can prove it does not hold: concepts with no claims, isolated concepts, questions with no answers, claims resting on a single source, unresolved disputes |
+
+| | |
+|---|---|
+| `1`-`5` | tabs |
+| `/` | the filter box on Concepts, the search box anywhere else |
+| `↑` `↓` | move the cursor; the detail pane follows it |
+| `esc` | leave a text box (the number keys are letters while one has focus) |
+| `r` | re-read the vault and the store |
+| `q`, `ctrl+c` | quit |
+
+**Every screen is deterministic.** Nothing on any tab calls a model or touches
+the network, and the title bar carries an `llm calls` counter that stays at `0`
+while you browse the whole vault — a test drives the entire interface and
+asserts that count. Model-derived knowledge appears where it exists and is
+absent without complaint where it does not: a concept with no claims says so,
+and names the command that would produce some.
+
+**The opening snapshot is built before the window appears**, because two
+seconds of an empty window is worse than two seconds of a terminal that has not
+changed yet (670 files, 8,133 spans: ~2s). The two slow tabs, Concepts and
+Gaps, load on first visit rather than at startup, on a worker thread, so the
+slowest query never decides when the interface appears.
+
+**What it will not do.** Nothing in the dashboard writes: not to the vault, not
+to the store. It suggests the commands that would, and you run them.
+
+Without the `tui` extra it prints the install line and exits 2, never a
+traceback. The same material is reachable with nothing extra installed:
+`forge status` for the counts, `forge diagnostics` for the problems, and
+`forge gaps` for the gap report.
 
 ---
 

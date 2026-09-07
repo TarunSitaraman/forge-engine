@@ -36,7 +36,16 @@ from typing import TYPE_CHECKING, Callable, Iterable
 import typer
 
 from ..config import Settings
-from .shell import Kind, command_help, command_names, parse, suggestions, visible_names
+from .shell import (
+    FULLSCREEN,
+    Kind,
+    REFUSED,
+    command_help,
+    command_names,
+    parse,
+    suggestions,
+    visible_names,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     pass
@@ -162,7 +171,9 @@ def build_app(app_typer: typer.Typer, settings: Settings, stats: Stats):
     from textual.widgets import Input, RichLog, Static
 
     names = command_names(app_typer)
-    shown = visible_names(names)
+    # This *is* a full-screen application, so it cannot start another one.
+    refused = (*REFUSED, *FULLSCREEN)
+    shown = visible_names(names, refused)
     helps = command_help(app_typer)
 
     class ForgeTUI(App):
@@ -375,7 +386,7 @@ def build_app(app_typer: typer.Typer, settings: Settings, stats: Stats):
             if not line.strip():
                 return
 
-            action = parse(line, names)
+            action = parse(line, names, refused)
             if action.kind is Kind.QUIT:
                 self.exit()
                 return

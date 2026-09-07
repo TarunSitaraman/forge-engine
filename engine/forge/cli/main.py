@@ -669,6 +669,23 @@ def tui(
     raise typer.Exit(code=run_tui(app, settings, stats))
 
 
+@app.command()
+def dash(
+    vault: Path | None = typer.Option(None),
+) -> None:
+    """Open the Forge dashboard: browse the vault, its graph and its problems.
+
+    The front door. `forge shell` and `forge tui` open on a prompt; this opens
+    on your vault — what is in it, what is wrong with it, and what to do next.
+    Every screen is deterministic: no model is called and nothing is written.
+    """
+    from .dashboard import run_dashboard
+    from .snapshot import build_snapshot
+
+    settings = _settings(vault)
+    raise typer.Exit(code=run_dashboard(settings, build_snapshot(settings)))
+
+
 def main() -> None:  # pragma: no cover
     try:
         app()

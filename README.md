@@ -10,17 +10,25 @@ believed, it *tells you* instead of silently overwriting it.
 [![PyPI](https://img.shields.io/pypi/v/forge-kb.svg)](https://pypi.org/project/forge-kb/)
 [![Python](https://img.shields.io/pypi/pyversions/forge-kb.svg)](https://pypi.org/project/forge-kb/)
 
-~22,500 lines of Python, 1,368 offline tests, no paid API required.
+~29,500 lines of Python, 1,425 offline tests, no paid API required.
 
 ```bash
-pip install forge-kb
+pip install "forge-kb[tui]"
 cd /path/to/your/notes
-forge index && forge diagnostics
+forge index && forge dash
 ```
 
 Point it at any folder of Markdown and it reports what is quietly broken:
 dead wikilinks, missing frontmatter, conventions that contradict each other.
 No model, no API key, no network, no configuration.
+
+`forge dash` is the front door: a full-screen dashboard that opens on your
+vault — its shape, the pages it hangs off, what is broken, and what to do next
+— with a concept browser, full-text search over every indexed page, and the
+gaps the graph can prove. Every screen of it is deterministic, and it carries a
+model-call counter that stays at zero to prove it. With nothing beyond the
+core install, `forge index && forge diagnostics` reports the same findings as
+text.
 
 > The distribution is **`forge-kb`**; the command and the import package are
 > both `forge`. The names differ because `forge-engine` on PyPI is an
@@ -77,7 +85,8 @@ These are enforced in code and asserted in tests, not stated as aspirations:
 ```bash
 pip install forge-kb             # Python 3.10+
 
-forge tui                       # full-screen UI  (pip install "forge-kb[tui]")
+forge dash                      # the dashboard: browse the vault  ("forge-kb[tui]")
+forge tui                       # full-screen prompt + transcript  ("forge-kb[tui]")
 forge shell                     # interactive: header bar, slash commands, history
 forge serve                     # read-only API + graph explorer  ("forge-kb[api]")
 forge mcp                       # the same queries, to an agent  ("forge-kb[mcp]")
@@ -174,14 +183,14 @@ evidence changes what it already knows, pausing for approval before anything
 changes. Phases 5-10 are not started; see [`docs/roadmap.md`](docs/roadmap.md).
 
 ```bash
-python -m pytest tests           # 1,368 tests, fully offline, no model needed
+python -m pytest tests           # 1,425 tests, fully offline, no model needed
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by running them
 python scripts/phase4_demo.py    # the end-to-end story
 ```
 
-In this repository 1,326 pass and 42 skip: those 42 are integration tests that
+In this repository 1,383 pass and 42 skip: those 42 are integration tests that
 run against the private Markdown vault, and they skip when it is not checked
-out. Point them at a checkout to run the full 1,368:
+out. Point them at a checkout to run the full 1,425:
 
 ```bash
 FORGE_TEST_VAULT=/path/to/forge python -m pytest tests
@@ -203,7 +212,7 @@ The suite is otherwise complete and requires no model. CI and every test run
 | `engine/forge/evolution/` | LangGraph workflow evaluating new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering documentation: architecture, ADRs, research, test strategy. |
-| `tests/`, `scripts/` | 1,368 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,425 tests; demos and per-phase validation scripts. |
 
 Start with [`docs/`](docs/README.md): the
 [current-state audit](docs/architecture/forge-current-state.md),

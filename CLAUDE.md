@@ -17,7 +17,7 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them, `1,326 passed, 42 skipped` becomes `1,368 passed`. See
+   to run them, `1,383 passed, 42 skipped` becomes `1,425 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine*, architecture, ADRs, research,
@@ -44,6 +44,58 @@ are measurement records: renaming the corpus a number was measured
 against would falsify it.
 
 ## Known Stale/Legacy Items
+
+**The dashboard, `forge dash`, 2026-09-07.** The front door, and a
+deliberate change of direction: the engine had grown five interfaces
+(CLI, shell, TUI, HTTP, MCP) and every interactive one opened on a
+prompt, which answers "what do I type?" with silence. This opens on the
+vault. Overview (counts, the pages the graph hangs off, what is broken,
+what to do next), a concept browser with claims and relationships,
+lexical search over every indexed span, the issue list, and the gap
+report. **Zero model calls on every screen**, asserted by a test that
+drives the whole interface through Textual's pilot and reads
+`CALLS.count`.
+
+Three things are worth keeping from building it:
+
+1. **The data layer is not in the app.** `cli/snapshot.py` computes
+   everything and imports no Textual; `cli/dashboard.py` is layout, key
+   handling, and worker hand-off. 42 of the 57 tests never start an
+   application. The browsing functions wrap `api.queries` rather than
+   re-querying the store, so the dashboard is a fourth face on one
+   service layer and a test asserts the two agree.
+2. **A focus trap that only a screenshot found.** Switching tabs hides
+   the focused widget, and Textual then hands focus to the next widget
+   in the DOM, which was the search box three tabs away. Visiting
+   Search once left every number key typing into that box, with no
+   visible way out. Each tab now focuses its own widget on open, and
+   the footer changes while a text box has focus, because inside one
+   every single-key binding is a character somebody is typing: `q` in
+   the middle of "queue" must not quit. Both are regression-tested,
+   and the focus test was checked by reverting the fix.
+3. **A comment claiming a mechanism, again.** The number-key bindings
+   were commented as deliberately non-`priority` "so typing a digit in
+   the filter box does not switch tabs". Measured on Textual 8.2.8, a
+   focused `Input` wins against a priority binding too, so the comment
+   named a cause that was not doing the work. It now says what was
+   measured, and the test is labelled as guarding the behaviour rather
+   than proving the choice. Same failure shape as the extraction
+   docstring in the grounding entry below: an unmeasured "and this is
+   why" in a comment is a claim.
+
+Also found by reading the screen rather than the code: SQLite's bm25
+score is negative and unbounded, so a column headed `Score` reading
+`-12.89` told the user only that something was broken. It shows rank
+now. A span with no heading above it cites as `L1-L8`, which locates it
+in a file whose name the reader was never given; hits now carry the
+page. And the gap table repeated one identical sentence 72 times, once
+per row of a kind, so the explanation is printed when the kind changes.
+
+**`snapshot.issue_count` counts only real defects.** A file with no
+frontmatter at all is rated INFO by the parser on purpose, because
+plenty of good notes have none. An earlier version of the dashboard's
+"next action" told the user to go and fix 263 files the engine does not
+consider broken. Diagnostics above INFO are what count.
 
 **Phase 10, release readiness, 2026-09-07, and what a clean-room install
 found.** The gate "fresh-machine setup works from documentation alone" was
@@ -878,7 +930,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine, distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,368 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,425 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -903,12 +955,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 1,326 passed, 42 skipped, offline, no model
+python -m pytest tests           # 1,383 passed, 42 skipped, offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,368 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,425 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.
