@@ -49,6 +49,15 @@ plain folder of notes, `mkdir .forge` is the one-time marker. Otherwise set
 **Nothing above needs a model.** Extraction, `forge ask`, and the evolution
 workflow do; everything else is deterministic and stays that way.
 
+**On a rate-limited free tier, set `FORGE_LLM_MIN_INTERVAL`.** It is the
+minimum number of seconds between the starts of two model calls, applied to
+whichever provider is configured, and it exists because a free cloud tier
+limits requests per minute rather than concurrency: extraction issues calls as
+fast as it can and collects 429s, which the retry backoff only reacts to after
+the fact. `FORGE_LLM_MIN_INTERVAL=2` next to the API key in
+`~/.config/forge/forge.env` gives every command that calls a model at most 30
+calls a minute. Unset (the default, `0`) the call path is exactly as it was.
+
 ---
 
 ## Install (for working on the engine)

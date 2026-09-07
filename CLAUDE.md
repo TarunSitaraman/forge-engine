@@ -17,7 +17,7 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them, `1,402 passed, 42 skipped` becomes `1,444 passed`. See
+   to run them, `1,405 passed, 42 skipped` becomes `1,447 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine*, architecture, ADRs, research,
@@ -116,6 +116,29 @@ The dashboard's overview was wrong in the same way and was corrected with it:
 the stat labelled `isolated` in warning colour is now `no edges`, muted,
 because it is a fact about graph shape and not a defect, with `unreferenced`
 beside it carrying the number that means unreachable.
+
+**The throttle was never reachable from the engine's own commands,
+2026-09-07.** `ThrottledProvider` was written in August for exactly the
+problem a free cloud tier poses — its limit is requests per minute, not
+concurrency, so extraction issues calls as fast as it can and collects 429s
+that the retry backoff only reacts to afterwards. But it was wired only into
+`scripts/concept_extraction_eval.py` and `scripts/assessment_eval.py`, through
+their `--sleep` flag. **No `forge` command could ask for pacing**, which meant
+`forge ingest --extract` against Groq's free tier could not be run at all —
+the one step the entire knowledge layer depends on, unrunnable against the
+provider actually available, while the code to fix it had existed for weeks in
+a module nothing but two scripts imported.
+
+Found by trying to write the command down for someone else to run. That is
+worth noting as a technique: the throttle had tests, the scripts had tests, and
+nothing failed. What exposed it was composing the actual sequence a user would
+type.
+
+`FORGE_LLM_MIN_INTERVAL` now feeds `LLMSettings.min_interval_seconds`, and
+`get_provider` wraps whatever it builds. Default `0` returns the provider
+unchanged, so the un-paced path is untouched. The fallback health probe is
+deliberately outside the pacing: it is one call before any work starts, and
+delaying it protects nothing.
 
 **The dashboard, `forge dash`, 2026-09-07.** The front door, and a
 deliberate change of direction: the engine had grown five interfaces
@@ -1002,7 +1025,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine, distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,444 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,447 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -1027,12 +1050,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 1,402 passed, 42 skipped, offline, no model
+python -m pytest tests           # 1,405 passed, 42 skipped, offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,444 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,447 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.

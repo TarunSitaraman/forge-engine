@@ -36,6 +36,10 @@ def get_provider(settings: Settings) -> LLMProvider:
     **explicit**: an unavailable provider is reported as unavailable, never
     quietly replaced by a different one. See :func:`require_provider`.
 
+    `FORGE_LLM_MIN_INTERVAL` paces whichever provider is returned. The health
+    probe below is deliberately outside that: it is one call before any work,
+    and pacing it would delay the decision without protecting anything.
+
     `FORGE_LLM_FALLBACK` relaxes that, but narrowly and on purpose:
 
     * It is **opt-in**. With nothing set, behaviour is exactly as before.
@@ -50,16 +54,17 @@ def get_provider(settings: Settings) -> LLMProvider:
     * It is **loud**. The switch is logged at warning level and `forge status`
       reports it.
     """
+    pace = settings.llm.min_interval_seconds
     primary = _build(settings, settings.llm.provider)
     if settings.llm.fallback is None:
-        return primary
+        return throttled(primary, pace)
 
     try:
         healthy, detail = primary.health()
     except Exception as exc:  # a provider that cannot even be probed is down
         healthy, detail = False, f"{type(exc).__name__}: {exc}"
     if healthy:
-        return primary
+        return throttled(primary, pace)
 
     log.warning(
         "provider_fallback",
@@ -67,7 +72,7 @@ def get_provider(settings: Settings) -> LLMProvider:
         using=settings.llm.fallback,
         reason=detail,
     )
-    return _build(settings, settings.llm.fallback)
+    return throttled(_build(settings, settings.llm.fallback), pace)
 
 
 def _build(settings: Settings, provider: str) -> LLMProvider:

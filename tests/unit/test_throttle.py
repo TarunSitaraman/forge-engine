@@ -170,3 +170,58 @@ def test_the_wrappers_own_methods_are_not_shadowed_by_the_inner_provider():
     provider.complete(request())
     provider.complete(request())
     assert clock.sleeps == [5.0]
+
+
+class TestTheEngineAsksForIt:
+    """`FORGE_LLM_MIN_INTERVAL` reaches the provider every command builds.
+
+    The throttle shipped usable only from `scripts/*_eval.py`, which took a
+    `--sleep`. Nothing in the engine's own commands could ask for pacing, so
+    `forge ingest --extract` against a free cloud tier issued calls as fast as
+    it could and collected 429s — the one step the whole knowledge layer
+    depends on could not be run against the provider the user actually has.
+    """
+
+    def _settings(self, tmp_path, **env):
+        import os
+
+        from forge.config import Settings
+
+        vault = tmp_path / "vault"
+        (vault / ".forge").mkdir(parents=True, exist_ok=True)
+        previous = {k: os.environ.get(k) for k in env}
+        os.environ.update({k: str(v) for k, v in env.items()})
+        try:
+            return Settings.load(vault)
+        finally:
+            for k, v in previous.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
+    def test_unset_leaves_the_call_path_exactly_as_it_was(self, tmp_path):
+        from forge.llm import get_provider
+        from forge.llm.throttle import ThrottledProvider
+
+        settings = self._settings(tmp_path, FORGE_LLM_PROVIDER="mock")
+
+        assert settings.llm.min_interval_seconds == 0.0
+        assert not isinstance(get_provider(settings), ThrottledProvider)
+
+    def test_the_env_var_paces_whatever_provider_is_built(self, tmp_path):
+        from forge.llm import get_provider
+        from forge.llm.throttle import ThrottledProvider
+
+        settings = self._settings(
+            tmp_path, FORGE_LLM_PROVIDER="mock", FORGE_LLM_MIN_INTERVAL="2"
+        )
+
+        assert settings.llm.min_interval_seconds == 2.0
+        assert isinstance(get_provider(settings), ThrottledProvider)
+
+    def test_a_negative_interval_is_a_configuration_error(self, tmp_path):
+        from forge.config import ConfigError
+
+        with pytest.raises(ConfigError):
+            self._settings(tmp_path, FORGE_LLM_PROVIDER="mock", FORGE_LLM_MIN_INTERVAL="-1")

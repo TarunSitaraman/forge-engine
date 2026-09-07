@@ -278,6 +278,20 @@ class LLMSettings(BaseModel):
     timeout_seconds: float = Field(default=120.0, gt=0)
     max_retries: int = Field(default=2, ge=0, le=5)
 
+    #: Minimum seconds between the *starts* of two model calls, applied to
+    #: whichever provider is built. Zero, the default, leaves the call path
+    #: exactly as it was.
+    #:
+    #: This exists because a free cloud tier's limit is requests per minute,
+    #: not concurrency: extraction over a vault issues calls as fast as it can
+    #: and collects 429s, and the retry backoff only slows down after the
+    #: damage. `scripts/*_eval.py` already took a `--sleep` for this reason;
+    #: the engine's own commands had no way to ask for the same pacing, so
+    #: `forge ingest --extract` against Groq's free tier could not be run at
+    #: all. Set `FORGE_LLM_MIN_INTERVAL=2` next to the API key and every
+    #: command that calls a model inherits it.
+    min_interval_seconds: float = Field(default=0.0, ge=0)
+
     ollama: OllamaSettings = Field(default_factory=OllamaSettings)
     cloud: CloudSettings = Field(default_factory=CloudSettings)
 
@@ -381,6 +395,7 @@ class Settings(BaseModel):
                 base_url=ollama_url,
                 timeout_seconds=timeout,
                 max_retries=retries,
+                min_interval_seconds=float(env.get("FORGE_LLM_MIN_INTERVAL", "0")),
                 ollama=OllamaSettings(
                     base_url=ollama_url,
                     timeout_seconds=timeout,
