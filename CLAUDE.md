@@ -45,6 +45,48 @@ against would falsify it.
 
 ## Known Stale/Legacy Items
 
+**`isolated_concept` is 99% false positive on a hub-and-spoke vault,
+2026-09-07.** Phase 9's gate was "gap detection produces findings a human
+agrees are real gaps". The 72 `isolated_concept` findings on the corpus were
+reviewed one by one and **71 are wrong**, for a reason that is structural
+rather than a matter of taste.
+
+Measured by resolving every wikilink in the vault and counting inbound links
+per reported page: 115 links point at the 72 "isolated" pages, and **zero**
+come from a page the graph counts. Exactly one page has no inbound link at
+all. The worst case is `Technologies/Docs/vector-databases.md`, reported
+isolated with **12** inbound links — one of the better-connected pages in the
+corpus.
+
+The cause is `bootstrap.is_concept_page()` meeting the corpus's linking
+convention. Edges come only from links between concept pages, and that
+predicate excludes `_index.md` hubs, `00_Index/` pages and numbered
+project/course docs as navigation. The exclusion is defensible: a hub is not a
+concept. But that vault links hub-and-spoke — `Technologies/Docs/_index.md`
+is what points at every technology doc — so those links are dropped, 658 of
+them, which `forge bootstrap` already reports as `outside_the_graph`. The
+number was there all along; nothing connected it to the gap report.
+
+**The metric cannot be satisfied by fixing the vault**, which is the part that
+makes it a defect and not merely noise. A genuinely unreferenced page
+(`DSA/Forge Engineering Constitution.md`) was linked from the index page its
+four siblings are linked from, exactly as the corpus's conventions require.
+Re-indexing left it on the isolated list, because that index page is
+navigation. A finding a user cannot clear by doing the right thing trains them
+to ignore the report.
+
+**Not yet fixed, and the options are not equivalent.** Widening
+`is_concept_page()` to admit hubs would put 125 navigation pages into the
+graph as concepts, which is wrong. The store cannot answer "does any page link
+here?" today: it holds `ClaimLink`s between concepts and nothing about links
+from non-concept pages. So the honest fix is for bootstrap to record an
+inbound-link count per concept over *all* pages, and for
+`research.gaps` to call a concept isolated only when it has no edges **and**
+no inbound links at all — which on this corpus turns 72 findings into 1. Until
+that lands, `forge gaps --kind isolated_concept` should be read as "no other
+*concept page* links here", which is a different and much weaker statement
+than the label makes it sound.
+
 **The dashboard, `forge dash`, 2026-09-07.** The front door, and a
 deliberate change of direction: the engine had grown five interfaces
 (CLI, shell, TUI, HTTP, MCP) and every interactive one opened on a
