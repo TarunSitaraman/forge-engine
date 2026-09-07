@@ -17,7 +17,7 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them, `1,407 passed, 42 skipped` becomes `1,449 passed`. See
+   to run them, `1,409 passed, 42 skipped` becomes `1,451 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine*, architecture, ADRs, research,
@@ -44,6 +44,40 @@ are measurement records: renaming the corpus a number was measured
 against would falsify it.
 
 ## Known Stale/Legacy Items
+
+**The first real extraction run, and what it measured, 2026-09-07.**
+`Technologies/Docs/rag.md` through `openai/gpt-oss-120b` on Groq: 4 spans, 8
+calls, 105 seconds, `status=succeeded`. **28 concepts, 39 claims, 59
+proposals.** The first time extraction has completed against this corpus, and
+the first evidence about the knowledge half of the engine that is not a
+prediction.
+
+**Concept quality is materially better than the August baseline.** That sample
+was 35-40% usable and returned `RAM`, `Answer`, `Fluency` and `VARCHAR(n)`.
+This run proposed 17 new concepts (11 of the 28 matched existing ones, so the
+identity layer worked silently), of which roughly 12 are things the vault would
+want a page for: `Chunking`, `Reranker`, `Reciprocal Rank Fusion`, `BM25`,
+`Hybrid search`, `Metadata filtering`, `Embedding Model`, `Agentic RAG`,
+`Recall@k`. The failures are **over-granularity, not nonsense** — `Retrieval`,
+`Generation` and `Citation` are too generic to own a page. That is a
+tractable prompt problem where `VARCHAR(n)` was not.
+
+**Grounding: 39 of 39 quotes verbatim in their span.** Read that number
+carefully, though: `proposals audit-grounding` re-checks claims that already
+passed the same `_grounded` test on the way in, so it can only ever agree with
+itself. `forge.evaluation.extraction` documents this exact trap. What it
+establishes is that the check is consistent and nothing corrupted a quote in
+storage — not that the model never fabricates one. Only the *dropped* count, in
+the denominator, measures that.
+
+**The claims are worth keeping, which was the open question.** "Retrieval
+failures cannot be fixed by prompt engineering", "increasing top-k can worsen
+answers because more retrieved chunks dilute the context", "chunks should be
+created from document structure rather than fixed token counts", "recall at k
+is the fraction of queries where the correct chunk ID appears in the top k".
+Those are the page's actual content, in sentences a person would write down.
+Perhaps 3 of 12 are thin restatements of a heading, and one is a fact about the
+page's example code rather than about RAG.
 
 **Bootstrap added edges and never removed them, 2026-09-07.** `put_link` is
 an upsert and nothing pruned, so an edge derived from a wikilink survived the
@@ -1059,7 +1093,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine, distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,449 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,451 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -1084,12 +1118,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 1,407 passed, 42 skipped, offline, no model
+python -m pytest tests           # 1,409 passed, 42 skipped, offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,449 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,451 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.

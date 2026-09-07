@@ -33,19 +33,39 @@ DEDUP_VERSION = "dedup/0.1.0"
 
 #: Similarity at which two claim statements are treated as near-duplicates.
 #:
-#: Measured against the duplicate clusters actually observed in the 2026-08-19
-#: sample, not chosen by feel — a first guess of 0.60 was wrong by a factor of
-#: three, and the real clusters would all have been missed.
+#: **0.35, raised from 0.22 on 2026-09-07, and it is a trade rather than a
+#: free win.** The original was calibrated on eight hand-picked pairs from a
+#: 2026-08-19 sample and its own comment warned the 0.09-wide gap would produce
+#: false positives. The first real extraction run said how many: 30 claims off
+#: one page, 435 pairs, **67 of them clustered wrongly at 0.22** — a group of
+#: seven that put "RAG grounds an LLM's output in retrieved content" with
+#: "increasing top-k can worsen answers", which share vocabulary and nothing
+#: else. Ten clusters over 39 proposals, most of them wrong, is a report nobody
+#: can use.
 #:
-#:     known duplicates   0.262  0.302  0.338  0.492
-#:     distinct claims    0.076  0.132  0.142  0.170
+#: Both populations, every score measured rather than felt:
 #:
-#: 0.22 sits in the gap. **That gap is 0.09 wide on eight hand-picked pairs**,
-#: which is narrow and a small sample, so this will produce false positives.
-#: That is acceptable only because the output is a cluster for a human to
-#: review, never an automatic merge — a threshold this soft must not be wired
-#: to anything that decides.
-CLAIM_SIMILARITY = 0.22
+#:     same fact     0.145 0.262 0.302 0.338 0.423 0.463 0.492 0.544
+#:     different     ...0.170 (Aug) ... 0.308 0.312 0.322 0.357 0.401 0.604
+#:
+#: **They overlap, so no threshold separates them.** 0.35 keeps 4 of the 8
+#: known duplicates and cuts the false pairs from 67 to 3; 0.22 keeps 6 and
+#: admits 67. Precision is the right side to err on here, because the output is
+#: a list a human reads: a missed duplicate costs one redundant claim that the
+#: next run can still catch, while a wrong cluster costs the reader's trust in
+#: every other cluster on the page.
+#:
+#: **The overlap has a cause that no tuning reaches.** The highest score in that
+#: run, 0.604, above every true duplicate but one, was
+#:
+#:     "Retrieval failures cannot be fixed by prompt engineering."
+#:     "Generation failures cannot be fixed by retrieval tuning."
+#:
+#: which are opposites. Word overlap cannot tell a statement from its converse:
+#: they share every content word but two, swapped. That is a property of the
+#: measure. It is why this output is a cluster for a human to review and must
+#: never be wired to anything that decides.
+CLAIM_SIMILARITY = 0.35
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
