@@ -1,18 +1,23 @@
 """FastAPI application: read-only views over the knowledge store.
 
+**The routes are wrappers, not implementations.** Every one calls a function in
+`forge.api.queries`, which the MCP server calls too. That is what Phase 8's
+"no capability lives only in one interface" means in practice: there is one
+implementation, and adding a capability to one interface but not the other
+fails a test rather than shipping.
+
+Each route's `operation_id` is the capability's name from
+`queries.CAPABILITIES`, so the mapping is in the OpenAPI schema and can be
+compared against the MCP tool list without a private registry of its own.
+
 **Every route is a GET, and that is enforced rather than observed.** A test
 walks the OpenAPI schema and fails on any other method. Knowledge changes
 through proposal and activation, which require a human decision; an HTTP write
-path would be a second way in without that gate, and "we only wrote GETs" is
-the kind of claim that stops being true six months later.
+path would be a second way in without that gate.
 
-**Zero model calls.** The API is a view over what is already stored. The stats
-route publishes the process call counter so a client can see that, and a test
-asserts it stays at zero across every route.
-
-The routes are thin on purpose. `KnowledgeGraph.explain_concept` and
-`get_claim_evidence` already assemble the chains this phase is about; an API
-that re-implemented them would drift from what `forge explain` prints.
+**Zero model calls.** The API is a view over what is already stored. `/stats`
+publishes the process call counter so a client can see that, and a test asserts
+it stays at zero across every route.
 """
 
 from __future__ import annotations
@@ -24,24 +29,16 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 
 from ..config import Settings
-from ..domain import EntityType
-from ..graph import KnowledgeGraph
-from ..llm.base import CALLS
 from ..storage import SqliteStore
-from . import API_VERSION
+from . import API_VERSION, queries
 from .models import (
     ClaimDetail,
     ClaimPage,
-    ClaimSummary,
     ConceptDetail,
     ConceptPage,
-    ConceptSummary,
     EvidenceItem,
     NeighborItem,
-    OriginProposal,
-    OriginSpan,
     PathResponse,
-    Provenance,
     RevisionItem,
     SearchHit,
     SourcePage,
@@ -49,126 +46,9 @@ from .models import (
     SpanDetail,
     StatsResponse,
 )
+from .queries import MAX_PAGE_SIZE, BadRequest, NotFound
 
 STATIC_DIR = FilePath(__file__).resolve().parent / "static"
-
-#: Ceiling on any listing, whatever `limit` asks for. The vault has 545
-#: concepts and 8,133 spans; an unbounded list endpoint is a way to make the
-#: server hold the whole store in memory because a client typed a big number.
-MAX_PAGE_SIZE = 200
-
-
-# --------------------------------------------------------------------------
-# Adapters: domain objects -> wire models
-# --------------------------------------------------------------------------
-
-
-def _provenance(prov: Any) -> Provenance:
-    return Provenance(
-        tier=prov.tier.value,
-        derivation=prov.derivation.value,
-        confidence=getattr(prov, "confidence", None),
-        model_id=getattr(prov, "model_id", None),
-        agent=getattr(prov, "agent", None),
-    )
-
-
-def _concept_summary(concept: Any) -> ConceptSummary:
-    return ConceptSummary(
-        id=concept.id,
-        canonical_name=concept.canonical_name,
-        qualified_name=concept.qualified_name,
-        namespace=concept.namespace,
-        kind=concept.kind.value,
-        aliases=list(concept.aliases),
-        vault_path=concept.vault_path,
-        provenance=_provenance(concept.provenance),
-    )
-
-
-def _claim_summary(claim: Any, evidence_count: int = 0) -> ClaimSummary:
-    return ClaimSummary(
-        id=claim.id,
-        statement=claim.statement,
-        subject_concept_id=claim.subject_concept_id,
-        status=claim.status.value,
-        provenance=_provenance(claim.provenance),
-        evidence_count=evidence_count,
-    )
-
-
-def _span_detail(span: Any, store: SqliteStore) -> SpanDetail:
-    document = store.get_document(span.document_id)
-    source = store.get_source(document.source_id) if document else None
-    return SpanDetail(
-        id=span.id,
-        document_id=span.document_id,
-        ordinal=span.ordinal,
-        locator=span.locator,
-        citation=span.citation(),
-        start_line=span.start_line,
-        end_line=span.end_line,
-        page=span.page,
-        heading_path=list(span.heading_path),
-        text=span.text,
-        source_id=source.id if source else None,
-        source_locator=source.locator if source else None,
-    )
-
-
-def _source_summary(source: Any) -> SourceSummary:
-    return SourceSummary(
-        id=source.id,
-        locator=source.locator,
-        kind=source.kind.value,
-        trust_tier=source.trust_tier.value,
-        title=source.title,
-        byte_size=source.byte_size,
-        line_count=source.line_count,
-        content_hash=source.content_hash,
-    )
-
-
-def _changed_fields(before: dict | None, after: dict | None) -> list[str]:
-    """Which top-level keys differ. Cheap, and enough for a timeline row."""
-    if before is None or after is None:
-        return sorted((after or before or {}).keys())
-    keys = set(before) | set(after)
-    return sorted(k for k in keys if before.get(k) != after.get(k))
-
-
-def _revision_item(revision: Any) -> RevisionItem:
-    return RevisionItem(
-        id=revision.id,
-        entity_type=revision.entity_type.value,
-        entity_id=revision.entity_id,
-        op=revision.op.value,
-        created_at=revision.created_at.isoformat(),
-        cause=revision.cause,
-        workflow_run_id=revision.workflow_run_id,
-        note=revision.note,
-        changed_fields=_changed_fields(revision.before, revision.after),
-    )
-
-
-def _neighbor(raw: dict[str, Any]) -> NeighborItem:
-    return NeighborItem(
-        concept_id=raw["entity_id"],
-        label=raw.get("label"),
-        link_type=raw["type"],
-        direction=raw["direction"],
-        score=raw.get("score"),
-        rationale=raw.get("rationale"),
-    )
-
-
-def _page_bounds(limit: int, offset: int) -> tuple[int, int]:
-    return max(0, min(limit, MAX_PAGE_SIZE)), max(0, offset)
-
-
-# --------------------------------------------------------------------------
-# Application
-# --------------------------------------------------------------------------
 
 
 def create_app(settings: Settings | None = None, *, db_path: FilePath | None = None) -> FastAPI:
@@ -218,29 +98,30 @@ def create_app(settings: Settings | None = None, *, db_path: FilePath | None = N
         finally:
             store.close()
 
-    def get_graph(store: SqliteStore = Depends(get_store)) -> KnowledgeGraph:
-        return KnowledgeGraph(store)
+    @app.exception_handler(NotFound)
+    def _not_found(request, exc: NotFound):  # pragma: no cover - exercised via routes
+        return JSONResponse({"detail": str(exc)}, status_code=404)
+
+    @app.exception_handler(BadRequest)
+    def _bad_request(request, exc: BadRequest):  # pragma: no cover - via routes
+        return JSONResponse({"detail": str(exc)}, status_code=400)
 
     # -- meta --------------------------------------------------------------
 
-    @app.get("/health", tags=["meta"])
+    @app.get("/health", tags=["meta"], operation_id="health")
     def health() -> dict[str, Any]:
+        """Liveness. Interface plumbing, deliberately not a knowledge capability."""
         return {"ok": True, "api_version": API_VERSION, "vault": str(settings.vault_path)}
 
-    @app.get("/stats", response_model=StatsResponse, tags=["meta"])
-    def stats(store: SqliteStore = Depends(get_store), graph: KnowledgeGraph = Depends(get_graph)):
-        counts = store.counts()
-        metrics = graph.metrics() if counts.get("concepts") else None
-        return StatsResponse(
-            api_version=API_VERSION,
-            counts=counts,
-            graph=metrics.to_dict() if metrics else None,
-            llm_calls=CALLS.count,
-        )
+    @app.get("/stats", response_model=StatsResponse, tags=["meta"], operation_id="get_stats")
+    def get_stats(store: SqliteStore = Depends(get_store)):
+        return queries.get_stats(store)
 
     # -- concepts ----------------------------------------------------------
 
-    @app.get("/concepts", response_model=ConceptPage, tags=["concepts"])
+    @app.get(
+        "/concepts", response_model=ConceptPage, tags=["concepts"], operation_id="list_concepts"
+    )
     def list_concepts(
         store: SqliteStore = Depends(get_store),
         q: str | None = Query(None, description="Case-insensitive substring of the name."),
@@ -248,170 +129,89 @@ def create_app(settings: Settings | None = None, *, db_path: FilePath | None = N
         limit: int = Query(50, ge=1, le=MAX_PAGE_SIZE),
         offset: int = Query(0, ge=0),
     ):
-        limit, offset = _page_bounds(limit, offset)
-        items = list(store.list_concepts())
-        if q:
-            needle = q.casefold()
-            items = [c for c in items if needle in c.canonical_name.casefold()]
-        if kind:
-            items = [c for c in items if c.kind.value == kind]
-        items.sort(key=lambda c: c.canonical_name.casefold())
-        window = items[offset : offset + limit]
-        return ConceptPage(
-            total=len(items),
-            limit=limit,
-            offset=offset,
-            returned=len(window),
-            items=[_concept_summary(c) for c in window],
-        )
+        return queries.list_concepts(store, q=q, kind=kind, limit=limit, offset=offset)
 
-    @app.get("/concepts/{concept_id}", response_model=ConceptDetail, tags=["concepts"])
-    def get_concept(
-        concept_id: str,
-        store: SqliteStore = Depends(get_store),
-        graph: KnowledgeGraph = Depends(get_graph),
-    ):
-        explained = graph.explain_concept(concept_id)
-        if explained is None:
-            raise HTTPException(status_code=404, detail=f"no concept {concept_id!r}")
-        concept = store.get_concept(concept_id)
-        proposal = explained.get("origin_proposal")
-        return ConceptDetail(
-            concept=_concept_summary(concept),
-            origin_proposal=OriginProposal(**proposal) if proposal else None,
-            origin_spans=[OriginSpan(**s) for s in explained["origin_spans"]],
-            claims=[
-                _claim_summary(c, len(store.evidence_for_claim(c.id)))
-                for c in graph.get_concept_claims(concept_id)
-            ],
-            relationships=[_neighbor(n) for n in explained["relationships"]],
-        )
+    @app.get(
+        "/concepts/{concept_id}",
+        response_model=ConceptDetail,
+        tags=["concepts"],
+        operation_id="get_concept",
+    )
+    def get_concept(concept_id: str, store: SqliteStore = Depends(get_store)):
+        return queries.get_concept(store, concept_id)
 
     @app.get(
         "/concepts/{concept_id}/neighbors",
         response_model=list[NeighborItem],
         tags=["concepts"],
+        operation_id="list_concept_neighbors",
     )
-    def concept_neighbors(
+    def list_concept_neighbors(
         concept_id: str,
         store: SqliteStore = Depends(get_store),
-        graph: KnowledgeGraph = Depends(get_graph),
         limit: int = Query(50, ge=1, le=MAX_PAGE_SIZE),
     ):
-        if store.get_concept(concept_id) is None:
-            raise HTTPException(status_code=404, detail=f"no concept {concept_id!r}")
-        return [_neighbor(n.to_dict()) for n in graph.get_neighbors(concept_id)][:limit]
+        return queries.list_concept_neighbors(store, concept_id, limit=limit)
 
     # -- claims and their evidence ----------------------------------------
 
-    @app.get("/claims", response_model=ClaimPage, tags=["claims"])
+    @app.get("/claims", response_model=ClaimPage, tags=["claims"], operation_id="list_claims")
     def list_claims(
         store: SqliteStore = Depends(get_store),
         concept_id: str | None = Query(None),
         limit: int = Query(50, ge=1, le=MAX_PAGE_SIZE),
         offset: int = Query(0, ge=0),
     ):
-        limit, offset = _page_bounds(limit, offset)
-        items = list(store.list_claims())
-        if concept_id:
-            items = [c for c in items if c.subject_concept_id == concept_id]
-        window = items[offset : offset + limit]
-        return ClaimPage(
-            total=len(items),
-            limit=limit,
-            offset=offset,
-            returned=len(window),
-            items=[_claim_summary(c, len(store.evidence_for_claim(c.id))) for c in window],
-        )
+        return queries.list_claims(store, concept_id=concept_id, limit=limit, offset=offset)
 
-    @app.get("/claims/{claim_id}", response_model=ClaimDetail, tags=["claims"])
-    def get_claim(
-        claim_id: str,
-        store: SqliteStore = Depends(get_store),
-        graph: KnowledgeGraph = Depends(get_graph),
-    ):
+    @app.get(
+        "/claims/{claim_id}",
+        response_model=ClaimDetail,
+        tags=["claims"],
+        operation_id="get_claim",
+    )
+    def get_claim(claim_id: str, store: SqliteStore = Depends(get_store)):
         """Claim plus its full evidence chain.
 
-        The phase gate is reaching the exact source span from a claim in **one
-        interaction**, so the span text and its source locator are in this
-        response rather than behind a second request.
+        The Phase 6 gate is reaching the exact source span from a claim in
+        **one interaction**, so the span text and its source locator are in
+        this response rather than behind a second request.
         """
-        claim = store.get_claim(claim_id)
-        if claim is None:
-            raise HTTPException(status_code=404, detail=f"no claim {claim_id!r}")
-        chain = _evidence_chain(claim_id, store, graph)
-        return ClaimDetail(
-            **_claim_summary(claim, len(chain)).model_dump(),
-            evidence=chain,
-        )
+        return queries.get_claim(store, claim_id)
 
-    @app.get("/claims/{claim_id}/evidence", response_model=list[EvidenceItem], tags=["claims"])
-    def claim_evidence(
-        claim_id: str,
-        store: SqliteStore = Depends(get_store),
-        graph: KnowledgeGraph = Depends(get_graph),
-    ):
-        if store.get_claim(claim_id) is None:
-            raise HTTPException(status_code=404, detail=f"no claim {claim_id!r}")
-        return _evidence_chain(claim_id, store, graph)
-
-    def _evidence_chain(
-        claim_id: str, store: SqliteStore, graph: KnowledgeGraph
-    ) -> list[EvidenceItem]:
-        out: list[EvidenceItem] = []
-        for raw in graph.get_claim_evidence(claim_id):
-            source = store.get_source(raw["source_id"]) if raw.get("source_id") else None
-            span = store.get_span(raw["span_id"])
-            out.append(
-                EvidenceItem(
-                    relation=raw["relation"],
-                    span_id=raw["span_id"],
-                    citation=raw.get("citation"),
-                    span_citation=span.citation() if span else None,
-                    page=raw.get("page"),
-                    heading_path=raw.get("heading_path") or [],
-                    text=raw.get("text"),
-                    document_id=raw.get("document_id"),
-                    source_id=raw.get("source_id"),
-                    source_locator=source.locator if source else None,
-                    source_kind=raw.get("source_kind"),
-                    trust_tier=raw.get("trust_tier"),
-                )
-            )
-        return out
+    @app.get(
+        "/claims/{claim_id}/evidence",
+        response_model=list[EvidenceItem],
+        tags=["claims"],
+        operation_id="get_claim_evidence",
+    )
+    def get_claim_evidence(claim_id: str, store: SqliteStore = Depends(get_store)):
+        return queries.get_claim_evidence(store, claim_id)
 
     # -- spans and sources -------------------------------------------------
 
-    @app.get("/spans/{span_id}", response_model=SpanDetail, tags=["sources"])
+    @app.get(
+        "/spans/{span_id}", response_model=SpanDetail, tags=["sources"], operation_id="get_span"
+    )
     def get_span(span_id: str, store: SqliteStore = Depends(get_store)):
-        span = store.get_span(span_id)
-        if span is None:
-            raise HTTPException(status_code=404, detail=f"no span {span_id!r}")
-        return _span_detail(span, store)
+        return queries.get_span(store, span_id)
 
-    @app.get("/sources", response_model=SourcePage, tags=["sources"])
+    @app.get("/sources", response_model=SourcePage, tags=["sources"], operation_id="list_sources")
     def list_sources(
         store: SqliteStore = Depends(get_store),
         limit: int = Query(50, ge=1, le=MAX_PAGE_SIZE),
         offset: int = Query(0, ge=0),
     ):
-        limit, offset = _page_bounds(limit, offset)
-        items = sorted(store.list_sources(), key=lambda s: s.locator)
-        window = items[offset : offset + limit]
-        return SourcePage(
-            total=len(items),
-            limit=limit,
-            offset=offset,
-            returned=len(window),
-            items=[_source_summary(s) for s in window],
-        )
+        return queries.list_sources(store, limit=limit, offset=offset)
 
-    @app.get("/sources/{source_id}", response_model=SourceSummary, tags=["sources"])
+    @app.get(
+        "/sources/{source_id}",
+        response_model=SourceSummary,
+        tags=["sources"],
+        operation_id="get_source",
+    )
     def get_source(source_id: str, store: SqliteStore = Depends(get_store)):
-        source = store.get_source(source_id)
-        if source is None:
-            raise HTTPException(status_code=404, detail=f"no source {source_id!r}")
-        return _source_summary(source)
+        return queries.get_source(store, source_id)
 
     # -- history -----------------------------------------------------------
 
@@ -419,77 +219,48 @@ def create_app(settings: Settings | None = None, *, db_path: FilePath | None = N
         "/revisions/{entity_type}/{entity_id}",
         response_model=list[RevisionItem],
         tags=["history"],
+        operation_id="list_entity_revisions",
     )
-    def entity_revisions(
+    def list_entity_revisions(
         entity_type: str, entity_id: str, store: SqliteStore = Depends(get_store)
     ):
-        """The revision timeline for one entity, oldest first."""
         try:
-            kind = EntityType(entity_type)
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"unknown entity type {entity_type!r}; expected one of "
-                    f"{', '.join(e.value for e in EntityType)}"
-                ),
-            ) from None
-        return [_revision_item(r) for r in store.revisions_for(kind, entity_id)]
+            return queries.list_entity_revisions(store, entity_type, entity_id)
+        except BadRequest as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
 
-    @app.get("/revisions", response_model=list[RevisionItem], tags=["history"])
-    def recent_revisions(
+    @app.get(
+        "/revisions",
+        response_model=list[RevisionItem],
+        tags=["history"],
+        operation_id="list_recent_revisions",
+    )
+    def list_recent_revisions(
         store: SqliteStore = Depends(get_store),
         limit: int = Query(50, ge=1, le=MAX_PAGE_SIZE),
     ):
-        return [_revision_item(r) for r in store.recent_revisions(limit=limit)]
+        return queries.list_recent_revisions(store, limit=limit)
 
     # -- retrieval and traversal ------------------------------------------
 
-    @app.get("/search", response_model=list[SearchHit], tags=["retrieval"])
-    def search(
+    @app.get(
+        "/search", response_model=list[SearchHit], tags=["retrieval"], operation_id="search_spans"
+    )
+    def search_spans(
         q: str = Query(..., min_length=1),
         store: SqliteStore = Depends(get_store),
         limit: int = Query(20, ge=1, le=MAX_PAGE_SIZE),
     ):
-        """Lexical span search. Deterministic, no model, no embeddings."""
-        hits: list[SearchHit] = []
-        for span, score in store.search_spans(q, limit=limit):
-            document = store.get_document(span.document_id)
-            source = store.get_source(document.source_id) if document else None
-            hits.append(
-                SearchHit(
-                    span_id=span.id,
-                    score=score,
-                    citation=span.citation(),
-                    text=span.text,
-                    source_locator=source.locator if source else None,
-                )
-            )
-        return hits
+        return queries.search_spans(store, q, limit=limit)
 
-    @app.get("/path", response_model=PathResponse, tags=["retrieval"])
+    @app.get("/path", response_model=PathResponse, tags=["retrieval"], operation_id="find_path")
     def find_path(
-        graph: KnowledgeGraph = Depends(get_graph),
+        store: SqliteStore = Depends(get_store),
         source: str = Query(..., description="Concept id to start from."),
         target: str = Query(..., description="Concept id to reach."),
         max_depth: int = Query(4, ge=1, le=6),
     ):
-        """Shortest path within `max_depth`.
-
-        `found: false` means "no path within max_depth", which is not the same
-        as "no path": the search is bounded and cannot establish the latter.
-        """
-        path = graph.find_path(source, target, max_depth=max_depth)
-        if path is None:
-            return PathResponse(found=False)
-        labels = graph.node_labels(path.nodes)
-        return PathResponse(
-            found=True,
-            depth=path.depth,
-            nodes=list(path.nodes),
-            labels=[labels.get(n, n) for n in path.nodes],
-            edges=[link.type.value for link in path.links],
-        )
+        return queries.find_path(store, source, target, max_depth=max_depth)
 
     # -- the explorer ------------------------------------------------------
 

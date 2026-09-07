@@ -86,6 +86,8 @@ class ClaimDetail(ClaimSummary):
 
 
 class NeighborItem(BaseModel):
+    """One concept one edge away, carrying the edge's own provenance."""
+
     concept_id: str
     label: str | None = None
     link_type: str
@@ -133,6 +135,7 @@ class SpanDetail(BaseModel):
     text: str
     source_id: str | None = None
     source_locator: str | None = None
+    trust_tier: str | None = None
 
 
 class SourceSummary(BaseModel):
@@ -174,6 +177,27 @@ class SearchHit(BaseModel):
     citation: str | None = None
     text: str
     source_locator: str | None = None
+    #: A hit is quoted source text, so its provenance is the source's trust
+    #: tier rather than a provenance tier. Published for the same reason: an
+    #: agent must never receive a result it cannot attribute.
+    trust_tier: str | None = None
+
+
+class PathEdge(BaseModel):
+    """One hop, with who asserted it and why.
+
+    A path is a chain of assertions. Publishing only the link *type* would tell
+    an agent that two concepts are `RELATED_TO` without saying whether that
+    came from a human-authored wikilink or a model's guess, which is precisely
+    the distinction this system exists to keep.
+    """
+
+    from_id: str
+    to_id: str
+    link_type: str
+    score: float | None = None
+    rationale: str | None = None
+    provenance: Provenance
 
 
 class PathResponse(BaseModel):
@@ -181,7 +205,7 @@ class PathResponse(BaseModel):
     depth: int | None = None
     nodes: list[str] = Field(default_factory=list)
     labels: list[str] = Field(default_factory=list)
-    edges: list[str] = Field(default_factory=list)
+    edges: list[PathEdge] = Field(default_factory=list)
 
 
 class Page(BaseModel):

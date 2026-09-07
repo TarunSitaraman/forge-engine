@@ -81,6 +81,11 @@ tui = ["textual>=1.0"]
 # installed. `forge.api` is imported lazily so a missing FastAPI is a clear
 # message from one command rather than an ImportError at startup.
 api = ["fastapi>=0.110", "uvicorn>=0.29"]
+# `forge mcp` — the same read-only queries, exposed to an agent over MCP. A
+# separate extra from `api` on purpose: someone wiring Forge into an agent has
+# no reason to install a web server, and someone browsing the explorer has no
+# reason to install an agent SDK.
+mcp = ["mcp>=2.0"]
 # Static word vectors, for measuring whether *semantic* matching beats
 # vocabulary overlap. An extra for the same reason as the others: retrieval
 # must work with no model at all, and `hashing` remains the zero-dependency
@@ -92,6 +97,7 @@ dev = [
     "pytest-cov>=5.0",
     "fastapi>=0.110",
     "uvicorn>=0.29",
+    "mcp>=2.0",
     "textual>=1.0",
     "langgraph>=1.0",
     "langgraph-checkpoint-sqlite>=3.0",

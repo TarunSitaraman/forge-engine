@@ -556,6 +556,44 @@ def serve(
     uvicorn.run(create_app(settings), host=host, port=port, reload=reload)
 
 
+@app.command()
+def mcp(
+    vault: Optional[Path] = typer.Option(None),
+) -> None:
+    """Serve the knowledge model to an agent over MCP (needs the `mcp` extra).
+
+    Speaks MCP over stdio, which is what an agent host launches. It prints
+    nothing to stdout: stdout *is* the protocol channel, and a stray line
+    corrupts the stream. Diagnostics go to stderr.
+
+    Read-only, like the HTTP API. Knowledge changes only through proposal and
+    activation, which require a human decision.
+    """
+    settings = _settings(vault)
+    try:
+        from ..mcp import create_server
+    except ModuleNotFoundError as exc:
+        err(f"{exc}", err=True)
+        raise typer.Exit(code=2) from None
+
+    store = load_store(settings)
+    counts = store.counts()
+    store.close()
+    # stderr on purpose: stdout carries the protocol.
+    err(f"forge mcp: {settings.db_path}", err=True)
+    err(
+        f"  {counts.get('concepts', 0)} concepts, {counts.get('claims', 0)} claims, "
+        f"{counts.get('spans', 0)} spans",
+        err=True,
+    )
+    if not counts.get("concepts") and not counts.get("sources"):
+        err(
+            "  the store is empty; run `forge bootstrap --apply` or `forge ingest` first.",
+            err=True,
+        )
+    create_server(settings).run(transport="stdio")
+
+
 # Registered last, deliberately: the shell enumerates the commands of the group
 # it is given, so every command above must already be attached when it runs.
 @app.command()

@@ -473,11 +473,62 @@ that issues eight concurrent requests.
 - MCP server exposing retrieval and knowledge-model queries as tools;
   read-only initially.
 
+**Delivered, 2026-09-07**
+- `forge mcp`: 14 read-only tools over stdio, behind the `mcp` extra.
+- **`forge.api.queries`, a single service layer both interfaces call.** The
+  HTTP routes were rewritten as wrappers over it in the same change, so there
+  is one implementation of every query rather than two that agree today.
+
 **Gate**
-- [ ] An external agent can query the model and receive provenance with
-      every result
-- [ ] Identical semantics to the HTTP API, no capability lives only in
-      one interface
+- [x] **An external agent can query the model and receive provenance with
+      every result.** The tools return the same models the HTTP API does, so
+      the MCP *output schema* carries provenance as part of the published
+      contract rather than as a convention an agent has to discover. Derived
+      knowledge carries a provenance tier, quoted source material carries a
+      trust tier and a locator, a revision carries the cause that triggered it.
+      A test sweeps every capability and fails on any record that arrives
+      unattributable.
+
+      Two gaps were closed to make that true rather than nearly true. A path
+      result published only edge *types*, so an agent was told two concepts
+      were `RELATED_TO` with no way to tell a human-authored wikilink from a
+      model's guess; every hop now carries its own provenance and rationale.
+      Search hits and spans now carry the source's trust tier for the same
+      reason.
+
+      The server's `instructions` tell an agent how to read the distinction
+      before it calls anything, because a distinction the agent flattens when
+      reporting is one that was not kept.
+- [x] **Identical semantics to the HTTP API, no capability lives only in one
+      interface.** `queries.CAPABILITIES` names each capability once; the HTTP
+      layer stamps it as the route's `operation_id` and the MCP layer names the
+      tool the same. One test compares all three sets, so a capability added to
+      one interface and forgotten in the other fails the suite.
+
+      A second test compares the **payloads**: same store, same arguments, both
+      interfaces, asserting the JSON is equal across twelve capabilities. The
+      registry check alone would pass for two interfaces that share names and
+      disagree about meaning. It excludes `neighbor_query_ms` and
+      `path_query_ms`, which `GraphMetrics` measures at call time and which
+      therefore differ between any two calls, including two to the same
+      interface.
+
+      `health` is the one deliberate asymmetry: it is how the HTTP interface is
+      operated, not something an agent can ask about the knowledge model, and
+      MCP has its own liveness semantics. The test names the exclusion rather
+      than letting the sets quietly differ.
+
+**Read-only, and asserted.** No tool is named for a write, and the tools make
+zero model calls. An agent is the caller you least want holding a write path:
+knowledge changes through proposal and activation, which require a human
+decision.
+
+**One test drives the real transport.** It spawns `forge mcp` and speaks the
+protocol to it, because the failure most likely to break an agent integration
+silently is not in the tools: **stdout is the protocol channel**, so one stray
+`print` during startup corrupts the stream and every client sees a parse error
+rather than a Forge problem. The CLI writes diagnostics to stderr for that
+reason, and that test is what checks it.
 
 ---
 

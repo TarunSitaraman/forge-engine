@@ -371,6 +371,37 @@ The explorer needs something to show. On an empty store `forge serve` says so
 and still starts; run `forge bootstrap --apply` for the deterministic graph, or
 `forge ingest` for sources and spans, first.
 
+## Serving the knowledge model to an agent
+
+```bash
+pip install 'forge-kb[mcp]'
+forge mcp                        # speaks MCP over stdio
+```
+
+An agent host launches this; it is not something to run by hand. **stdout is
+the protocol channel**, so `forge mcp` prints nothing there and sends its
+diagnostics to stderr. A stray line on stdout corrupts the stream and every
+client sees a parse error rather than a Forge problem.
+
+Wire it into a host by pointing at the command:
+
+```json
+{
+  "mcpServers": {
+    "forge": {
+      "command": "forge",
+      "args": ["mcp"],
+      "env": { "FORGE_VAULT_PATH": "/path/to/your/vault" }
+    }
+  }
+}
+```
+
+Fourteen tools, the same queries the HTTP API serves and with the same
+semantics: both interfaces call `forge.api.queries`, and a test compares their
+payloads rather than trusting that they match. Read-only, zero model calls, and
+every result carries its provenance.
+
 The evaluation is reproducible, so re-run it rather than estimating:
 
 ```bash

@@ -17,7 +17,7 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them, `1,253 passed, 42 skipped` becomes `1,295 passed`. See
+   to run them, `1,276 passed, 42 skipped` becomes `1,318 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine*, architecture, ADRs, research,
@@ -44,6 +44,48 @@ are measurement records: renaming the corpus a number was measured
 against would falsify it.
 
 ## Known Stale/Legacy Items
+
+**Phase 8, the MCP server, 2026-09-07, and the refactor that made its gate
+real.** `forge mcp` (`forge.mcp`, behind the `mcp` extra) exposes 14 read-only
+tools over stdio.
+
+**The gate was "identical semantics to the HTTP API, no capability lives only
+in one interface", and the only honest way to close it was to stop having two
+implementations.** `forge.api.queries` now holds every query once; the Phase 6
+routes were rewritten as wrappers over it in the same change, and the MCP tools
+are wrappers over the same functions. `queries.CAPABILITIES` names each
+capability, the HTTP layer stamps it as the route's `operation_id`, the MCP
+layer names the tool the same, and a test compares all three sets. A second
+test compares the **payloads** across twelve capabilities, because the registry
+check alone passes for two interfaces that share names and disagree about
+meaning.
+
+**Two things that test taught, both worth keeping.** `GraphMetrics` measures
+`neighbor_query_ms` and `path_query_ms` at call time, so `/stats` differs
+between any two calls including two to the same interface; parity comparisons
+must exclude them or they are flaky rather than strict. And `health` is a real
+asymmetry, not an oversight: it is how the HTTP interface is operated, not
+something an agent asks about the knowledge model, so the test names the
+exclusion instead of letting the sets quietly differ.
+
+**Gate one, provenance with every result, needed two gaps closed.** A path
+result published only edge *types*, so an agent was told two concepts were
+`RELATED_TO` with no way to tell a human-authored wikilink from a model's
+guess; every hop now carries its own provenance and rationale. Spans and search
+hits now carry the source's trust tier. A test sweeps every capability and
+fails on any record that arrives unattributable. The server's `instructions`
+also tell an agent how to *read* the distinction, because one it flattens when
+reporting was not kept.
+
+**stdout is the protocol channel.** `forge mcp` prints nothing there and sends
+diagnostics to stderr; one stray `print` during startup corrupts the stream and
+every client sees a parse error rather than a Forge problem. A test spawns the
+real CLI and speaks the protocol to it, which is the only way that failure is
+visible. Two SDK notes: this is `mcp` 2.x, where `FastMCP` was renamed
+`MCPServer` and fields are snake_case (`input_schema`, `server_info`), and a
+tool that raises `ToolError` has its message reach the agent while any other
+exception becomes an opaque "error executing tool", which is why `NotFound`
+and `BadRequest` are translated and nothing else is.
 
 **Phase 6, the read-only API and explorer, 2026-09-07.** `forge serve`
 (`forge.api`, behind the `api` extra). Three things are enforced rather than
@@ -741,7 +783,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine, distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,295 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,318 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -766,12 +808,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 1,253 passed, 42 skipped, offline, no model
+python -m pytest tests           # 1,276 passed, 42 skipped, offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,295 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,318 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.
