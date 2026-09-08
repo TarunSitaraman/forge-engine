@@ -49,6 +49,14 @@ plain folder of notes, `mkdir .forge` is the one-time marker. Otherwise set
 **Nothing above needs a model.** Extraction, `forge ask`, and the evolution
 workflow do; everything else is deterministic and stays that way.
 
+**Extraction drops two kinds of claim and says so.** A quote that is not in its
+span is `ungrounded_quote`, the check that separates a citation from a
+plausible-looking one. A quote lifted out of a fenced code block is
+`quote_from_code_block`: a Mermaid diagram or a Python example can be quoted
+verbatim and still leave a reviewer nothing to read as support, and the point of
+storing the quote is that a human can look at it and decide. Both appear in the
+run's failure list rather than disappearing.
+
 **On a rate-limited free tier, set `FORGE_LLM_MIN_INTERVAL`.** It is the
 minimum number of seconds between the starts of two model calls, applied to
 whichever provider is configured, and it exists because a free cloud tier

@@ -385,6 +385,20 @@ class CandidateExtractor:
                 )
                 log.warning("dropped_ungrounded_claim", span_id=span.id)
                 continue
+            # Grounded, and still not evidence: see `_from_code_block`.
+            if _from_code_block(claim.evidence_quote, span.text):
+                dropped.append(
+                    {
+                        "kind": "quote_from_code_block",
+                        "span_id": span.id,
+                        "error": (
+                            f"dropped claim quoting a fenced block, which a reader "
+                            f"cannot read as support: {claim.evidence_quote[:80]!r}"
+                        ),
+                    }
+                )
+                log.warning("dropped_code_block_claim", span_id=span.id)
+                continue
             out.append(
                 ClaimCandidate(
                     statement=claim.statement.strip(),
@@ -629,6 +643,47 @@ def _local_overlap(quote_words: Sequence[str], text_words: Sequence[str]) -> flo
         if best >= 1.0:
             break
     return best
+
+
+_FENCE_RE = re.compile(r"^[ \t]*(?:```|~~~).*?(?:^[ \t]*(?:```|~~~)|\Z)", re.DOTALL | re.MULTILINE)
+
+
+def _from_code_block(quote: str, text: str) -> bool:
+    """Is this quote lifted out of a fenced code block rather than prose?
+
+    A claim's quote is what a human reads to decide whether the claim is
+    supported. Measured on the first real extraction run, 2026-09-07: the page
+    was 20% fenced code, and the thin claims were exactly the ones drawn from
+    it. `In ingestion, source documents are chunked, then embedded, then stored
+    in a vector database` is an accurate reading of a Mermaid diagram, and its
+    evidence reads
+
+        DOCS[Source Documents] --> CHUNK[Chunking]
+        CHUNK --> EMBED1[Embedding Model]
+
+    which asserts nothing a reviewer can check. The grounding test passes —
+    the string really is in the span — and the evidence chain is still broken,
+    because diagram syntax is not a statement.
+
+    The test is deliberately two-sided: a quote is only rejected when it is
+    inside a fence **and** not in the prose. A sentence repeated in both a
+    paragraph and a code comment is still supported by the paragraph.
+    """
+    if not quote.strip():
+        return False
+    fences = list(_FENCE_RE.finditer(text))
+    if not fences:
+        return False
+    needle = _flat(quote)
+    if not needle:
+        return False
+    code = _flat(" ".join(m.group(0) for m in fences))
+    prose = _flat(_FENCE_RE.sub(" ", text))
+    return needle in code and needle not in prose
+
+
+def _flat(text: str) -> str:
+    return " ".join(text.split())
 
 
 def _grounded(quote: str, text: str) -> bool:

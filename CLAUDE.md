@@ -17,7 +17,7 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them, `1,413 passed, 42 skipped` becomes `1,455 passed`. See
+   to run them, `1,418 passed, 42 skipped` becomes `1,460 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine*, architecture, ADRs, research,
@@ -44,6 +44,36 @@ are measurement records: renaming the corpus a number was measured
 against would falsify it.
 
 ## Known Stale/Legacy Items
+
+**A grounded quote is not automatically evidence, 2026-09-08.** Fixing the
+evidence display immediately paid for itself: with the real quotes visible, the
+thin claims from the first extraction run all had one thing in common. They came
+out of fenced code blocks.
+
+`rag.md` is **20% fenced** — Mermaid diagrams and Python examples. The model
+read a diagram correctly and produced *"In ingestion, source documents are
+chunked, then embedded, then stored in a vector database"*, whose evidence is
+
+    DOCS[Source Documents] --> CHUNK[Chunking]
+    CHUNK --> EMBED1[Embedding Model]
+
+The grounding check passes — that string really is in the span — and the
+evidence chain is broken anyway, because **diagram syntax asserts nothing a
+reviewer can read as support**. The whole reason the quote is stored is that a
+human can look at it and decide; this one gives them nothing to decide with.
+
+`_from_code_block` now drops those, reported as `quote_from_code_block`
+alongside `ungrounded_quote` — never silently discarded. The test is
+deliberately two-sided: a sentence that appears in a paragraph *and* is echoed
+in a code comment is still supported by the paragraph, so a quote is rejected
+only when it is inside a fence and absent from the prose.
+
+**Two lessons stack here.** The display bug hid the diagnosis: while every
+claim showed the same file header, "some claims are thin" was a vague
+impression, and one look at the real quotes made it a mechanical rule. And
+"grounded" was doing less work than its name promised — the check answers *is
+this string present*, which is necessary and not sufficient for *is this
+support*.
 
 **`forge proposals show` printed the wrong evidence, 2026-09-07.** It showed
 the first 110 characters of the evidence span instead of the quote that
@@ -1138,7 +1168,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine, distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,455 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,460 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -1163,12 +1193,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 1,413 passed, 42 skipped, offline, no model
+python -m pytest tests           # 1,418 passed, 42 skipped, offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,455 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,460 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.

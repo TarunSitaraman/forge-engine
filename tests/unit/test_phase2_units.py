@@ -785,3 +785,98 @@ class TestReviewingAProposalShowsWhatWasChecked:
 
     def test_the_concept_the_claim_is_about_is_named(self, tmp_path):
         assert "RAG" in self._show(tmp_path)
+
+
+class TestEvidenceMustBeReadableAsSupport:
+    """A claim quoting a fenced block is grounded and still not evidence.
+
+    Measured on the first real extraction run, 2026-09-07. The page was 20%
+    fenced code, and the thin claims were exactly the ones drawn from it: the
+    model read a Mermaid diagram correctly and produced "In ingestion, source
+    documents are chunked, then embedded, then stored in a vector database",
+    whose quote is
+
+        DOCS[Source Documents] --> CHUNK[Chunking]
+
+    The grounding test passes, because that string really is in the span. The
+    evidence chain is broken anyway, because diagram syntax asserts nothing a
+    reviewer can check — and the whole point of storing the quote is that a
+    human can read it and decide.
+    """
+
+    DIAGRAM = "DOCS[Source Documents] --> CHUNK[Chunking]"
+    PROSE = "Retrieval and generation are independent failure modes."
+    SPAN = (
+        "## Architecture\n\n"
+        f"{PROSE} Diagnose them separately.\n\n"
+        "```mermaid\n"
+        "graph TD\n"
+        f"    {DIAGRAM}\n"
+        "    CHUNK --> EMBED1[Embedding Model]\n"
+        "```\n\n"
+        "More prose after the diagram.\n"
+    )
+
+    def test_a_quote_from_a_fence_is_rejected(self):
+        from forge.extraction.extractor import _from_code_block
+
+        assert _from_code_block(self.DIAGRAM, self.SPAN) is True
+
+    def test_a_quote_from_the_prose_is_kept(self):
+        from forge.extraction.extractor import _from_code_block, _grounded
+
+        assert _grounded(self.PROSE, self.SPAN) is True
+        assert _from_code_block(self.PROSE, self.SPAN) is False
+
+    def test_a_sentence_in_both_prose_and_a_comment_is_still_supported(self):
+        """The test is two-sided on purpose: being echoed inside a fence does
+        not withdraw the support the paragraph already gives."""
+        from forge.extraction.extractor import _from_code_block
+
+        span = (
+            "Chunk on structure, not token counts.\n\n"
+            "```python\n# Chunk on structure, not token counts.\nchunk(doc)\n```\n"
+        )
+        assert _from_code_block("Chunk on structure, not token counts.", span) is False
+
+    def test_a_span_with_no_fences_is_unaffected(self):
+        from forge.extraction.extractor import _from_code_block
+
+        assert _from_code_block("anything at all", "plain prose, no fences here") is False
+
+    def test_the_extractor_drops_it_and_says_why(self):
+        """Dropped and reported, the same shape as an ungrounded quote — never
+        silently discarded."""
+        import json
+
+        from forge.extraction.extractor import CandidateExtractor
+        from forge.llm import MockProvider
+
+        def responder(request):
+            content = request.messages[1].content
+            if "factual assertions" in content:
+                return json.dumps(
+                    {
+                        "claims": [
+                            {
+                                "statement": "Documents are chunked then embedded.",
+                                "evidence_quote": self.DIAGRAM,
+                                "concept": "Ingestion",
+                            },
+                            {
+                                "statement": "Retrieval and generation fail separately.",
+                                "evidence_quote": self.PROSE,
+                                "concept": "Failure Mode",
+                            },
+                        ]
+                    }
+                )
+            return "{}"
+
+        extractor = CandidateExtractor(MockProvider(responder=responder))
+        result = extractor.extract([make_span(self.SPAN, "sp-code")])
+
+        kept = [c.statement for c in result.claims]
+        assert kept == ["Retrieval and generation fail separately."]
+        kinds = [f.get("kind") for f in result.failures]
+        assert "quote_from_code_block" in kinds
