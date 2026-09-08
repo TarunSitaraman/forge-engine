@@ -39,7 +39,7 @@ D1 (repository layout) and D2 (write-back policy), audit §8, ADR-001.
 
 ---
 
-## Phase 1: Canonical knowledge model
+## Phase 1: Canonical knowledge model *(complete)*
 
 The foundation. Everything else is built on this, so it is the phase
 most worth slowing down for.
@@ -60,14 +60,20 @@ most worth slowing down for.
   against real corpus pairs (technology decisions §4.4).
 
 **Gate**
-- [ ] A claim cannot be persisted without provenance; the floor rule has
-      tests proving synthesis cannot be written as `SOURCE_FACT`
-- [ ] Supersession retains both states and writes a `Revision`
-- [ ] All 283 `related:` fields parse as valid YAML; full-corpus
-      frontmatter parse succeeds with zero errors
-- [ ] Full test suite runs offline with no model
-- [ ] Spike result recorded: is local `analysis` good enough, and at
-      what thresholds?
+- [x] A claim cannot be persisted without provenance; the floor rule has
+      tests proving synthesis cannot be written as `SOURCE_FACT`.
+      `tests/unit/test_provenance.py`; the rule is a pydantic validator, so a
+      violating object cannot be constructed at all.
+- [x] Supersession retains both states and writes a `Revision`.
+      `tests/unit/test_revision_and_model.py`.
+- [x] All 283 `related:` fields parse as valid YAML; full-corpus frontmatter
+      parse succeeds with zero errors. `forge diagnostics frontmatter` on the
+      vault reports 407 files with frontmatter, 407 valid, 0 invalid, over 892
+      `related:` entries (2026-09-08; the 283 was the pre-repair audit figure).
+- [x] Full test suite runs offline with no model. 1,435 pass with no provider
+      configured, and `CALLS.count` is asserted rather than assumed.
+- [x] Spike result recorded: is local `analysis` good enough, and at what
+      thresholds? [`docs/research/local-model-capability-spike.md`](research/local-model-capability-spike.md).
 
 ---
 
@@ -392,7 +398,7 @@ false-positive rate is measured.
 
 ---
 
-## Phase 6: Knowledge exploration interface
+## Phase 6: Knowledge exploration interface *(complete)*
 
 **Scope**
 - FastAPI read endpoints; graph explorer; concept → claims → evidence →
@@ -467,7 +473,7 @@ that issues eight concurrent requests.
 
 ---
 
-## Phase 8: MCP interface
+## Phase 8: MCP interface *(complete)*
 
 **Scope**
 - MCP server exposing retrieval and knowledge-model queries as tools;
@@ -532,7 +538,7 @@ reason, and that test is what checks it.
 
 ---
 
-## Phase 9: Research intelligence
+## Phase 9: Research intelligence *(complete)*
 
 Where the vision's questions become answerable.
 
@@ -649,7 +655,7 @@ would consume.
 
 ---
 
-## Phase 10: Polish, testing, documentation, release
+## Phase 10: Polish, testing, documentation, release *(complete)*
 
 **Scope**
 - Coverage, performance, error-message quality, deployment docs,

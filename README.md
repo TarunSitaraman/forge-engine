@@ -8,14 +8,23 @@
 
 ```bash
 pip install "forge-kb[tui]"
+forge demo                       # no vault needed; writes one and finds its defects
+```
+
+Then point it at your own:
+
+```bash
 cd /path/to/your/notes
 forge index && forge dash
 ```
 
+![The Forge dashboard, opened on the vault `forge demo` writes](docs/media/dash-overview.svg)
+
 ## What it found the first time it ran properly
 
-The vault this was built against has 670 files and 5,373 wikilinks, and every
-single one of them resolved. Zero broken links, on every report, for months.
+The vault this was built against has 669 indexed files and 5,373 links, and
+every single one of them resolves. Zero broken links, on every report, for
+months.
 
 Then a check for pages nothing links to turned up 26 unreachable cheat sheets.
 Reading them explained why: **24 of 32 pattern pages linked to the wrong
@@ -30,6 +39,19 @@ does nothing link to* exposed them.
 
 That is the job: not dead links, which any tool finds, but the defects that
 survive every tool because nothing about them is malformed.
+
+It keeps finding them. On 2026-09-08, in a vault reporting zero broken links,
+`Technologies/_index.md` carried this line:
+
+```markdown
+- [[Courses]] - structured learning, distinct from reference material
+```
+
+There is a `Courses/` folder. `[[Courses]]` resolved, case-insensitively, to
+`Resources/courses.md`: the curated list of external courses, which is the
+reference material the same line says it is distinct from. One `case_mismatch`
+in 5,373 links, and the sentence around it said what it was supposed to point
+at.
 
 ## What it reports
 
@@ -48,7 +70,7 @@ carries a model-call counter that stays at zero to prove it. With nothing beyond
 the core install, `forge index && forge diagnostics` reports the same findings
 as text.
 
-~29,500 lines of Python, 1,465 offline tests, no paid API required.
+~30,600 lines of Python, 1,477 tests that need no model, no paid API required.
 
 ## Where it is going
 
@@ -118,6 +140,7 @@ These are enforced in code and asserted in tests, not stated as aspirations:
 ```bash
 pip install forge-kb             # Python 3.10+
 
+forge demo                      # a sample vault, its defects, and what finds them
 forge dash                      # the dashboard: browse the vault  ("forge-kb[tui]")
 forge tui                       # full-screen prompt + transcript  ("forge-kb[tui]")
 forge shell                     # interactive: header bar, slash commands, history
@@ -208,22 +231,30 @@ old number.
 
 ## Status
 
-**Phases 0-4 complete.** The engine indexes a corpus deterministically, ingests
-external PDFs and Markdown with page- and section-level provenance, turns
-everything it infers into proposals a human decides on, activates approved ones
-into canonical knowledge you can traverse and cite, and evaluates how new
-evidence changes what it already knows, pausing for approval before anything
-changes. Phases 5-10 are not started; see [`docs/roadmap.md`](docs/roadmap.md).
+**Phases 0-4, 6 and 8-10 have passed every gate they declared.** The engine
+indexes a corpus deterministically, ingests external PDFs and Markdown with
+page- and section-level provenance, turns everything it infers into proposals a
+human decides on, activates approved ones into canonical knowledge you can
+traverse and cite, evaluates how new evidence changes what it already knows,
+and serves all of it through a dashboard, a read-only HTTP API and an MCP
+server.
+
+Two things are open, and neither is finished work being described as done.
+**Phase 5** still has two gates unticked: extraction has run against this
+corpus but has not been scored against its 545 filename-derived concepts, so
+the knowledge half is demonstrated rather than measured at scale. **Phase 7**,
+an Obsidian plugin, is not started. See [`docs/roadmap.md`](docs/roadmap.md),
+where every gate is ticked or not.
 
 ```bash
-python -m pytest tests           # 1,465 tests, fully offline, no model needed
+forge demo                       # the end-to-end story, in a vault it writes
+python -m pytest tests           # 1,477 tests, no model needed
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by running them
-python scripts/phase4_demo.py    # the end-to-end story
 ```
 
-In this repository 1,423 pass and 42 skip: those 42 are integration tests that
+In this repository 1,435 pass and 42 skip: those 42 are integration tests that
 run against the private Markdown vault, and they skip when it is not checked
-out. Point them at a checkout to run the full 1,465:
+out. Point them at a checkout to run the full 1,477:
 
 ```bash
 FORGE_TEST_VAULT=/path/to/forge python -m pytest tests
@@ -245,7 +276,7 @@ The suite is otherwise complete and requires no model. CI and every test run
 | `engine/forge/evolution/` | LangGraph workflow evaluating new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering documentation: architecture, ADRs, research, test strategy. |
-| `tests/`, `scripts/` | 1,465 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,477 tests; demos and per-phase validation scripts. |
 
 Start with [`docs/`](docs/README.md): the
 [current-state audit](docs/architecture/forge-current-state.md),
@@ -258,8 +289,14 @@ Start with [`docs/`](docs/README.md): the
 pip install forge-kb             # Python 3.10+
 ```
 
-Then point it at any folder of Markdown and see what is broken. No model, no
-API key, no network, no configuration:
+See what it does before you point it at anything of yours. No model, no API
+key, no network, no configuration:
+
+```bash
+forge demo
+```
+
+Then point it at any folder of Markdown:
 
 ```bash
 cd /path/to/your/notes
