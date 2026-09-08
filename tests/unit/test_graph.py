@@ -24,7 +24,6 @@ from forge.domain import (
     ConceptKind,
     Derivation,
     Document,
-    EntityType,
     EvidenceLink,
     EvidenceRelation,
     LinkType,

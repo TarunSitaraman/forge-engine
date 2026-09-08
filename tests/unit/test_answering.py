@@ -7,7 +7,6 @@ answerable was measured at 3,372 calls and 153 hours.
 
 from __future__ import annotations
 
-import pytest
 
 from forge.answering import NOT_IN_VAULT, Answerer
 from forge.llm import MockProvider

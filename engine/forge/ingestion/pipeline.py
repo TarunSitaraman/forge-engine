@@ -25,18 +25,14 @@ from typing import Sequence
 
 from ..config import Settings
 from ..domain import (
-    ChangeStatus,
     Document,
     ProposalStatus,
     ProposalType,
-    EvidenceRelation,
     ExtractionStatus,
     IngestionStatus,
-    MatchKind,
     Source,
     SourceKind,
     TrustTier,
-    deterministic_provenance,
     ProvenanceTier,
 )
 from ..extraction.extractor import CandidateExtractor, ExtractionResult, extraction_provenance

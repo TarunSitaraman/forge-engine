@@ -126,6 +126,21 @@ markers = [
 line-length = 100
 target-version = "py311"
 
+[tool.ruff.lint.per-file-ignores]
+# E402, imports below the top of the file. Both cases here are deliberate and
+# the alternative is worse than the rule.
+#
+#   main.py registers the later phases' commands by calling into their modules,
+#   and it does so *after* defining its own, so Phase 1's commands keep their
+#   position in the help and their order in the group the shell enumerates.
+#
+#   The optional-extra tests guard their imports with `pytest.importorskip`, so
+#   the whole module skips when the extra is absent instead of failing to
+#   collect. That call has to run before the import it protects.
+"engine/forge/cli/main.py" = ["E402"]
+"tests/unit/test_api.py" = ["E402"]
+"tests/unit/test_mcp.py" = ["E402"]
+
 [tool.ruff.lint.flake8-bugbear]
 # FastAPI's dependency injection *is* a call in an argument default, which is
 # what B008 exists to catch in ordinary code. These four are the documented

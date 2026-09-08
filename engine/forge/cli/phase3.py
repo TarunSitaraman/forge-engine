@@ -14,7 +14,6 @@ from typing import Any, Optional
 import typer
 
 from ..activation import ProposalActivator, RelationshipActivator
-from ..domain import LinkType, ProposalStatus, ProposalType, SafetyClass
 from ..embeddings import (
     HashingEmbeddingProvider,
     NullEmbeddingProvider,
@@ -22,7 +21,7 @@ from ..embeddings import (
     SpacyEmbeddingProvider,
 )
 from ..evaluation import DEFAULT_DATASET, EvalDataset, RetrievalEvaluator
-from ..graph import KnowledgeGraph, check_integrity
+from ..graph import KnowledgeGraph
 from ..llm.base import CALLS
 from ..identity import IdentityConfig, IdentityService
 from ..matching import build_ambiguity_index

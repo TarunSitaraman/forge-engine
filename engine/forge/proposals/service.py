@@ -12,11 +12,9 @@ PENDING ones. With it, a rejected proposal stays rejected.
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Sequence
+from typing import Iterable
 
 from ..domain import (
-    Concept,
-    Derivation,
     EntityType,
     MatchKind,
     Proposal,
@@ -24,9 +22,7 @@ from ..domain import (
     ProposalType,
     ProposedOperation,
     Provenance,
-    ProvenanceTier,
     SafetyClass,
-    deterministic_provenance,
 )
 from ..extraction.extractor import ClaimCandidate, ConceptCandidate
 from ..ids import text_hash

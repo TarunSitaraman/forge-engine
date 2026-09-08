@@ -266,8 +266,8 @@ class TestPresentation:
         coloured = render_header(settings, 634, 634, colour=True)
         plain = render_header(settings, 634, 634, colour=False)
 
-        assert [_visible_width(l) for l in coloured.splitlines()] == [
-            _visible_width(l) for l in plain.splitlines()
+        assert [_visible_width(line) for line in coloured.splitlines()] == [
+            _visible_width(line) for line in plain.splitlines()
         ]
 
     def test_plain_output_carries_no_escapes(self, tmp_path):

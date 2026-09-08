@@ -33,7 +33,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "engine"))
 from forge.config import Settings  # noqa: E402
 from forge.logging import configure_logging  # noqa: E402
 from forge.domain import (  # noqa: E402
-    AssessmentClass,
     Claim,
     Concept,
     ConceptKind,

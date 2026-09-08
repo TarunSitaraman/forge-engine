@@ -16,7 +16,6 @@ from forge.ingestion import (
     ExtractionPlanner,
     IngestionPipeline,
     IngestOptions,
-    extraction_key,
 )
 from forge.llm.base import CALLS
 from forge.storage import SqliteStore

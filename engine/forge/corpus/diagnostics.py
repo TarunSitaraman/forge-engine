@@ -12,7 +12,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..parsing.frontmatter import CODE_DESCRIPTIONS, DiagnosticCode, Severity
+from ..parsing.frontmatter import CODE_DESCRIPTIONS, Severity
 from ..parsing.links import RESOLVING_STATUSES, STATUS_DESCRIPTIONS, LinkStatus
 from .model import CorpusIndex
 

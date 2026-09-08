@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from ..domain import Derivation, LinkType
+from ..domain import Derivation
 from ..logging import get_logger
 from ..storage.sqlite_store import SqliteStore
 from .graph import SUPPORTED_GRAPH_TYPES

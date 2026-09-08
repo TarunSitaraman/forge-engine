@@ -15,7 +15,6 @@ import pytest
 from forge.corpus import IndexPipeline, analyze_conventions, compute_stats
 from forge.corpus.diagnostics import frontmatter_report, link_report
 from forge.corpus.indexer import CorpusIndexer, detect_changes
-from forge.domain import ChangeStatus
 from forge.llm.base import CALLS
 from forge.parsing.frontmatter import DiagnosticCode
 from forge.parsing.links import LinkStatus

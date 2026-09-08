@@ -16,25 +16,69 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev]"
+      # `ruff format` is deliberately not checked. The formatter disagrees with
+      # this codebase in 103 files, almost all of it the hand-wrapped
+      # explanatory comments that carry the engineering record, and a check
+      # nobody can pass is a check nobody reads.
+      - name: Lint
+        run: ruff check engine tests scripts
+
   pytest:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # The floor and the ceiling, not every version between. 3.10 is the floor
+      # declared in pyproject, so it catches the newer-syntax-crept-in class of
+      # bug that testing only on a current release would miss; 3.13 catches the
+      # deprecation that a floor-only matrix would not see until a user hit it.
+      matrix:
+        python-version: ["3.10", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
 
-      # One version, not a matrix: 3.10 is the floor declared in pyproject, so
-      # it catches the newer-syntax-crept-in class of bug that testing only on
-      # a current release would miss. Add versions if the suite ever needs them.
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: ${{ matrix.python-version }}
           cache: pip
 
       - name: Install
         run: pip install -e ".[dev]"
 
       # No secrets, no network, no model. FORGE_TEST_VAULT is deliberately
-      # unset, so the 42 vault-dependent tests skip and 1,072 run -- the vault
-      # is a separate private repository.
+      # unset, so the 42 vault-dependent tests skip and 1,435 run: the vault is
+      # a separate private repository.
       - name: Test
         run: python -m pytest tests
+
+  demo:
+    # The demo plants five defects and reports which the engine found; it exits
+    # non-zero when one is missed. Run it from a built wheel rather than the
+    # checkout, so this also proves the packaging: that `pip install forge-kb`
+    # followed by the first command in the README actually works on a machine
+    # that has never seen this repository.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Build the wheel
+        run: |
+          pip install build
+          python -m build --wheel
+      - name: Install it, alone
+        run: pip install dist/*.whl
+      - name: Run the demo from outside the checkout
+        run: cd "$RUNNER_TEMP" && forge demo --path ./demo-vault

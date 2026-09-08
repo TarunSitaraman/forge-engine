@@ -162,7 +162,9 @@ def parse_structured(
         return schema.model_validate_json(candidate)
     except ValidationError as exc:
         try:
-            data = json.loads(candidate)
+            # Parsed only to tell "not JSON" from "JSON of the wrong shape",
+            # which are different errors to the caller. The result is unused.
+            json.loads(candidate)
         except json.JSONDecodeError as jexc:
             raise StructuredOutputError(
                 f"response was not valid JSON: {jexc}", raw=text, attempts=attempts

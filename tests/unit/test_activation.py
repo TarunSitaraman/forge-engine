@@ -16,7 +16,6 @@ from forge.activation import (
     RelationshipCandidate,
 )
 from forge.domain import (
-    Claim,
     Concept,
     Derivation,
     Document,

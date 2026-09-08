@@ -42,7 +42,6 @@ from ..domain import (
     EvidenceLink,
     EvidenceRelation,
     IdentityState,
-    MatchKind,
     Proposal,
     ProposalStatus,
     ProposalType,

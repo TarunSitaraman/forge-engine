@@ -32,7 +32,7 @@ from forge.extraction import CandidateExtractor  # noqa: E402
 from forge.ingestion import IngestionPipeline, IngestOptions  # noqa: E402
 from forge.llm import MockProvider  # noqa: E402
 from forge.proposals import ProposalService, build_repair_proposals  # noqa: E402
-from forge.retrieval import SearchQuery, SearchService  # noqa: E402
+from forge.retrieval import SearchService  # noqa: E402
 from forge.storage import SqliteStore  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "pdf"

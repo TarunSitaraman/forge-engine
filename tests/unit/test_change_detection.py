@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from forge.corpus.indexer import detect_changes
 from forge.corpus.model import IndexedFile
-from forge.domain import ChangeStatus
 from forge.ids import content_hash, deterministic_id, text_hash
 
 

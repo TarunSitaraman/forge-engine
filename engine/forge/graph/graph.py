@@ -19,7 +19,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Sequence
 
-from ..domain import Claim, ClaimLink, Concept, EntityType, EvidenceLink, LinkType, Span
+from ..domain import Claim, ClaimLink, Concept, LinkType
 from ..logging import get_logger
 from ..storage.sqlite_store import SqliteStore
 

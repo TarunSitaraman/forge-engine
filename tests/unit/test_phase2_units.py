@@ -847,8 +847,6 @@ class TestEvidenceMustBeReadableAsSupport:
     def test_the_extractor_drops_it_and_says_why(self):
         """Dropped and reported, the same shape as an ungrounded quote — never
         silently discarded."""
-        import json
-
         from forge.extraction.extractor import CandidateExtractor
         from forge.llm import MockProvider
 

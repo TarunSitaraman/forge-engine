@@ -21,7 +21,6 @@ import subprocess
 import pytest
 from typer.testing import CliRunner
 
-from forge.activation import ProposalActivator
 from forge.cli.main import app
 from forge.domain import (
     Concept,

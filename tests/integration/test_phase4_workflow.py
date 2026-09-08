@@ -28,14 +28,12 @@ from typer.testing import CliRunner
 
 from forge.cli.main import app
 from forge.domain import (
-    AssessmentClass,
     Claim,
     ClaimStatus,
     Concept,
     ConceptKind,
     Derivation,
     Document,
-    EntityType,
     EvidenceLink,
     EvidenceRelation,
     ImpactClass,
@@ -50,7 +48,6 @@ from forge.domain import (
     deterministic_provenance,
 )
 from forge.evolution.service import EvolutionService, ProviderMismatch
-from forge.evolution.state import APPROVAL_APPROVED, APPROVAL_REJECTED
 from forge.llm import MockProvider
 from forge.llm.base import CALLS, LLMError, ProviderUnavailable
 from forge.proposals import ProposalService

@@ -289,9 +289,7 @@ class TestCandidateNarrowing:
                 origin_proposal_id="p",
             )
         )
-        document = Document(
-            id="d1", source_id="s1", parser="p", parser_version="1", content_hash="h"
-        )
+        Document(id="d1", source_id="s1", parser="p", parser_version="1", content_hash="h")
         span = Span(
             id="span-short",
             document_id="d1",
@@ -930,7 +928,7 @@ class TestEvolutionActivation:
         assert knowledge["span_a"].id in span_ids, "original evidence must survive"
 
     def test_activation_records_a_revision(self, knowledge):
-        store, claim = knowledge["store"], knowledge["claim"]
+        store = knowledge["store"]
         before = store.count_revisions()
 
         EvolutionActivator(store).activate(

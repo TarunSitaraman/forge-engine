@@ -7,9 +7,8 @@ commit — so it needs no model, no API token, and no rate limit budget.
 
 from __future__ import annotations
 
-import pytest
 
-from forge.upstream import UpstreamError, UpstreamStatus, check
+from forge.upstream import UpstreamError, check
 
 
 def _fetch(mapping):

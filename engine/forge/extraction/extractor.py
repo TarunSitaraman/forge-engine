@@ -52,8 +52,6 @@ from .schemas import (
     SCHEMA_VERSION,
     ClaimExtractionResponse,
     ConceptExtractionResponse,
-    ExtractedClaim,
-    ExtractedConcept,
     TerminologyResponse,
 )
 

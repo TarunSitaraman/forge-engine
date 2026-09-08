@@ -36,7 +36,6 @@ from forge.config import Settings  # noqa: E402
 from forge.domain import (  # noqa: E402
     EntityType,
     ProposalStatus,
-    ProposalType,
     WorkflowStatus,
 )
 from forge.evolution.service import EvolutionService  # noqa: E402

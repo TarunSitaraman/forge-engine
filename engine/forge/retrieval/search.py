@@ -20,7 +20,7 @@ import re
 from dataclasses import dataclass, field, replace
 from typing import Any, Sequence
 
-from ..domain import Concept, Document, ProvenanceTier, Source, Span, TrustTier
+from ..domain import Concept, Document, Source, Span, TrustTier
 from ..embeddings.base import EmbeddingProvider, NullEmbeddingProvider
 from ..logging import get_logger
 from ..matching.matcher import cosine
