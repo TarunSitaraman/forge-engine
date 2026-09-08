@@ -21,3 +21,4 @@ Thumbs.db
 dist/
 build/
 *.egg-info/
+release-notes.md

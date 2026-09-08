@@ -70,10 +70,36 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A re-run after a partial failure must not die on "file already
+          # exists". The upload is the irreversible step, so the job has to be
+          # safe to run twice; without this, fixing anything downstream of it
+          # costs a version number.
+          skip-existing: true
 
-      - name: Draft the GitHub release
+      # The notes are the changelog entry for this version, read out of
+      # CHANGELOG.md rather than generated from commit subjects. The entry was
+      # written deliberately and says what changed and why; a list of commit
+      # titles is what you get when nobody wrote one.
+      - name: Take the notes from the changelog
+        run: |
+          python - <<'EOF' > release-notes.md
+          import pathlib, re, os
+          version = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          # From this version's heading to the next one at the same level.
+          match = re.search(
+              rf"^## {re.escape(version)}\b.*?$(.*?)(?=^## |\Z)",
+              text, re.M | re.S,
+          )
+          body = match.group(1).strip() if match else ""
+          print(body or f"See CHANGELOG.md for {version}.")
+          EOF
+          echo "--- release notes ---"
+          cat release-notes.md
+
+      - name: Publish the GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          draft: true
-          generate_release_notes: true
+          body_path: release-notes.md
           files: dist/*
