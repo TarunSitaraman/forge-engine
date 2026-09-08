@@ -38,11 +38,17 @@ classifiers = [
     "Topic :: Software Development :: Quality Assurance",
     "Typing :: Typed",
 ]
-# Verified on 3.10, 3.11, 3.12, and 3.13 — the full suite passes on each.
-# The real floor is 3.10: the domain models use PEP 604 unions (`str | None`)
-# which pydantic evaluates at runtime, so 3.9 and below genuinely cannot load
-# them. The floor was previously declared as 3.11, which made pip refuse an
-# install that works, and 3.10 is materially easier to obtain on older systems.
+# The floor is 3.10: the domain models use PEP 604 unions (`str | None`) which
+# pydantic evaluates at runtime, so 3.9 and below genuinely cannot load them.
+# 3.10 is also materially easier to obtain on older systems than 3.11.
+#
+# This line previously carried "Verified on 3.10, 3.11, 3.12, and 3.13, the
+# full suite passes on each", and that was not true. It was written when the
+# floor was lowered from 3.11 without running 3.10, and `storage/backup.py`
+# had `from datetime import UTC`, which is 3.11 and later. `pip install
+# forge-kb` on 3.10 therefore succeeded and then failed on the first import.
+# CI ran only 3.10, so the badge had been red since. Fixed 2026-09-08, and CI
+# now runs the floor and the ceiling rather than one version.
 requires-python = ">=3.10"
 license = { text = "MIT" }
 
@@ -95,6 +101,9 @@ vectors = ["spacy>=3.7"]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    # CI lints with this. It was missing until 2026-09-08, so the lint job it
+    # was added for failed on `ruff: command not found`.
+    "ruff>=0.6",
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "mcp>=2.0",
@@ -124,7 +133,13 @@ markers = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+# Must match `requires-python` above, and did not: it said py311 while the
+# package declared 3.10. That is how `from datetime import UTC` reached
+# `storage/backup.py` (UP017 rewrites `timezone.utc` to it, and at py311 ruff
+# believes that is safe), and the package then failed to import on the very
+# version it claimed as its floor. Raising this without raising the floor
+# licenses the same bug again.
+target-version = "py310"
 
 [tool.ruff.lint.per-file-ignores]
 # E402, imports below the top of the file. Both cases here are deliberate and

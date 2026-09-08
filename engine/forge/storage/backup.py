@@ -31,7 +31,7 @@ import json
 import shutil
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -137,7 +137,7 @@ def create_backup(db_path: Path | str, destination: Path | str) -> BackupManifes
         store.close()
 
     manifest = BackupManifest(
-        created_at=datetime.now(UTC).isoformat(),
+        created_at=datetime.now(timezone.utc).isoformat(),
         schema_version=schema,
         forge_version=_forge_version(),
         source_db=str(db_path),
