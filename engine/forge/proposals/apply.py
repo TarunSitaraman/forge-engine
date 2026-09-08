@@ -175,13 +175,22 @@ class ProposalApplier:
         """Reasons a proposal may not be applied. Conservative by design."""
         if proposal.status is not ProposalStatus.APPROVED:
             return f"not approved (status: {proposal.status.value})"
+        # Asked before the safety class on purpose. A claim or a concept was
+        # never a candidate for vault write-back, and answering "safety class
+        # model_generated is not automatically applicable" told someone who had
+        # just approved ten concepts that ten things had failed. Nothing had:
+        # their approvals were recorded, and knowledge reaches the graph
+        # through activation, which is a different command.
+        if proposal.operation.action != "replace_frontmatter_line":
+            return (
+                f"{proposal.operation.action} changes the knowledge graph, not a "
+                f"file; run `forge activate` to apply it"
+            )
         if proposal.safety is not SafetyClass.DETERMINISTIC_VERIFIED:
             return (
                 f"safety class {proposal.safety.value} is not automatically applicable; "
                 f"only deterministic, verified repairs are"
             )
-        if proposal.operation.action != "replace_frontmatter_line":
-            return f"unsupported operation for write-back: {proposal.operation.action}"
         if proposal.operation.before is None or proposal.operation.after is None:
             return "proposal does not record both before and after content"
         if "line" not in proposal.operation.details:

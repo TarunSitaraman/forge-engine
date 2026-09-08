@@ -378,6 +378,38 @@ class TestWriteBack:
         assert report.applied == []
         assert "not automatically applicable" in report.refused[0].refused_reason
 
+    def test_a_knowledge_proposal_is_told_to_activate_not_that_it_failed(
+        self, fixture_vault, store, tmp_path
+    ):
+        """Approving ten concepts printed "safety class model_generated is not
+        automatically applicable" ten times, directly under ten lines saying
+        `approved`. Nothing had failed: a concept was never a candidate for
+        vault write-back, and knowledge reaches the graph through activation.
+        """
+        from forge.domain import EntityType, ProposalType, ProposedOperation
+
+        _, applier, _ = self._setup(fixture_vault, store, tmp_path)
+        concept = Proposal(
+            id="p-concept",
+            type=ProposalType.NEW_CONCEPT,
+            safety=SafetyClass.MODEL_GENERATED,
+            target_entity_type=EntityType.CONCEPT,
+            operation=ProposedOperation(
+                action="create_concept", target="Chunking", after="Chunking"
+            ),
+            reason="extracted",
+            evidence_span_ids=("s1",),
+            provenance=model_provenance(),
+        ).approve()
+
+        report = applier.apply([concept], apply=True)
+
+        reason = report.refused[0].refused_reason
+        assert "forge activate" in reason
+        assert "not automatically applicable" not in reason, (
+            "a concept was never a vault repair; saying so blames the wrong thing"
+        )
+
     def test_stale_proposal_is_refused(self, fixture_vault, store, tmp_path):
         """If the file changed since the proposal, applying could clobber an edit."""
         service, applier, proposals = self._setup(fixture_vault, store, tmp_path)

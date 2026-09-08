@@ -127,7 +127,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         payload = {"workflows": [r.to_dict() for r in runs], "counts": store.count_workflows()}
         if not _emit(payload, json_out):
             if not runs:
-                typer.echo("no workflows yet — run `forge evolve <source>`")
+                typer.echo("no workflows yet, run `forge evolve <source>`")
             for run in runs:
                 source = store.get_source(run.source_id)
                 typer.echo(
@@ -296,7 +296,7 @@ def _print_outcome(outcome: Any, store: SqliteStore) -> None:
 
     typer.echo("\nConcepts affected:")
     if not run.candidates:
-        typer.echo("  (none — this evidence does not touch existing knowledge)")
+        typer.echo("  (none: this evidence does not touch existing knowledge)")
     for candidate in run.candidates:
         typer.echo(f"  ✓ {candidate.concept_name}   [{candidate.selector}]")
 

@@ -247,7 +247,7 @@ def status(
         if model_identity.endswith("+nothink"):
             typer.echo(
                 "  NOTE: reasoning is OFF (FORGE_OLLAMA_THINK=0). Measured and "
-                "rejected —\n         see docs/research/provider-availability.md §8."
+                "rejected.\n         See docs/research/provider-availability.md §8."
             )
         typer.echo(f"  {provider_detail}")
     store.close()
@@ -353,7 +353,7 @@ def diagnostics(
             typer.echo(f"    {code}: {n}")
         typer.echo(
             f"  {fm.repairable_files} file(s) have verified repair proposals "
-            f"(NOT applied — approval required)"
+            f"(NOT applied, approval required)"
         )
 
     if "links" in payload:
@@ -372,7 +372,7 @@ def diagnostics(
 
     if "conventions" in payload:
         cr = analyze_conventions(index)
-        typer.echo(f"\nCONVENTIONS — {cr.resolution_status}")
+        typer.echo(f"\nCONVENTIONS: {cr.resolution_status}")
         for sysid, conf in cr.conformance.items():
             typer.echo(
                 f"  {sysid}: {conf['files_in_scope']} files in scope; "
@@ -384,7 +384,7 @@ def diagnostics(
 
     if "graph" in payload:
         gr = payload["graph"]
-        typer.echo(f"\nGRAPH INTEGRITY — {'clean' if gr['clean'] else str(gr['errors']) + ' error(s)'}")
+        typer.echo(f"\nGRAPH INTEGRITY: {'clean' if gr['clean'] else str(gr['errors']) + ' error(s)'}")
         typer.echo(f"  checked: {gr['checked']}")
         for code, count in gr["by_code"].items():
             typer.echo(f"    {code}: {count}")
@@ -501,7 +501,7 @@ def model_test(
 
     typer.echo(f"provider : {report.provider}")
     typer.echo(f"model    : {report.model}")
-    typer.echo(f"reachable: {report.reachable} — {report.detail}")
+    typer.echo(f"reachable: {report.reachable}. {report.detail}")
     if not report.reachable:
         typer.echo("\nNo capability results: the spike did not run. Nothing has been established.")
         raise typer.Exit(code=1)
@@ -530,7 +530,7 @@ def model_test(
         if report.overall_success_rate == 0 and len(failures) == 1:
             typer.echo(
                 "\nEvery task failed the same way. That is the provider or the request\n"
-                "shape, not the model's capability — nothing here is a measurement of\n"
+                "shape, not the model's capability. Nothing here is a measurement of\n"
                 "how good the model is.",
                 err=True,
             )

@@ -135,7 +135,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
                 ],
             }
             if not _emit(payload, json_out):
-                typer.echo(f"{len(candidates)} candidate relationship(s) — nothing created (pass --apply)")
+                typer.echo(f"{len(candidates)} candidate relationship(s), nothing created (pass --apply)")
                 for c in candidates:
                     typer.echo(
                         f"  {names.get(c.from_concept_id, c.from_concept_id)} <-> "
@@ -195,12 +195,12 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             if not _emit(payload, json_out):
                 if by_name:
                     typer.echo(
-                        f"{name!r} names {len(matches)} distinct concepts — specify one:"
+                        f"{name!r} names {len(matches)} distinct concepts. Specify one:"
                     )
                 else:
                     typer.echo(
                         f"no concept is named {name!r}. "
-                        f"{len(matches)} contain it — did you mean:"
+                        f"{len(matches)} contain it. Did you mean:"
                     )
                 for c in matches:
                     typer.echo(f"  {c.qualified_name}   ({c.kind.value})")
@@ -556,7 +556,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         if answer.invalid_citations:
             typer.echo(
                 f"\nWARNING: the answer cited {answer.invalid_citations}, which were "
-                f"never supplied — only {len(answer.passages)} passages were given. "
+                f"never supplied; only {len(answer.passages)} passages were given. "
                 f"Treat those statements as unsupported.",
                 err=True,
             )
@@ -655,7 +655,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             if pruned_ids:
                 typer.echo(
                     f"pruned       : {len(pruned_ids)} edge(s) "
-                    f"{'removed' if apply else 'to remove'} — the wikilink behind "
+                    f"{'removed' if apply else 'to remove'}. The wikilink behind "
                     "each one is gone from the vault"
                 )
             if stale:
@@ -670,7 +670,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             if plan.undecided_collisions:
                 typer.echo(
                     f"\n{len(plan.undecided_collisions)} undecided name collision(s) left out "
-                    f"of the graph — the engine will not pick one:"
+                    f"of the graph. The engine will not pick one:"
                 )
                 for name, paths in sorted(plan.undecided_collisions.items())[:10]:
                     typer.echo(f"  {name}: {', '.join(paths)}")
@@ -688,7 +688,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
                     "meant. Fixing the link in the vault turns it into an edge."
                 )
             typer.echo(
-                f"\n{'written to the store' if apply else 'preview only — re-run with --apply to write'}"
+                f"\n{'written to the store' if apply else 'preview only, re-run with --apply to write'}"
             )
         store.close()
 
@@ -737,7 +737,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         if _emit(payload, json_out):
             return
         if not service.config.collisions:
-            typer.echo("no collisions recorded — run `forge identity scaffold`")
+            typer.echo("no collisions recorded, run `forge identity scaffold`")
         for resolution in service.config.collisions.values():
             status = resolution.default or "UNDECIDED"
             typer.echo(f"{resolution.name:<20} -> {status}")
@@ -852,7 +852,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         provider: str = typer.Option("hashing", help="ollama | spacy | hashing"),
         json_out: bool = typer.Option(False, "--json"),
     ) -> None:
-        """Embed every stored span. Optional — lexical retrieval works without it."""
+        """Embed every stored span. Optional; lexical retrieval works without it."""
         settings = settings_factory(vault)
         store = SqliteStore(settings.db_path)
         store.initialize()
@@ -941,7 +941,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
 
         if not report.trustworthy:
             typer.echo(
-                f"\n  UNTRUSTWORTHY — {len(report.failed)} of {len(report.scores)} case(s) "
+                f"\n  UNTRUSTWORTHY: {len(report.failed)} of {len(report.scores)} case(s) "
                 "did not complete.\n"
                 "  Every rate above is over the "
                 f"{len(report.complete)} case(s) that did, and none of them is a\n"
@@ -959,7 +959,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             shapes = {line for s_ in report.failed for line in s_.failures}
             if len(report.failed) == len(report.scores) and len(shapes) <= 1:
                 typer.echo(
-                    "\n  Every case failed identically — that is the provider or the\n"
+                    "\n  Every case failed identically. That is the provider or the\n"
                     "  configuration, not the model's extraction quality. Check\n"
                     "  `forge model-test` and the model name your endpoint accepts.",
                     err=True,

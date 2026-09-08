@@ -117,14 +117,14 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             typer.echo(
                 "The provider rejected the request, so every remaining call would fail\n"
                 "identically. Nothing was cached. Check the credential named in\n"
-                "FORGE_CLOUD_PRESET's api_key_env (`forge status` shows which), then re-run —\n"
+                "FORGE_CLOUD_PRESET's api_key_env (`forge status` shows which), then re-run.\n"
                 "completed sources are served from cache.",
                 err=True,
             )
             store.close()
             raise typer.Exit(code=2)
         if not extract:
-            typer.echo("(deterministic ingestion only — pass --extract for concept/claim candidates)")
+            typer.echo("(deterministic ingestion only; pass --extract for concept/claim candidates)")
         store.close()
 
         if any(s.status in (IngestionStatus.PARSE_FAILED, IngestionStatus.NOT_FOUND) for s in report.sources):
@@ -142,7 +142,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         semantic: bool = typer.Option(False, "--semantic", help="Re-rank with embeddings if available."),
         json_out: bool = typer.Option(False, "--json"),
     ) -> None:
-        """Search spans. Returns evidence with provenance — not generated prose."""
+        """Search spans. Returns evidence with provenance, not generated prose."""
         settings = settings_factory(vault)
         store = SqliteStore(settings.db_path)
         store.initialize()
@@ -195,7 +195,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         if not found:
             typer.echo(
                 "no concepts stored.\n"
-                "Phase 2 proposes concepts rather than creating them — "
+                "Phase 2 proposes concepts rather than creating them: "
                 "see `forge proposals list --type new_concept`."
             )
         for concept in found:
@@ -369,7 +369,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             raise typer.Exit(code=1 if failed else 0)
 
         if not checks:
-            typer.echo("no proposals carry an evidence quote — nothing to audit")
+            typer.echo("no proposals carry an evidence quote, nothing to audit")
             return
 
         ungrounded = sum(1 for c in checks if not c.grounded)
@@ -389,7 +389,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         rate = len(failed) / len(checks) if checks else 0.0
         typer.echo(
             f"\n{len(checks)} quote(s) checked, {len(failed)} failing ({rate:.2%})"
-            + (f" — {ungrounded} ungrounded" if ungrounded else "")
+            + (f", {ungrounded} ungrounded" if ungrounded else "")
             + (f", {from_code} quoting a code block" if from_code else "")
             + "."
         )
@@ -399,7 +399,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             elif reject:
                 pending = {c.proposal_id for c in failed if c.status == ProposalStatus.PENDING.value}
                 typer.echo(
-                    f"\ndry run — would reject {len(pending)} pending proposal(s).\n"
+                    f"\ndry run. Would reject {len(pending)} pending proposal(s).\n"
                     "Re-run with --no-dry-run to apply."
                 )
             else:
@@ -483,7 +483,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
 
         typer.echo(f"model : {plan.model_id}  prompt {plan.prompt_version}  max-spans {plan.max_spans}")
         typer.echo(
-            f"scope : {len(plan.sources)} source(s) — {len(plan.cached)} cached, "
+            f"scope : {len(plan.sources)} source(s), {len(plan.cached)} cached, "
             f"{len(plan.pending)} pending, {len(plan.duplicates)} duplicate content, "
             f"{len(plan.unknown)} not ingested\n"
         )
@@ -498,7 +498,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         typer.echo(f"\n{plan.calls} model call(s) to run this.")
         if plan.estimated_hours is not None:
             typer.echo(
-                f"At {plan.seconds_per_call:.1f} s/call that is {plan.estimated_hours:.1f} h — "
+                f"At {plan.seconds_per_call:.1f} s/call that is {plan.estimated_hours:.1f} h; "
                 "your measured rate, not a prediction of it."
             )
         else:
@@ -567,7 +567,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             return
 
         if not clusters:
-            typer.echo(f"{len(found)} proposal(s) examined — no duplicate clusters.")
+            typer.echo(f"{len(found)} proposal(s) examined, no duplicate clusters.")
             return
 
         for cluster in clusters[:limit]:
@@ -583,7 +583,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             f"{redundant} proposal(s) are redundant."
         )
         typer.echo(
-            "Review before acting — a cluster is a suggestion, not a decision.\n"
+            "Review before acting. A cluster is a suggestion, not a decision.\n"
             "  forge proposals show <id>"
         )
 
@@ -788,7 +788,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
                 "targets": [p.operation.target for p in candidates[:20]],
             }
             if not _emit(payload, json_out):
-                typer.echo(f"{len(candidates)} proposal(s) match safety={wanted.value} — none approved")
+                typer.echo(f"{len(candidates)} proposal(s) match safety={wanted.value}, none approved")
                 for p in candidates[:10]:
                     typer.echo(f"  {p.id[:12]}  {p.type.value:<16} {p.operation.target}")
                 typer.echo("\nRe-run with --no-dry-run to approve them.")
@@ -891,7 +891,7 @@ def _print_source(source: Any) -> None:
                 f"{source.proposals_created} proposals"
             )
         else:
-            typer.echo(f"    unchanged ({source.spans} spans already stored) — no work done")
+            typer.echo(f"    unchanged ({source.spans} spans already stored), no work done")
     if source.detail:
         typer.echo(f"    {source.detail}")
     for warning in source.warnings[:5]:
@@ -913,7 +913,9 @@ def _print_apply(report: Any, *, applied_flag: bool) -> None:
                 typer.echo(f"    - {outcome.before}")
                 typer.echo(f"    + {outcome.after}")
         for outcome in report.refused:
-            typer.echo(f"\nnot applicable: {outcome.refused_reason}")
+            # No "not applicable:" prefix. The reason says what happened, and
+            # the prefix made a successful approval read as a failed one.
+            typer.echo(f"  {outcome.refused_reason}")
         return
 
     for outcome in report.applied:
