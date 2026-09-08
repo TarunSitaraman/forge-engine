@@ -318,3 +318,59 @@ class TestAuditCli:
         reopened.initialize()
         assert reopened.get_proposal("p-appr").status is ProposalStatus.APPROVED
         reopened.close()
+
+
+def test_the_closing_advice_names_the_rule_that_actually_failed(tmp_path):
+    """It asserted the pre-2026-08-19 bag-of-words rule for every failure.
+
+    That stopped being true the moment a second rule existed: the first real
+    audit under both printed that sentence over six code-block quotes admitted
+    the previous afternoon. A message that names a cause it cannot know is the
+    same defect class as a metric that measures something other than its label.
+    """
+    from typer.testing import CliRunner
+
+    from forge.cli.main import app
+    from forge.config import Settings
+    from forge.domain import Document, Source, SourceKind, Span
+    from forge.storage import SqliteStore
+
+    vault = tmp_path / "vault"
+    (vault / ".forge").mkdir(parents=True)
+    store = SqliteStore(Settings.load(vault).db_path)
+    store.initialize()
+    source = Source.for_path("d.md", kind=SourceKind.MARKDOWN, content_hash="h")
+    store.put_source(source)
+    document = Document(
+        id=Document.make_id(source.id, "h"),
+        source_id=source.id,
+        parser="p",
+        parser_version="1",
+        content_hash="h",
+    )
+    store.put_document(document)
+    store.put_spans(
+        [
+            Span(
+                id="sp1",
+                document_id=document.id,
+                ordinal=0,
+                locator="L1",
+                start_line=1,
+                end_line=9,
+                text="Real prose here.\n\n```python\nx = compute(y)\n```\n",
+                content_hash="h",
+            )
+        ]
+    )
+    store.put_proposal(_proposal("x = compute(y)", "p-code"))
+    store.close()
+
+    output = CliRunner().invoke(
+        app, ["proposals", "audit-grounding", "--vault", str(vault)]
+    ).output
+
+    assert "fenced code" in output
+    assert "bag-of-words" not in output, (
+        "a code-block failure was blamed on the grounding rule it did not fail"
+    )

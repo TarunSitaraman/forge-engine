@@ -17,7 +17,7 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them, `1,418 passed, 42 skipped` becomes `1,460 passed`. See
+   to run them, `1,420 passed, 42 skipped` becomes `1,462 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine*, architecture, ADRs, research,
@@ -74,6 +74,14 @@ store. That path matters because the alternative is re-extraction, and
 `EXTRACTOR_VERSION` is part of the derivation key — bumping it to force a re-run
 discards every cached result to re-derive what a string check settles in
 seconds.
+
+**And the audit's own closing advice was wrong the first time it ran under
+two rules.** It printed *"These were admitted under the pre-2026-08-19
+bag-of-words rule"* over six code-block quotes admitted the previous afternoon
+— a sentence that names a cause it cannot know, hardcoded when there was only
+one way to fail. It now reports each rule's count separately. Small, and the
+same defect class as a metric measuring something other than its label:
+`isolated_concept`, `grounded`, and this, all in two days.
 
 **Two lessons stack here.** The display bug hid the diagnosis: while every
 claim showed the same file header, "some claims are thin" was a vague
@@ -1175,7 +1183,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine, distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,460 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,462 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -1200,12 +1208,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 1,418 passed, 42 skipped, offline, no model
+python -m pytest tests           # 1,420 passed, 42 skipped, offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,460 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,462 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.

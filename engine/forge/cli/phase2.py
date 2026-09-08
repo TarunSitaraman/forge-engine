@@ -372,6 +372,9 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             typer.echo("no proposals carry an evidence quote — nothing to audit")
             return
 
+        ungrounded = sum(1 for c in checks if not c.grounded)
+        from_code = sum(1 for c in checks if c.from_code_block)
+
         for check in checks:
             if check.passes and not show_passing:
                 continue
@@ -384,8 +387,6 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
                 typer.echo(f"     why  : {check.reason}")
 
         rate = len(failed) / len(checks) if checks else 0.0
-        ungrounded = sum(1 for c in checks if not c.grounded)
-        from_code = sum(1 for c in checks if c.from_code_block)
         typer.echo(
             f"\n{len(checks)} quote(s) checked, {len(failed)} failing ({rate:.2%})"
             + (f" — {ungrounded} ungrounded" if ungrounded else "")
@@ -402,9 +403,25 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
                     "Re-run with --no-dry-run to apply."
                 )
             else:
+                # Name the rule that actually failed. This used to assert the
+                # pre-2026-08-19 bag-of-words grounding rule for every failure,
+                # which stopped being true the moment a second rule existed:
+                # the first real audit under both printed that sentence over
+                # six code-block quotes admitted the previous afternoon.
+                why = []
+                if ungrounded:
+                    why.append(
+                        f"{ungrounded} quote(s) are not in the span they cite — "
+                        "admitted under the pre-2026-08-19 bag-of-words rule"
+                    )
+                if from_code:
+                    why.append(
+                        f"{from_code} quote(s) are fenced code — admitted before "
+                        "extraction checked for that"
+                    )
+                typer.echo("\n" + "\n".join(why))
                 typer.echo(
-                    "\nThese were admitted under the pre-2026-08-19 bag-of-words rule and\n"
-                    "would be dropped by extraction today. Reject rather than approve:\n"
+                    "Extraction would drop these today. Reject rather than approve:\n"
                     "  forge proposals audit-grounding --reject --no-dry-run"
                 )
             raise typer.Exit(code=1)
