@@ -105,6 +105,66 @@ def _emit(payload: dict[str, Any], as_json: bool) -> bool:
 
 
 @app.command()
+def demo(
+    path: Path | None = typer.Option(
+        None, help="Where to write the sample vault. A temporary directory by default."
+    ),
+    force: bool = typer.Option(False, "--force", help="Write into a directory that is not empty."),
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """Write a small vault with known defects and show what the engine finds in it.
+
+    Every other command needs a vault, and someone evaluating this tool does not
+    have one yet. This writes ten files, runs the real deterministic pipeline
+    over them, and reports which of the planted defects came back. Nothing is
+    canned: the findings are read out of the same reports `forge diagnostics`
+    and `forge bootstrap` produce.
+
+    No model, no API key, no network. The vault it writes is yours to keep;
+    the path is printed at the end so you can open `forge dash` on it.
+    """
+    import tempfile
+
+    from .demo import build, is_occupied, render, write_vault
+
+    target = Path(path) if path else Path(tempfile.mkdtemp(prefix="forge-demo-"))
+    if is_occupied(target) and not force:
+        err(
+            f"{target} is not empty. The demo writes ten files and will not "
+            f"write over notes it did not create; pass --force to use it anyway.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    target.mkdir(parents=True, exist_ok=True)
+    write_vault(target)
+
+    settings = _settings(target)
+    CALLS.reset()
+    checks, counts = build(settings)
+
+    if _emit(
+        {
+            "vault_path": str(target),
+            "llm_calls": CALLS.count,
+            "counts": counts,
+            "checks": [
+                {"title": c.title, "found": c.found, "evidence": c.evidence} for c in checks
+            ],
+        },
+        json_out,
+    ):
+        return
+
+    for line in render(checks, counts, target, CALLS.count):
+        typer.echo(line)
+
+    # A missed defect is a regression in the engine, not a cosmetic problem with
+    # the demo, so it has to leave a non-zero status behind for CI to catch.
+    if counts["found"] != counts["total"]:
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def index(
     vault: Path | None = typer.Option(None, help="Vault path (defaults to repo root)."),
     persist: bool = typer.Option(True, help="Write sources/documents/spans to derived state."),
