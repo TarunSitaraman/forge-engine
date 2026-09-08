@@ -68,6 +68,13 @@ deliberately two-sided: a sentence that appears in a paragraph *and* is echoed
 in a code comment is still supported by the paragraph, so a quote is rejected
 only when it is inside a fence and absent from the prose.
 
+The rule applies **retroactively** too: `proposals audit-grounding` now checks
+both rules, so `--reject --no-dry-run` clears the code-block claims already in a
+store. That path matters because the alternative is re-extraction, and
+`EXTRACTOR_VERSION` is part of the derivation key — bumping it to force a re-run
+discards every cached result to re-derive what a string check settles in
+seconds.
+
 **Two lessons stack here.** The display bug hid the diagnosis: while every
 claim showed the same file header, "some claims are thin" was a vague
 impression, and one look at the real quotes made it a mechanical rule. And

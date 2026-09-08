@@ -318,10 +318,15 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         dry_run: bool = typer.Option(True, help="With --reject, preview without deciding."),
         json_out: bool = typer.Option(False, "--json"),
     ) -> None:
-        """Re-check stored evidence quotes against the current grounding rule.
+        """Re-check stored evidence quotes against the current evidence rules.
 
-        Zero model calls: grounding is a deterministic string check, so a rule
+        Zero model calls: both rules are deterministic string checks, so a rule
         change applies retroactively to an already-extracted corpus for free.
+
+        Two ways to fail. A quote that is **not in its span** was never
+        evidence. A quote that is in its span but comes from a **fenced code
+        block** is grounded and still unreadable as support — a Mermaid arrow
+        or a line of Python asserts nothing a reviewer can check.
 
         Exits 1 if any stored quote fails. Those were admitted under an older,
         looser rule and would be dropped by extraction today — reject them
@@ -332,7 +337,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         store.initialize()
         try:
             checks = audit_grounding(store)
-            failed = [c for c in checks if not c.grounded]
+            failed = [c for c in checks if not c.passes]
 
             rejected: list[str] = []
             if reject and not dry_run:
@@ -347,7 +352,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
                     service.reject(
                         check.proposal_id,
                         by="audit-grounding",
-                        note="evidence quote is not verbatim in the cited span",
+                        note=check.reason,
                     )
                     rejected.append(check.proposal_id)
         finally:
@@ -368,19 +373,24 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             return
 
         for check in checks:
-            if check.grounded and not show_passing:
+            if check.passes and not show_passing:
                 continue
-            mark = "ok  " if check.grounded else "FAIL"
+            mark = "ok  " if check.passes else "FAIL"
             typer.echo(
                 f"{mark} {check.proposal_id[:12]}  {check.status:<9} overlap={check.overlap:.3f}"
             )
             typer.echo(f"     quote: {check.quote[:100]!r}")
-            if check.note:
-                typer.echo(f"     note : {check.note}")
+            if check.reason:
+                typer.echo(f"     why  : {check.reason}")
 
         rate = len(failed) / len(checks) if checks else 0.0
+        ungrounded = sum(1 for c in checks if not c.grounded)
+        from_code = sum(1 for c in checks if c.from_code_block)
         typer.echo(
-            f"\n{len(checks)} quote(s) checked, {len(failed)} ungrounded ({rate:.2%})."
+            f"\n{len(checks)} quote(s) checked, {len(failed)} failing ({rate:.2%})"
+            + (f" — {ungrounded} ungrounded" if ungrounded else "")
+            + (f", {from_code} quoting a code block" if from_code else "")
+            + "."
         )
         if failed:
             if rejected:

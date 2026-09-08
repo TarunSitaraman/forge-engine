@@ -1,4 +1,4 @@
-"""Re-check stored evidence quotes against the current grounding rule.
+"""Re-check stored evidence quotes against the current evidence rules.
 
 Grounding is a deterministic string check, so it can be applied retroactively
 to an existing store at **zero model calls**. That is what makes this useful:
@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..extraction.extractor import _grounded, _ordered_overlap, _tokens
+from ..extraction.extractor import _from_code_block, _grounded, _ordered_overlap, _tokens
 from ..storage.sqlite_store import SqliteStore
 
 
@@ -31,6 +31,24 @@ class QuoteCheck:
     grounded: bool
     overlap: float
     note: str = ""
+    #: Grounded, and quoting a fenced block — so present in the span and still
+    #: not something a reviewer can read as support. Kept separate from
+    #: `grounded` rather than folded into it: they fail for different reasons
+    #: and the note has to say which.
+    from_code_block: bool = False
+
+    @property
+    def passes(self) -> bool:
+        """Does this quote satisfy **every** current evidence rule?"""
+        return self.grounded and not self.from_code_block
+
+    @property
+    def reason(self) -> str:
+        if not self.grounded:
+            return self.note or "quote is not present in the cited span"
+        if self.from_code_block:
+            return "quote is a fenced code block, which asserts nothing a reader can check"
+        return ""
 
     def to_dict(self) -> dict:
         return {
@@ -39,8 +57,11 @@ class QuoteCheck:
             "span_id": self.span_id,
             "quote": self.quote,
             "grounded": self.grounded,
+            "from_code_block": self.from_code_block,
+            "passes": self.passes,
             "overlap": self.overlap,
             "note": self.note,
+            "reason": self.reason,
         }
 
 
@@ -69,13 +90,15 @@ def audit(store: SqliteStore, *, limit: int = 100_000) -> list[QuoteCheck]:
                     )
                 )
                 continue
+            grounded = _grounded(quote, span.text)
             checks.append(
                 QuoteCheck(
                     proposal_id=proposal.id,
                     status=proposal.status.value,
                     span_id=span_id,
                     quote=quote,
-                    grounded=_grounded(quote, span.text),
+                    grounded=grounded,
+                    from_code_block=grounded and _from_code_block(quote, span.text),
                     overlap=round(_ordered_overlap(_tokens(quote), _tokens(span.text)), 3),
                 )
             )

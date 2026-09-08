@@ -441,6 +441,14 @@ forge gaps                               # what the model does not hold
 forge changes --days 30                  # what changed, from the revision log
 ```
 
+`forge proposals audit-grounding` re-checks every stored quote against the
+**current** evidence rules, at zero model calls, and `--reject --no-dry-run`
+rejects the pending ones that fail. Two ways to fail: a quote that is not in
+its span was never evidence, and a quote that is in its span but comes from a
+fenced code block is grounded and still unreadable as support. When a rule
+tightens, run this rather than re-extracting — re-extraction discards every
+cached result to re-derive what a string check settles in seconds.
+
 `forge gaps` reports and never acts. Every finding is a structural fact about
 the graph: a concept with no claims, an open question with no answers, a claim
 resting on one source, an unresolved dispute, a page nothing links to. Whether

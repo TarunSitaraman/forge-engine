@@ -114,6 +114,66 @@ def test_a_quote_reordered_from_span_vocabulary_is_flagged(store):
     assert rows[0].overlap < 0.9
 
 
+def test_a_grounded_quote_from_a_code_fence_fails_the_audit(tmp_path):
+    """The rule tightened on 2026-09-08 and the audit has to apply it too.
+
+    Extraction now drops a claim quoting a fenced block. The proposals already
+    in a store were admitted before that rule existed, and re-extracting to
+    flush them would discard every cached result — which is the whole reason
+    this audit exists.
+    """
+    from forge.domain import Document, Source, SourceKind, Span
+    from forge.storage import SqliteStore
+
+    (tmp_path / ".forge").mkdir(exist_ok=True)
+    store = SqliteStore(tmp_path / ".forge" / "forge.db")
+    store.initialize()
+    source = Source.for_path("Technologies/Docs/rag.md", kind=SourceKind.MARKDOWN, content_hash="h")
+    store.put_source(source)
+    document = Document(
+        id=Document.make_id(source.id, "h"),
+        source_id=source.id,
+        parser="p",
+        parser_version="1",
+        content_hash="h",
+    )
+    store.put_document(document)
+    store.put_spans(
+        [
+            Span(
+                id="sp1",
+                document_id=document.id,
+                ordinal=0,
+                locator="p.1",
+                start_line=1,
+                end_line=8,
+                text=(
+                    "Ingestion runs once per corpus update.\n\n"
+                    "```mermaid\ngraph TD\n    DOCS[Source Documents] --> CHUNK[Chunking]\n```\n"
+                ),
+                content_hash="h",
+            )
+        ]
+    )
+    try:
+        store.put_proposal(_proposal("DOCS[Source Documents] --> CHUNK[Chunking]", "p-code"))
+        store.put_proposal(_proposal("Ingestion runs once per corpus update.", "p-prose"))
+
+        rows = {r.proposal_id: r for r in audit(store)}
+
+        code = rows["p-code"]
+        assert code.grounded is True, "the string really is in the span"
+        assert code.from_code_block is True
+        assert code.passes is False
+        assert "asserts nothing" in code.reason
+
+        prose = rows["p-prose"]
+        assert prose.passes is True
+        assert prose.reason == ""
+    finally:
+        store.close()
+
+
 def test_audit_makes_no_model_calls(store):
     from forge.llm.base import CALLS
 
