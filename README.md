@@ -1,16 +1,10 @@
 # Forge Engine
 
-**A local-first knowledge OS that maintains understanding, not just files.**
-
-Forge ingests sources, extracts claims with page-level provenance, links them
-into a knowledge graph. When new evidence contradicts something it already
-believed, it *tells you* instead of silently overwriting it.
+**Finds what is quietly wrong in a folder of Markdown notes.**
 
 [![tests](https://github.com/TarunSitaraman/forge-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/TarunSitaraman/forge-engine/actions/workflows/tests.yml)
 [![PyPI](https://img.shields.io/pypi/v/forge-kb.svg)](https://pypi.org/project/forge-kb/)
 [![Python](https://img.shields.io/pypi/pyversions/forge-kb.svg)](https://pypi.org/project/forge-kb/)
-
-~29,500 lines of Python, 1,465 offline tests, no paid API required.
 
 ```bash
 pip install "forge-kb[tui]"
@@ -18,17 +12,56 @@ cd /path/to/your/notes
 forge index && forge dash
 ```
 
-Point it at any folder of Markdown and it reports what is quietly broken:
-dead wikilinks, missing frontmatter, conventions that contradict each other.
-No model, no API key, no network, no configuration.
+## What it found the first time it ran properly
 
-`forge dash` is the front door: a full-screen dashboard that opens on your
-vault — its shape, the pages it hangs off, what is broken, and what to do next
-— with a concept browser, full-text search over every indexed page, and the
-gaps the graph can prove. Every screen of it is deterministic, and it carries a
-model-call counter that stays at zero to prove it. With nothing beyond the
-core install, `forge index && forge diagnostics` reports the same findings as
-text.
+The vault this was built against has 670 files and 5,373 wikilinks, and every
+single one of them resolved. Zero broken links, on every report, for months.
+
+Then a check for pages nothing links to turned up 26 unreachable cheat sheets.
+Reading them explained why: **24 of 32 pattern pages linked to the wrong
+index**. Every page carried `[[Binary Search Representative Problems]]` no
+matter which pattern it documented, and a cheat sheet belonging to something
+else. The same wrong link sat in their frontmatter.
+
+Every one of those links resolved. A link checker passes. Obsidian's graph view
+draws a connected graph. `forge diagnostics` reported zero broken links
+throughout, because they were not broken, they were wrong. Only asking *what
+does nothing link to* exposed them.
+
+That is the job: not dead links, which any tool finds, but the defects that
+survive every tool because nothing about them is malformed.
+
+## What it reports
+
+Point it at any folder of Markdown, with no model, no API key and no network:
+
+- dead and ambiguous wikilinks, with the page each one probably meant
+- frontmatter that does not parse, separately from frontmatter that is absent,
+  because a note without metadata is not a defect
+- pages nothing links to, counted over every page rather than over the graph
+- duplicate files, convention drift, and stale cross-references
+
+`forge dash` is the front door. It opens on your vault rather than on a prompt:
+counts, the pages the graph hangs off, a concept browser, search across every
+indexed page, and the problems. Every screen is deterministic, and the title bar
+carries a model-call counter that stays at zero to prove it. With nothing beyond
+the core install, `forge index && forge diagnostics` reports the same findings
+as text.
+
+~29,500 lines of Python, 1,465 offline tests, no paid API required.
+
+## Where it is going
+
+Everything above is deterministic and finished. The larger goal is a knowledge
+base that maintains its own understanding: claims extracted from sources with
+page-level provenance, a graph of what is believed and why, and a conflict
+routed to a human instead of silently overwriting what came before.
+
+That half runs end to end and is **not yet proven at scale**. The first real
+extraction against this corpus was 2026-09-07. See
+[`docs/roadmap.md`](docs/roadmap.md) for what is measured and what is not, and
+`CLAUDE.md` for the engineering record, including the measurements that came
+out wrong and what was changed because of them.
 
 > The distribution is **`forge-kb`**; the command and the import package are
 > both `forge`. The names differ because `forge-engine` on PyPI is an
