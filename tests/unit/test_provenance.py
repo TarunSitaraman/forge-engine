@@ -8,7 +8,6 @@ object, it is possible to persist one.
 from __future__ import annotations
 
 import pytest
-
 from forge.domain import (
     Claim,
     ClaimLink,

@@ -51,8 +51,8 @@ from .assessor import AssessmentOutcome, EvidenceAssessor
 from .candidates import CandidateNarrower
 from .claims import ClaimRetriever
 from .impact import actionable, classify_impact
-from .proposer import EvolutionProposer
 from .prompts import PROMPT_VERSION
+from .proposer import EvolutionProposer
 from .schemas import SCHEMA_VERSION
 from .state import (
     APPROVAL_APPROVED,

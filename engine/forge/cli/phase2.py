@@ -20,11 +20,11 @@ from ..config import Settings
 from ..domain import IngestionStatus, ProposalStatus, ProposalType, SafetyClass
 from ..embeddings import NullEmbeddingProvider, OllamaEmbeddingProvider
 from ..extraction import CandidateExtractor
-from ..ingestion import IngestionPipeline, IngestOptions
+from ..ingestion import ExtractionPlanner, IngestionPipeline, IngestOptions
 from ..llm import CALLS, get_provider
-from ..proposals import ProposalApplier, ProposalService, audit as audit_grounding
+from ..proposals import ProposalApplier, ProposalService
+from ..proposals import audit as audit_grounding
 from ..proposals.dedup import CLAIM_SIMILARITY, DEDUP_VERSION, find_duplicates
-from ..ingestion import ExtractionPlanner
 from ..retrieval import SearchQuery, SearchService
 from ..storage.sqlite_store import SqliteStore
 
@@ -53,7 +53,7 @@ def _enum_option(enum_cls: Any, value: str, flag: str) -> Any:
     except ValueError:
         allowed = "|".join(member.value for member in enum_cls)
         typer.echo(f"unknown {flag} {value!r}; expected one of: {allowed}", err=True)
-        raise typer.Exit(code=2)
+        raise typer.Exit(code=2) from None
 
 
 def register(app: typer.Typer, settings_factory: Any) -> None:
@@ -83,7 +83,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
                 extractor = CandidateExtractor(get_provider(settings), max_spans=max_spans)
             except Exception as exc:
                 typer.echo(f"could not construct LLM provider: {exc}", err=True)
-                raise typer.Exit(code=2)
+                raise typer.Exit(code=2) from None
 
         CALLS.reset()
         pipeline = IngestionPipeline(settings, store, extractor=extractor)
@@ -467,7 +467,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
                 extractor = CandidateExtractor(get_provider(settings), max_spans=max_spans)
             except Exception as exc:
                 typer.echo(f"could not construct LLM provider: {exc}", err=True)
-                raise typer.Exit(code=2)
+                raise typer.Exit(code=2) from None
 
             CALLS.reset()
             pipeline = IngestionPipeline(settings, store, extractor=extractor)
@@ -681,7 +681,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         except KeyError as exc:
             typer.echo(str(exc), err=True)
             store.close()
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from None
 
         applier = ProposalApplier(settings.vault_path, store, settings.state_dir / "backups")
         apply_report = applier.apply([decided], apply=apply)
@@ -712,7 +712,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         except KeyError as exc:
             typer.echo(str(exc), err=True)
             store.close()
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from None
 
         if not _emit(decided.model_dump(mode="json"), json_out):
             typer.echo(f"rejected {decided.id[:12]} ({decided.type.value})")
@@ -758,7 +758,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         except ValueError:
             typer.echo(f"unknown safety class {safety!r}", err=True)
             store.close()
-            raise typer.Exit(code=2)
+            raise typer.Exit(code=2) from None
 
         if wanted is SafetyClass.AMBIGUOUS and not include_ambiguous:
             typer.echo(

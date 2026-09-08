@@ -87,7 +87,7 @@ def _settings(vault: Path | None, log_level: str = "WARNING") -> Settings:
         settings = Settings.load(vault)
     except ConfigError as exc:
         err(f"configuration error: {exc}", err=True)
-        raise typer.Exit(code=2)
+        raise typer.Exit(code=2) from None
     configure_logging(log_level, settings.log_format)
     bind_run(new_run_id())
     return settings
@@ -547,7 +547,7 @@ def model_test(
         provider = get_provider(settings)
     except Exception as exc:
         err(f"cannot construct provider: {exc}", err=True)
-        raise typer.Exit(code=2)
+        raise typer.Exit(code=2) from None
 
     report = run_spike(provider, model_role=role, repetitions=repetitions)
 

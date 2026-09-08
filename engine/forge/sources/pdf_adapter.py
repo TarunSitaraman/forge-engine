@@ -183,7 +183,7 @@ class PdfAdapter:
         lines: list[tuple[str, float]] = []
         current: list[str] = []
         current_sizes: list[float] = []
-        for ch, size in zip(chars, sizes):
+        for ch, size in zip(chars, sizes, strict=True):
             if ch in ("\r", "\n"):
                 if current:
                     lines.append(("".join(current), _median(current_sizes)))

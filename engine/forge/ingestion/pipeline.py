@@ -26,14 +26,14 @@ from typing import Sequence
 from ..config import Settings
 from ..domain import (
     Document,
-    ProposalStatus,
-    ProposalType,
     ExtractionStatus,
     IngestionStatus,
+    ProposalStatus,
+    ProposalType,
+    ProvenanceTier,
     Source,
     SourceKind,
     TrustTier,
-    ProvenanceTier,
 )
 from ..extraction.extractor import CandidateExtractor, ExtractionResult, extraction_provenance
 from ..llm.base import CALLS

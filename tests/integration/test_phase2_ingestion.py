@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import json
 
-from typer.testing import CliRunner
-
 from forge.cli.main import app
 from forge.domain import (
     ExtractionStatus,
@@ -24,6 +22,7 @@ from forge.ingestion import IngestionPipeline, IngestOptions
 from forge.llm.base import CALLS
 from forge.proposals import ProposalService
 from forge.retrieval import SearchQuery, SearchService
+from typer.testing import CliRunner
 
 runner = CliRunner()
 

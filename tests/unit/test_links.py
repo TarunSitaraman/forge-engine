@@ -8,9 +8,14 @@ positives during the Phase 0 audit.
 from __future__ import annotations
 
 import pytest
-
 from forge.corpus.indexer import CorpusIndexer
-from forge.parsing.links import LinkIndex, LinkStatus, normalize, resolve_markdown_link, resolve_wikilink
+from forge.parsing.links import (
+    LinkIndex,
+    LinkStatus,
+    normalize,
+    resolve_markdown_link,
+    resolve_wikilink,
+)
 from forge.parsing.markdown import MarkdownLink, WikiLink
 
 PATHS = [

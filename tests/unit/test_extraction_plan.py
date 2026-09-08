@@ -8,7 +8,6 @@ is worse than no preview, because a number in a cost report gets believed.
 from __future__ import annotations
 
 import pytest
-
 from forge.extraction.extractor import CandidateExtractor
 from forge.ingestion import (
     CALLS_PER_SPAN,

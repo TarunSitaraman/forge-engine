@@ -21,7 +21,6 @@ from __future__ import annotations
 import shutil
 
 import pytest
-
 from forge.config import Settings
 from forge.ingestion import IngestionPipeline, IngestOptions
 from forge.llm.base import CALLS

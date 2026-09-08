@@ -16,7 +16,6 @@ out the other side unchanged.
 from __future__ import annotations
 
 import pytest
-
 from forge.domain import (
     Claim,
     ClaimLink,
@@ -41,7 +40,6 @@ from forge.graph import (
     KnowledgeGraph,
     check_integrity,
 )
-
 
 # --------------------------------------------------------------------------
 # helpers
@@ -93,7 +91,8 @@ def chain(store):
     concepts = [concept(name) for name in names]
     for c in concepts:
         store.put_concept(c)
-    for left, right in zip(concepts, concepts[1:-1]):
+    # Ragged on purpose: the last two concepts are left unlinked.
+    for left, right in zip(concepts, concepts[1:-1], strict=False):
         store.put_link(link(left.id, right.id))
     return store, {c.canonical_name: c for c in concepts}
 

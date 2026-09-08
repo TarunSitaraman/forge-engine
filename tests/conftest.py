@@ -25,7 +25,6 @@ import shutil
 from pathlib import Path
 
 import pytest
-
 from forge.config import Settings
 from forge.corpus.indexer import CorpusIndexer
 from forge.llm.base import CALLS

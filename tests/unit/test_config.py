@@ -13,7 +13,6 @@ import os
 from pathlib import Path
 
 import pytest
-
 from forge import config as config_module
 from forge.config import (
     CLOUD_PRESETS,
@@ -24,7 +23,6 @@ from forge.config import (
     env_value,
     read_env_file,
 )
-
 
 # --------------------------------------------------------------------------
 # _find_vault_root

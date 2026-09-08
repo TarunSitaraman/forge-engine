@@ -15,7 +15,6 @@ from collections import Counter
 
 import pytest
 import yaml
-
 from forge.evaluation.assessment import DEFAULT_ASSESSMENT_SET
 
 HOLDOUT = DEFAULT_ASSESSMENT_SET.parent / "assessment-holdout-v1.yaml"

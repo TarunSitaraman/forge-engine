@@ -11,7 +11,6 @@ from __future__ import annotations
 import subprocess
 
 import pytest
-
 from forge.corpus import IndexPipeline, analyze_conventions, compute_stats
 from forge.corpus.diagnostics import frontmatter_report, link_report
 from forge.corpus.indexer import CorpusIndexer, detect_changes

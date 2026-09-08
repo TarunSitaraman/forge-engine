@@ -11,12 +11,11 @@ import os
 from unittest import mock
 
 import pytest
-from typer.testing import CliRunner
-
 from forge.cli.main import app
 from forge.corpus import IndexPipeline
 from forge.llm.base import CALLS
 from forge.storage import SqliteStore
+from typer.testing import CliRunner
 
 runner = CliRunner()
 

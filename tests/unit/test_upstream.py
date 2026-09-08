@@ -7,7 +7,6 @@ commit — so it needs no model, no API token, and no rate limit budget.
 
 from __future__ import annotations
 
-
 from forge.upstream import UpstreamError, check
 
 

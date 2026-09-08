@@ -8,8 +8,6 @@ is the state most developers will first encounter.
 from __future__ import annotations
 
 import pytest
-from pydantic import BaseModel
-
 from forge.config import LLMSettings, Settings
 from forge.llm import (
     CALLS,
@@ -26,6 +24,7 @@ from forge.llm import (
     malformed_provider,
     unavailable_provider,
 )
+from pydantic import BaseModel
 
 
 class Answer(BaseModel):

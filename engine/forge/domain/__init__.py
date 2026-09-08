@@ -40,7 +40,6 @@ from .proposal import (
     ProposalTransitionError,
     ProposedOperation,
 )
-from .research import KnowledgeGap, Question, Synthesis
 from .provenance import (
     Provenance,
     ProvenanceInput,
@@ -50,6 +49,7 @@ from .provenance import (
     utc_now,
     violates_floor,
 )
+from .research import KnowledgeGap, Question, Synthesis
 from .revision import (
     Revision,
     record_change,

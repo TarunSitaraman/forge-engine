@@ -29,8 +29,8 @@ from pathlib import PurePosixPath
 from typing import Any, Iterable, Sequence
 
 from ..domain import Concept, IdentityState, MatchKind
-from ..logging import get_logger
 from ..identity.service import IdentityService
+from ..logging import get_logger
 from ..parsing.links import normalize
 
 log = get_logger(__name__)
@@ -436,7 +436,7 @@ def cosine(a: Sequence[float], b: Sequence[float]) -> float:
     """Cosine similarity. Returns 0.0 for zero or mismatched vectors."""
     if len(a) != len(b) or not a:
         return 0.0
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(y * y for y in b))
     if na == 0.0 or nb == 0.0:

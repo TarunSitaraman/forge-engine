@@ -1436,16 +1436,40 @@ def claim_fingerprint(claim: Claim) -> str:
     )
 
 
+#: The fields `_fingerprint` joins, in order.
+_FINGERPRINT_FIELDS = ("status", "tier", "statement", "superseded_by")
+
+
+def _split_fingerprint(value: str) -> tuple[str, ...] | None:
+    """Split a fingerprint back into its four fields, or None if it is not one.
+
+    Not `value.split("|")`. The statement is the only field that may contain a
+    `|` (the other three are two enum values and an id), and a claim whose text
+    holds one, a table row or a shell pipeline, produced five parts. Every label
+    after the statement then described the wrong field: `superseded_by` would be
+    reported as having changed to the tail of the sentence.
+
+    Returns None for anything that is not four-or-more fields, which is what a
+    restored backup or a fingerprint written by an older version looks like.
+    The caller falls back to saying only that the content differs, rather than
+    guessing at fields it cannot see.
+    """
+    parts = value.split("|")
+    if len(parts) < len(_FINGERPRINT_FIELDS):
+        return None
+    return (parts[0], parts[1], "|".join(parts[2:-1]), parts[-1])
+
+
 def _describe_drift(claim_id: str, before: str, after: str) -> str:
     """Name the parts that moved, so `stale_reason` is readable by a human."""
-    labels = ("status", "tier", "statement", "superseded_by")
-    old = before.split("|")
-    new = after.split("|")
-    moved = [
-        f"{label} {o!r} -> {n!r}"
-        for label, o, n in zip(labels, old, new)
-        if o != n
-    ]
+    old, new = _split_fingerprint(before), _split_fingerprint(after)
+    moved: list[str] = []
+    if old is not None and new is not None:
+        moved = [
+            f"{label} {o!r} -> {n!r}"
+            for label, o, n in zip(_FINGERPRINT_FIELDS, old, new, strict=True)
+            if o != n
+        ]
     return f"claim {claim_id} changed: {', '.join(moved) if moved else 'content differs'}"
 
 

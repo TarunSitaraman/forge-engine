@@ -10,7 +10,6 @@ about extraction, while reasoning-off was silently governing a 5.66-hour run.
 from __future__ import annotations
 
 import pytest
-
 from forge.evaluation.extraction import (
     DEFAULT_EXTRACTION_SET,
     ExtractionCase,

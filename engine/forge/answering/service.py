@@ -110,13 +110,32 @@ class Answer:
         """Every citation resolves, and at least one was made."""
         return not self.invalid_citations and bool(self.cited)
 
-    def sources(self) -> list[str]:
-        """Citation strings for the passages the answer used."""
+    def cited_sources(self) -> list[tuple[int, str]]:
+        """(passage number, citation) for every citation that resolves.
+
+        Paired here rather than by the caller. `sources()` drops any citation
+        naming a passage nobody supplied, so it is only the same length as
+        `cited` while `cited` holds no such number, and the CLI printed its
+        list by zipping the two. `Answerer` does keep that invariant, routing
+        unsupplied numbers to `invalid_citations`, so the display was correct
+        as written; but nothing enforced it, and an `Answer` built any other
+        way, from the API or restored from a store, would have slid every
+        source up by one and printed a number against another passage's
+        citation. A number that resolves to the wrong source is worse than no
+        number, because a reader who checks it finds a real page.
+
+        Pairing at the point the numbers are known removes the invariant
+        instead of relying on it.
+        """
         return [
-            self.passages[n - 1].citation
+            (n, self.passages[n - 1].citation)
             for n in self.cited
             if 1 <= n <= len(self.passages)
         ]
+
+    def sources(self) -> list[str]:
+        """Citation strings for the passages the answer used."""
+        return [citation for _, citation in self.cited_sources()]
 
     def to_dict(self) -> dict[str, Any]:
         return {

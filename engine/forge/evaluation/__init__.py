@@ -8,6 +8,7 @@ from .assessment import (
     AssessmentReport,
     CaseResult,
 )
+from .dataset import DEFAULT_DATASET, DatasetError, EvalDataset, EvalQuery
 from .extraction import (
     DEFAULT_EXTRACTION_SET,
     ExtractionDataset,
@@ -15,7 +16,6 @@ from .extraction import (
     ExtractionReport,
     score_case,
 )
-from .dataset import DEFAULT_DATASET, DatasetError, EvalDataset, EvalQuery
 from .metrics import MetricSummary, QueryScore, compare, score_query, summarize
 from .runner import DEFAULT_FUSION_WEIGHTS, EvaluationRun, RetrievalEvaluator
 

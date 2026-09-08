@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import pytest
-
 from forge.domain import (
     Claim,
     ClaimLink,
     ClaimStatus,
     Concept,
     ConceptKind,
+    Derivation,
     Document,
     EntityType,
     EvidenceLink,
@@ -23,7 +23,6 @@ from forge.domain import (
     SourceKind,
     Span,
     TrustTier,
-    Derivation,
     deterministic_provenance,
 )
 from forge.storage import SqliteStore, Store

@@ -881,3 +881,55 @@ def test_superseding_a_claim_stales_work_written_from_it(tmp_path: Path):
     assert after.stale is True
     assert "status" in (after.stale_reason or "")
     store.close()
+
+
+def test_a_pipe_in_a_statement_does_not_shift_every_label(tmp_path):
+    """`stale_reason` named the wrong fields for any claim containing a `|`.
+
+    The fingerprint is `status|tier|statement|superseded_by`, and the statement
+    is the only field that can hold a pipe: a table row, a shell pipeline, an
+    `A | B`. Splitting naively gave five parts, so `statement` was reported as
+    the text up to the pipe and `superseded_by` as the text after it. The
+    reason a human reads to decide whether to rewrite a synthesis was wrong
+    exactly for the claims whose text is most structured.
+
+    Found by turning on B905: `zip(labels, old, new)` was silently truncating.
+    """
+    store = SqliteStore(tmp_path / "forge.db")
+    store.initialize()
+    vault = Vault(store)
+    rag = vault.concept("RAG")
+    _, doc = vault.source("rag.md")
+    span = vault.span(doc, "Recall and precision trade off.")
+    original = vault.claim("recall | precision is the trade-off.", rag, [span])
+    _synthesis(vault, original, rag)
+
+    replacement = Claim(
+        id=Claim.make_id("recall | precision is not the trade-off.", span.id),
+        statement="recall | precision is not the trade-off.",
+        subject_concept_id=rag.id,
+        provenance=MODEL,
+    )
+    store.supersede_claim(original.id, replacement)
+
+    reason = store.get_synthesis("syn-1").stale_reason or ""
+    # What moved is the original claim's status and its superseded_by, and both
+    # must be named with their real values. Before the fix the naive split put
+    # the text after the pipe into superseded_by and dropped the real id off
+    # the end of the zip, so the one field a reader needs was never reported.
+    assert "status 'active' -> 'superseded'" in reason
+    assert replacement.id in reason
+    assert "precision" not in reason
+    store.close()
+
+
+def test_a_fingerprint_from_another_version_says_only_that_it_differs(tmp_path):
+    """A restore, or a fingerprint written by an older schema, is not four fields.
+
+    Guessing at field names it cannot see would be worse than saying less.
+    """
+    from forge.storage.sqlite_store import _describe_drift
+
+    assert _describe_drift("c1", "something else", "a|b|c|d").endswith("content differs")
+    assert _describe_drift("c1", "a|b|c|d", "a|b|c|d").endswith("content differs")
+    assert "tier 'b' -> 'z'" in _describe_drift("c1", "a|b|c|d", "a|z|c|d")

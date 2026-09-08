@@ -9,8 +9,7 @@ from __future__ import annotations
 import json
 
 import pytest
-
-from forge.domain import ExtractionStatus, IngestionStatus, ProvenanceTier, Span, SourceKind
+from forge.domain import ExtractionStatus, IngestionStatus, ProvenanceTier, SourceKind, Span
 from forge.embeddings import NullEmbeddingProvider, OllamaEmbeddingProvider
 from forge.extraction import CandidateExtractor, extraction_provenance
 from forge.extraction import extractor as extractor_module
@@ -19,7 +18,6 @@ from forge.ingestion import build_spans, extraction_key, split_sentences
 from forge.ingestion.chunking import MAX_CHUNK_CHARS
 from forge.llm import MockProvider
 from forge.sources import AdapterRegistry, MarkdownAdapter, TextBlock
-
 
 # --------------------------------------------------------------------------
 # Markdown adapter
@@ -691,8 +689,6 @@ class TestReviewingAProposalShowsWhatWasChecked:
     )
 
     def _show(self, tmp_path):
-        from typer.testing import CliRunner
-
         from forge.cli.main import app
         from forge.config import Settings
         from forge.domain import (
@@ -708,6 +704,7 @@ class TestReviewingAProposalShowsWhatWasChecked:
         from forge.extraction.extractor import ClaimCandidate
         from forge.proposals.service import claim_proposal
         from forge.storage import SqliteStore
+        from typer.testing import CliRunner
 
         vault = tmp_path / "vault"
         (vault / ".forge").mkdir(parents=True)
@@ -917,9 +914,8 @@ class TestLookingUpAConceptByName:
         return vault
 
     def _run(self, vault, name):
-        from typer.testing import CliRunner
-
         from forge.cli.main import app
+        from typer.testing import CliRunner
 
         return CliRunner().invoke(app, ["concept", "--vault", str(vault), name]).output
 

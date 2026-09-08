@@ -19,8 +19,6 @@ import json
 import subprocess
 
 import pytest
-from typer.testing import CliRunner
-
 from forge.cli.main import app
 from forge.domain import (
     Concept,
@@ -43,6 +41,7 @@ from forge.identity import IdentityConfig, IdentityService
 from forge.llm.base import CALLS
 from forge.proposals import ProposalService
 from forge.storage import SqliteStore
+from typer.testing import CliRunner
 
 runner = CliRunner()
 

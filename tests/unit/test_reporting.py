@@ -8,7 +8,6 @@ legal filename, and its own health report must not run it.
 from __future__ import annotations
 
 import pytest
-
 from forge.reporting import render_html, render_markdown
 from forge.reporting.summary import headline
 

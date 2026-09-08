@@ -18,7 +18,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-
 from forge.embeddings import HashingEmbeddingProvider, NullEmbeddingProvider
 from forge.evaluation import (
     DEFAULT_DATASET,

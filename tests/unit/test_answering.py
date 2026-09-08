@@ -7,11 +7,11 @@ answerable was measured at 3,372 calls and 153 hours.
 
 from __future__ import annotations
 
-
 from forge.answering import NOT_IN_VAULT, Answerer
+from forge.answering.service import Answer
+from forge.domain import Span
 from forge.llm import MockProvider
 from forge.retrieval.search import SearchHit
-from forge.domain import Span
 
 
 def _span(text, sid="sp1"):
@@ -79,6 +79,48 @@ class TestCitationVerification:
         answer = Answerer(_FakeSearch(_hits(3)), provider).ask("q")
         assert answer.invalid_citations == [7]
         assert answer.grounded is False
+
+    def test_an_unsupplied_number_is_kept_out_of_cited(self):
+        """The invariant the printed source list depends on.
+
+        `sources()` drops any citation naming a passage nobody supplied, so it
+        matches `cited` only while `cited` holds no such number. `Answerer`
+        keeps that true by routing them to `invalid_citations` instead.
+        """
+        provider = MockProvider(default_response="A [2]. B [7]. C [3].")
+        answer = Answerer(_FakeSearch(_hits(3)), provider).ask("q")
+
+        assert answer.cited == [2, 3]
+        assert answer.invalid_citations == [7]
+        assert len(answer.sources()) == len(answer.cited)
+
+    def test_each_number_is_paired_with_its_own_passage(self):
+        """Not with whatever survived filtering at the same index.
+
+        The CLI used to print its source list by zipping `cited` against
+        `sources()`, which is correct only while the invariant above holds.
+        Nothing enforced it. An Answer built any other way, from the API or
+        restored from a store, slid every source up by one and printed a
+        number against another passage's citation, which reads as verified.
+
+        `cited_sources()` pairs at the point the numbers are known, so the
+        list is right whatever `cited` contains. Turning on B905 is what
+        pointed at the zip.
+        """
+        hits = _hits(3)
+        answer = Answer(
+            question="q",
+            text="A [2]. B [7]. C [3].",
+            passages=hits,
+            cited=[2, 7, 3],  # as no Answerer would build it, and a restore might
+            invalid_citations=[],
+        )
+
+        pairs = answer.cited_sources()
+        assert [n for n, _ in pairs] == [2, 3], "7 names no passage, so it has no source"
+        for n, citation in pairs:
+            assert hits[n - 1].citation == citation
+        assert answer.sources() == [c for _, c in pairs]
 
     def test_an_uncited_answer_is_not_grounded(self):
         provider = MockProvider(default_response="Some confident prose with no citation.")

@@ -16,7 +16,6 @@ any caller.
 from __future__ import annotations
 
 import re
-
 from dataclasses import dataclass, field, replace
 from typing import Any, Sequence
 
@@ -344,7 +343,9 @@ class SearchService:
         except Exception as exc:
             log.warning("embedding_failed", error=str(exc)[:160])
             return 0
-        for span, vector in zip(spans, vectors):
+        # One vector per span. Truncating here would silently leave spans
+        # unembedded and searchable only lexically, with nothing reported.
+        for span, vector in zip(spans, vectors, strict=True):
             self.store.put_embedding("span", span.id, self.embeddings.model_id, vector)
         return len(vectors)
 

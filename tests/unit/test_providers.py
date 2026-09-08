@@ -18,8 +18,6 @@ from unittest import mock
 
 import httpx
 import pytest
-from pydantic import ValidationError as PydanticValidationError
-
 from forge.config import CloudSettings, LLMSettings, OllamaSettings, Settings
 from forge.llm import (
     CloudProvider,
@@ -37,6 +35,7 @@ from forge.llm.base import (
     StructuredOutputError,
 )
 from forge.llm.cloud import ANTHROPIC, OPENAI_COMPATIBLE
+from pydantic import ValidationError as PydanticValidationError
 
 
 def request(text: str = "hello") -> CompletionRequest:
@@ -667,7 +666,6 @@ class TestProviderFallback:
     def test_a_fallback_equal_to_the_primary_is_refused(self):
         """model_copy skips validators, so construct the settings properly."""
         import pytest as _pytest
-
         from forge.config import LLMSettings
 
         with _pytest.raises(Exception) as exc:
@@ -897,9 +895,8 @@ class TestModelTestReportsWhyItFailed:
         )
 
     def test_the_recorded_error_reaches_the_output(self, capsys):
-        from typer.testing import CliRunner
-
         from forge.cli.main import app
+        from typer.testing import CliRunner
 
         report = self._report([{"kind": "llm_error", "error": "400 response_format unsupported"}])
         with mock.patch("forge.cli.main.run_spike", return_value=report):
@@ -907,9 +904,8 @@ class TestModelTestReportsWhyItFailed:
         assert "response_format unsupported" in result.output
 
     def test_identical_failures_across_tasks_are_called_configuration(self):
-        from typer.testing import CliRunner
-
         from forge.cli.main import app
+        from typer.testing import CliRunner
 
         report = self._report([{"kind": "llm_error", "error": "400 bad request"}])
         with mock.patch("forge.cli.main.run_spike", return_value=report):

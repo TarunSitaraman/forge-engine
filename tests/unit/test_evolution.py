@@ -20,7 +20,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from forge.domain import (
     AssessmentClass,
     AssessmentRecord,
@@ -63,7 +62,6 @@ from forge.identity import CollisionResolution, ConceptIdentity, IdentityConfig,
 from forge.llm import MockProvider
 from forge.llm.base import CALLS, LLMError, ProviderUnavailable
 from forge.proposals import ProposalService
-
 
 # --------------------------------------------------------------------------
 # fixtures

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from forge.domain import (
     Claim,
     ClaimStatus,
@@ -25,6 +24,7 @@ from forge.domain import (
     record_supersede,
     validate_supersession,
 )
+from pydantic import ValidationError
 
 
 class TestRevisionShapes:
@@ -72,7 +72,10 @@ class TestRevisionShapes:
 
     def test_revisions_are_immutable(self):
         rev = record_create(EntityType.SOURCE, "s1", {"a": 1})
-        with pytest.raises(Exception):
+        # Named, not bare. `pytest.raises(Exception)` also passes when the
+        # field has been renamed away and the assignment raises AttributeError,
+        # so the test would keep passing after immutability was lost.
+        with pytest.raises(ValidationError):
             rev.entity_id = "s2"  # type: ignore[misc]
 
     def test_revision_roundtrips(self):
@@ -153,7 +156,7 @@ class TestEntityValidation:
 
     def test_unknown_fields_rejected(self):
         """extra='forbid' catches typos that would otherwise vanish silently."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             Source(
                 id="x",
                 kind=SourceKind.MARKDOWN,

@@ -24,8 +24,6 @@ import re
 import subprocess
 
 import pytest
-from typer.testing import CliRunner
-
 from forge.cli.main import app
 from forge.domain import (
     Claim,
@@ -52,6 +50,7 @@ from forge.llm import MockProvider
 from forge.llm.base import CALLS, LLMError, ProviderUnavailable
 from forge.proposals import ProposalService
 from forge.storage import SqliteStore
+from typer.testing import CliRunner
 
 runner = CliRunner()
 

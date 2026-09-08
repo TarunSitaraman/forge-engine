@@ -38,8 +38,8 @@ import typer
 from ..config import Settings
 from .shell import (
     FULLSCREEN,
-    Kind,
     REFUSED,
+    Kind,
     command_help,
     command_names,
     parse,

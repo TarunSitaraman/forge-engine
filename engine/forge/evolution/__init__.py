@@ -14,7 +14,7 @@ from __future__ import annotations
 from .activation import EvolutionActivator
 from .assessor import AssessmentBatch, AssessmentOutcome, EvidenceAssessor
 from .candidates import CandidateNarrower, NarrowingResult
-from .claims import ClaimRetriever, ClaimRetrieval
+from .claims import ClaimRetrieval, ClaimRetriever
 from .impact import actionable, classify_impact, impact_of, requires_human_review
 from .proposer import EvolutionProposer, ProposalBatch
 

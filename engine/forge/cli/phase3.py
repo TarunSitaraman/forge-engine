@@ -22,8 +22,8 @@ from ..embeddings import (
 )
 from ..evaluation import DEFAULT_DATASET, EvalDataset, RetrievalEvaluator
 from ..graph import KnowledgeGraph
-from ..llm.base import CALLS
 from ..identity import IdentityConfig, IdentityService
+from ..llm.base import CALLS
 from ..matching import build_ambiguity_index
 from ..proposals import ProposalService
 from ..retrieval import SearchService
@@ -550,7 +550,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         typer.echo(answer.text)
         if answer.sources():
             typer.echo("\nsources:")
-            for n, src in zip(answer.cited, answer.sources()):
+            for n, src in answer.cited_sources():
                 typer.echo(f"  [{n}] {src}")
         if answer.invalid_citations:
             typer.echo(
@@ -759,7 +759,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             resolution = service.decide(name, qualified, by=by)
         except (KeyError, ValueError) as exc:
             typer.echo(str(exc), err=True)
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from None
         path = service.config.save(settings.vault_path / "config" / "concept-identity.yaml")
 
         if not _emit({**resolution.to_dict(), "path": str(path)}, json_out):
@@ -810,7 +810,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             service.clear(name)
         except KeyError as exc:
             typer.echo(str(exc), err=True)
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from None
         service.config.save(settings.vault_path / "config" / "concept-identity.yaml")
         typer.echo(f"{name!r} is undecided again")
 
@@ -916,13 +916,13 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             data = ExtractionDataset.load(dataset)
         except Exception as exc:
             typer.echo(f"error: {exc}", err=True)
-            raise typer.Exit(code=2)
+            raise typer.Exit(code=2) from None
 
         try:
             provider = get_provider(settings)
         except ProviderUnavailable as exc:
             typer.echo(f"no model available: {exc}", err=True)
-            raise typer.Exit(code=2)
+            raise typer.Exit(code=2) from None
 
         report = run(data, CandidateExtractor(provider, max_spans=1))
 
@@ -1014,7 +1014,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         except Exception as exc:
             typer.echo(str(exc), err=True)
             store.close()
-            raise typer.Exit(code=2)
+            raise typer.Exit(code=2) from None
 
         rotted = data.verify_labels(settings.vault_path)
         wanted = tuple(m.strip() for m in methods.split(",") if m.strip())

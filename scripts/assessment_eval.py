@@ -31,7 +31,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "engine"))
 
 from forge.config import Settings  # noqa: E402
-from forge.logging import configure_logging  # noqa: E402
 from forge.domain import (  # noqa: E402
     Claim,
     Concept,
@@ -56,6 +55,7 @@ from forge.evolution import EvidenceAssessor, EvolutionProposer  # noqa: E402
 from forge.evolution.assessor import AssessmentOutcome  # noqa: E402
 from forge.llm import MockProvider, get_provider, provider_identity, throttled  # noqa: E402
 from forge.llm.base import ProviderUnavailable  # noqa: E402
+from forge.logging import configure_logging  # noqa: E402
 from forge.storage import SqliteStore  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]

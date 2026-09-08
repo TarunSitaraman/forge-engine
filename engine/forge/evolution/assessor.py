@@ -48,8 +48,8 @@ from ..llm.base import (
 )
 from ..logging import get_logger
 from ..storage.sqlite_store import SqliteStore
-from .prompts import ASSESSMENT_INSTRUCTION, PROMPT_VERSION, SYSTEM, claims_block, evidence_block
 from .corroboration import CorroborationOutcome, Corroborator
+from .prompts import ASSESSMENT_INSTRUCTION, PROMPT_VERSION, SYSTEM, claims_block, evidence_block
 from .schemas import SCHEMA_VERSION, AssessmentResponse
 
 log = get_logger(__name__)

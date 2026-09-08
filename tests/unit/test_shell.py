@@ -8,8 +8,9 @@ user thinks it means, and that nothing takes the session down.
 
 from __future__ import annotations
 
-import pytest
+from dataclasses import FrozenInstanceError
 
+import pytest
 from forge.cli.main import app
 from forge.cli.shell import (
     BANNER,
@@ -25,8 +26,8 @@ from forge.cli.shell import (
     render_header,
     render_help,
     run,
-    suggestions,
     show_intro,
+    suggestions,
     visible_names,
     wants_animation,
     wants_colour,
@@ -205,7 +206,9 @@ class TestHistoryLocation:
 
 class TestActionIsInert:
     def test_actions_are_frozen(self):
-        with pytest.raises(Exception):
+        # FrozenInstanceError specifically: a bare Exception would also be
+        # satisfied by an AttributeError from a renamed field.
+        with pytest.raises(FrozenInstanceError):
             Action(Kind.EMPTY).kind = Kind.QUIT  # type: ignore[misc]
 
 

@@ -8,7 +8,6 @@ guessing.**
 from __future__ import annotations
 
 import pytest
-
 from forge.activation import (
     ActivationOutcome,
     ProposalActivator,
@@ -38,7 +37,6 @@ from forge.domain import (
     deterministic_provenance,
 )
 from forge.identity import CollisionResolution, ConceptIdentity, IdentityConfig, IdentityService
-
 
 # --------------------------------------------------------------------------
 # fixtures
@@ -567,10 +565,9 @@ class TestIdentityConfig:
         `Retrieval-Augmented Generation`, and with no alias between them the
         extractor proposes a second concept for a page that already has one.
         """
-        from typer.testing import CliRunner
-
         from forge.cli.main import app
         from forge.identity import IdentityConfig
+        from typer.testing import CliRunner
 
         vault = tmp_path / "vault"
         (vault / ".forge").mkdir(parents=True)

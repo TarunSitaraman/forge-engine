@@ -7,7 +7,6 @@ path is genuinely tested without requiring a model.
 from __future__ import annotations
 
 import pytest
-
 from forge.domain import (
     Concept,
     ConceptKind,

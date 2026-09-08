@@ -12,9 +12,8 @@ suite, before the help is ever printed.
 
 from __future__ import annotations
 
-from typer.testing import CliRunner
-
 from forge.cli.main import HELP_PANELS, app, assign_help_panels
+from typer.testing import CliRunner
 
 runner = CliRunner()
 

@@ -83,7 +83,8 @@ class Path:
     def describe(self, labels: dict[str, str] | None = None) -> str:
         labels = labels or {}
         parts = [labels.get(self.nodes[0], self.nodes[0])]
-        for node, link in zip(self.nodes[1:], self.links):
+        # A path of n nodes has n-1 links, so these are the same length.
+        for node, link in zip(self.nodes[1:], self.links, strict=True):
             parts.append(f"-[{link.type.value}]->")
             parts.append(labels.get(node, node))
         return " ".join(parts)

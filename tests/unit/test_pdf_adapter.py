@@ -8,7 +8,6 @@ tests nothing.
 from __future__ import annotations
 
 import pytest
-
 from forge.domain import IngestionStatus, SourceKind
 from forge.sources import PdfAdapter, SourceAdapter
 

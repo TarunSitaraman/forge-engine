@@ -7,7 +7,6 @@ engine believes reaches the user's files without an explicit human decision.**
 from __future__ import annotations
 
 import pytest
-
 from forge.domain import (
     Concept,
     ConceptKind,
@@ -308,8 +307,8 @@ class TestConceptMatching:
 
 class TestWriteBack:
     def _setup(self, fixture_vault, store, tmp_path):
-        from forge.corpus.indexer import CorpusIndexer
         from forge.config import Settings
+        from forge.corpus.indexer import CorpusIndexer
 
         settings = Settings(vault_path=fixture_vault, state_dir=tmp_path / "st")
         index = CorpusIndexer(settings).build_index()
@@ -460,9 +459,8 @@ class TestBulkApply:
         }
 
     def test_approve_all_without_apply_leaves_the_vault_untouched(self, settings, fixture_vault):
-        from typer.testing import CliRunner
-
         from forge.cli.main import app
+        from typer.testing import CliRunner
 
         runner = CliRunner()
         env = self._env(settings)
@@ -479,9 +477,8 @@ class TestBulkApply:
         assert {p: p.read_bytes() for p in sorted(fixture_vault.rglob("*.md"))} == before
 
     def test_approve_all_with_apply_writes_and_backs_up(self, settings, fixture_vault):
-        from typer.testing import CliRunner
-
         from forge.cli.main import app
+        from typer.testing import CliRunner
 
         runner = CliRunner()
         env = self._env(settings)
@@ -506,9 +503,8 @@ class TestBulkApply:
 
     def test_applying_twice_is_a_no_op(self, settings, fixture_vault):
         """The repaired form is a fixed point, so a second pass finds nothing."""
-        from typer.testing import CliRunner
-
         from forge.cli.main import app
+        from typer.testing import CliRunner
 
         runner = CliRunner()
         env = self._env(settings)

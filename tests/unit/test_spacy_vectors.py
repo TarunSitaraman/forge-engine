@@ -8,7 +8,6 @@ regardless: that an absent model is an absent provider rather than a crash.
 from __future__ import annotations
 
 import pytest
-
 from forge.embeddings.base import EmbeddingProvider
 from forge.embeddings.spacy_vectors import SpacyEmbeddingProvider
 

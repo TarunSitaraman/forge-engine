@@ -85,11 +85,11 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         except OrchestratorUnavailable as exc:
             typer.echo(str(exc), err=True)
             store.close()
-            raise typer.Exit(code=3)
+            raise typer.Exit(code=3) from None
         except ProviderUnavailable as exc:
             typer.echo(f"semantic provider unavailable: {exc}", err=True)
             store.close()
-            raise typer.Exit(code=2)
+            raise typer.Exit(code=2) from None
 
         if _emit(outcome.to_dict(verbose=True), json_out):
             service.close()
@@ -121,7 +121,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         except ValueError:
             typer.echo(f"unknown status {status!r}", err=True)
             store.close()
-            raise typer.Exit(code=2)
+            raise typer.Exit(code=2) from None
 
         runs = store.list_workflows(status=wanted, limit=limit)
         payload = {"workflows": [r.to_dict() for r in runs], "counts": store.count_workflows()}
@@ -271,11 +271,11 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         except ProviderMismatch as exc:
             typer.echo(f"{exc}\n\nRe-run with --allow-provider-change if that is intended.", err=True)
             store.close()
-            raise typer.Exit(code=2)
+            raise typer.Exit(code=2) from None
         except OrchestratorUnavailable as exc:
             typer.echo(str(exc), err=True)
             store.close()
-            raise typer.Exit(code=3)
+            raise typer.Exit(code=3) from None
 
         if not _emit(outcome.to_dict(verbose=True), json_out):
             _print_outcome(outcome, store)

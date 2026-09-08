@@ -23,7 +23,6 @@ the production path.
 from __future__ import annotations
 
 import pytest
-
 from forge.activation import ProposalActivator
 from forge.domain import ProposalType
 from forge.ingestion import IngestionPipeline, IngestOptions

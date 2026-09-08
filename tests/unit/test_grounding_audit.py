@@ -10,11 +10,7 @@ discard every cached result.
 
 from __future__ import annotations
 
-
 import pytest
-
-from forge.proposals import audit  # noqa: E402
-
 from forge.domain import (  # noqa: E402
     Derivation,
     Document,
@@ -29,6 +25,7 @@ from forge.domain import (  # noqa: E402
     SourceKind,
     Span,
 )
+from forge.proposals import audit  # noqa: E402
 from forge.storage import SqliteStore  # noqa: E402
 
 SPAN_TEXT = (
@@ -212,9 +209,8 @@ class TestAuditCli:
         return {"FORGE_VAULT_PATH": str(tmp_path), "FORGE_STATE_DIR": str(tmp_path / ".forge")}
 
     def test_empty_store_is_clean(self, tmp_path):
-        from typer.testing import CliRunner
-
         from forge.cli.main import app
+        from typer.testing import CliRunner
 
         (tmp_path / ".git").mkdir()
         result = CliRunner().invoke(
@@ -224,9 +220,8 @@ class TestAuditCli:
         assert "nothing to audit" in result.stdout
 
     def test_an_ungrounded_quote_exits_nonzero(self, tmp_path, store):
-        from typer.testing import CliRunner
-
         from forge.cli.main import app
+        from typer.testing import CliRunner
 
         store.put_proposal(
             _proposal("retrieved passages reduces generation grounds hallucination", "p-bad")
@@ -241,10 +236,9 @@ class TestAuditCli:
         assert "1 ungrounded" in result.output
 
     def test_reject_is_a_dry_run_by_default(self, tmp_path, store):
-        from typer.testing import CliRunner
-
         from forge.cli.main import app
         from forge.domain import ProposalStatus
+        from typer.testing import CliRunner
 
         store.put_proposal(
             _proposal("retrieved passages reduces generation grounds hallucination", "p-bad")
@@ -266,11 +260,10 @@ class TestAuditCli:
         reopened.close()
 
     def test_reject_no_dry_run_rejects_only_the_failures(self, tmp_path, store):
-        from typer.testing import CliRunner
-
         from forge.cli.main import app
         from forge.domain import ProposalStatus
         from forge.storage import SqliteStore
+        from typer.testing import CliRunner
 
         store.put_proposal(_proposal("grounds generation in retrieved passages", "p-good"))
         store.put_proposal(
@@ -295,11 +288,10 @@ class TestAuditCli:
 
     def test_an_already_decided_proposal_is_not_overturned(self, tmp_path, store):
         """A human decision is not this command's to reverse."""
-        from typer.testing import CliRunner
-
         from forge.cli.main import app
         from forge.domain import ProposalStatus
         from forge.storage import SqliteStore
+        from typer.testing import CliRunner
 
         bad = _proposal("retrieved passages reduces generation grounds hallucination", "p-appr")
         store.put_proposal(bad.approve(by="human"))
@@ -326,12 +318,11 @@ def test_the_closing_advice_names_the_rule_that_actually_failed(tmp_path):
     the previous afternoon. A message that names a cause it cannot know is the
     same defect class as a metric that measures something other than its label.
     """
-    from typer.testing import CliRunner
-
     from forge.cli.main import app
     from forge.config import Settings
     from forge.domain import Document, Source, SourceKind, Span
     from forge.storage import SqliteStore
+    from typer.testing import CliRunner
 
     vault = tmp_path / "vault"
     (vault / ".forge").mkdir(parents=True)

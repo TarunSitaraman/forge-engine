@@ -13,7 +13,6 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-
 from forge.cli.main import app as cli
 from forge.cli.tui import (
     INSTALL_HINT,
@@ -142,9 +141,8 @@ class TestDrivingTheInterface:
     the suite needs no async plugin."""
 
     def _drive(self, settings, keys, stats=None):
-        from textual.widgets import RichLog
-
         from forge.cli.tui import build_app
+        from textual.widgets import RichLog
 
         async def go():
             app = build_app(cli, settings, stats or Stats(10, 10, 100, 0))
@@ -167,9 +165,8 @@ class TestDrivingTheInterface:
 
     def _transcript(self, settings, keys) -> str:
         """The transcript as plain text, for asserting on what was shown."""
-        from textual.widgets import RichLog
-
         from forge.cli.tui import build_app
+        from textual.widgets import RichLog
 
         async def go():
             app = build_app(cli, settings, Stats(10, 10, 100, 0))
@@ -219,9 +216,8 @@ class TestTheQuickBar:
     """
 
     def _open(self, settings, keys):
-        from textual.widgets import Input, Static
-
         from forge.cli.tui import build_app
+        from textual.widgets import Input, Static
 
         async def go():
             app = build_app(cli, settings, Stats(10, 10, 100, 0))
@@ -298,9 +294,8 @@ class TestABusyCommandIsVisibleAndNotClobbered:
     their echo line and then nothing at all."""
 
     def _run_while_busy(self, settings):
-        from textual.widgets import Input, RichLog, Static
-
         from forge.cli.tui import build_app
+        from textual.widgets import Input, RichLog, Static
 
         async def go():
             app = build_app(cli, settings, Stats(10, 10, 100, 0))
@@ -332,9 +327,8 @@ class TestABusyCommandIsVisibleAndNotClobbered:
         assert "index --reset" in transcript
 
     def test_the_indicator_clears_when_the_command_ends(self, settings):
-        from textual.widgets import Static
-
         from forge.cli.tui import build_app
+        from textual.widgets import Static
 
         async def go():
             app = build_app(cli, settings, Stats(10, 10, 100, 0))
@@ -351,9 +345,8 @@ class TestABusyCommandIsVisibleAndNotClobbered:
 
     def test_a_command_that_prints_nothing_says_so(self, settings):
         """Silence was indistinguishable from a hang."""
-        from textual.widgets import RichLog
-
         from forge.cli.tui import build_app
+        from textual.widgets import RichLog
 
         async def go():
             app = build_app(cli, settings, Stats(10, 10, 100, 0))
