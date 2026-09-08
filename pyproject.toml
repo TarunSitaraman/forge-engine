@@ -9,7 +9,7 @@ build-backend = "hatchling.build"
 # script stay `forge`; PyPI's `forge` is a Django scaffolder, and the overlap
 # between its users and this tool's is close enough to zero to accept.
 name = "forge-kb"
-version = "0.1.0"
+version = "0.2.0"
 description = "A knowledge engine for Markdown vaults: traceable claims with provenance, a graph you can question, and a record of how your understanding changed."
 readme = "README.md"
 authors = [{ name = "Tarun Sitaraman", email = "tarunsitaraman134@gmail.com" }]

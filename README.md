@@ -328,6 +328,12 @@ Per-machine provider configuration lives in `~/.config/forge/forge.env`;
 actually active. Note that the model ids in that example rotate faster than the
 file does, so verify one is live before trusting it.
 
+## Releasing
+
+A release is a pushed tag; PyPI verifies the workflow's identity rather than
+a stored token. See [`docs/releasing.md`](docs/releasing.md), and
+[`CHANGELOG.md`](CHANGELOG.md) for what changed when.
+
 ## License
 
 MIT. See [`LICENSE`](LICENSE).

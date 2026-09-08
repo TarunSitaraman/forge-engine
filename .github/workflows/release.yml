@@ -1,0 +1,79 @@
+name: release
+
+# Publishes to PyPI when a version tag is pushed, and never otherwise. The
+# version in the tag must match the version in pyproject: a mismatch is how a
+# release gets cut from the wrong commit, so it fails the job rather than
+# uploading something nobody meant to.
+on:
+  push:
+    tags: ["v*"]
+  # Available by hand for a dry run: builds and checks, publishes nothing.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Check the tag against the version in pyproject
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tagged="${GITHUB_REF_NAME#v}"
+          declared=$(python -c "import tomllib,pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          echo "tag=$tagged pyproject=$declared"
+          test "$tagged" = "$declared"
+
+      - name: Build
+        run: |
+          pip install build twine
+          python -m build
+          twine check dist/*
+
+      # The wheel is what users get, so the wheel is what gets tested: install
+      # it on its own and run the demo, which exits non-zero if the engine
+      # stops finding one of its planted defects.
+      - name: Install the wheel alone and run the demo
+        run: |
+          python -m venv /tmp/release-check
+          /tmp/release-check/bin/pip install dist/*.whl
+          cd "$RUNNER_TEMP" && /tmp/release-check/bin/forge demo --path ./demo-vault
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    # Trusted Publishing: PyPI verifies this workflow's OIDC identity, so no
+    # API token is stored in the repository, in a secret, or on anyone's
+    # laptop. There is no credential here to leak or rotate.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/forge-kb
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Draft the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: dist/*
