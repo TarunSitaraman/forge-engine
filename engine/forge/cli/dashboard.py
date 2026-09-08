@@ -477,6 +477,11 @@ def build_dashboard(settings: Settings, snapshot: VaultSnapshot):
     from textual.widgets import ContentSwitcher, DataTable, Input, Static
 
     class ForgeDashboard(App):
+        # Names the terminal tab and window. Without it Textual uses the
+        # class name, so the tab reads "ForgeDashboard" while the command
+        # the user typed was `forge dash`.
+        TITLE = "forge dash"
+
         CSS = f"""
         Screen {{ background: {BG}; }}
 
