@@ -18,7 +18,7 @@ cd /path/to/your/notes
 forge index && forge dash
 ```
 
-![The Forge dashboard, opened on the vault `forge demo` writes](docs/media/dash-overview.svg)
+![The Forge dashboard, opened on the vault `forge demo` writes](docs/media/dash-overview.png)
 
 ## What it found the first time it ran properly
 
@@ -62,6 +62,8 @@ Point it at any folder of Markdown, with no model, no API key and no network:
   because a note without metadata is not a defect
 - pages nothing links to, counted over every page rather than over the graph
 - duplicate files, convention drift, and stale cross-references
+
+![The dashboard's Issues tab, listing an ambiguous link, a dead link and unparseable frontmatter](docs/media/dash-issues.png)
 
 `forge dash` is the front door. It opens on your vault rather than on a prompt:
 counts, the pages the graph hangs off, a concept browser, search across every
