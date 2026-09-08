@@ -170,9 +170,13 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         graph = KnowledgeGraph(store)
 
         namespace, _, bare = name.rpartition("/")
-        matches = store.concepts_named(bare)
+        matches = store.concepts_named(bare) or store.concepts_named(bare, ignore_case=True)
         if namespace:
             matches = [c for c in matches if c.namespace == namespace]
+        # Whether these are concepts *named* this, or merely ones containing it.
+        # Conflating the two claimed `rag-architecture-review` was a second
+        # concept named RAG, which it is not.
+        by_name = bool(matches)
         if not matches:
             matches = [c for c in SearchService(store).concepts(bare, limit=5)]
 
@@ -182,17 +186,28 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             raise typer.Exit(code=1)
 
         if len(matches) > 1 and not namespace:
-            # Two concepts share this bare name. Show both rather than picking.
+            # Show them rather than picking. A collision is the user's to settle.
             payload = {
                 "ambiguous": True,
+                "by_name": by_name,
                 "candidates": [c.qualified_name for c in matches],
             }
             if not _emit(payload, json_out):
-                typer.echo(f"{name!r} names {len(matches)} distinct concepts — specify one:")
+                if by_name:
+                    typer.echo(
+                        f"{name!r} names {len(matches)} distinct concepts — specify one:"
+                    )
+                else:
+                    typer.echo(
+                        f"no concept is named {name!r}. "
+                        f"{len(matches)} contain it — did you mean:"
+                    )
                 for c in matches:
                     typer.echo(f"  {c.qualified_name}   ({c.kind.value})")
             store.close()
             return
+        if not by_name:
+            typer.echo(f"no concept named {name!r}; showing the one that contains it\n")
 
         detail = graph.explain_concept(matches[0].id)
         if _emit(detail, json_out):

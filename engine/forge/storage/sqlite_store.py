@@ -640,12 +640,24 @@ class SqliteStore:
             )
         return Concept.model_validate_json(row["data"]) if row else None
 
-    def concepts_named(self, canonical_name: str) -> list[Concept]:
-        """Every concept sharing this bare name, across namespaces."""
-        rows = self._all(
-            "SELECT data FROM concepts WHERE canonical_name = ? ORDER BY IFNULL(namespace, '')",
-            (canonical_name,),
+    def concepts_named(
+        self, canonical_name: str, *, ignore_case: bool = False
+    ) -> list[Concept]:
+        """Every concept sharing this bare name, across namespaces.
+
+        `ignore_case` because a vault names concepts after its filenames —
+        `rag`, `llms`, `ai-agents` — and a human types RAG. The link resolver
+        has always treated a case mismatch as resolved; this lookup did not, so
+        `forge concept "RAG"` found nothing, fell through to a substring
+        search, and reported the template `rag-architecture-review` as a second
+        concept *named* RAG. Which it is not: it merely contains the letters.
+        """
+        sql = (
+            "SELECT data FROM concepts WHERE canonical_name = ?"
+            + (" COLLATE NOCASE" if ignore_case else "")
+            + " ORDER BY IFNULL(namespace, '')"
         )
+        rows = self._all(sql, (canonical_name,))
         return [Concept.model_validate_json(r["data"]) for r in rows]
 
     def list_concepts(self) -> Sequence[Concept]:

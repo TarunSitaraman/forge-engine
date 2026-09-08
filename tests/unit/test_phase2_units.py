@@ -880,3 +880,94 @@ class TestEvidenceMustBeReadableAsSupport:
         assert kept == ["Retrieval and generation fail separately."]
         kinds = [f.get("kind") for f in result.failures]
         assert "quote_from_code_block" in kinds
+
+
+class TestLookingUpAConceptByName:
+    """`forge concept "RAG"` on a vault whose concept is `rag`.
+
+    The exact lookup was case-sensitive, so it found nothing, fell through to a
+    substring search, and announced *"'RAG' names 2 distinct concepts"* —
+    listing the template `rag-architecture-review`, which is not named RAG. Two
+    defects behind one symptom: a lookup stricter than the link resolver, and a
+    message claiming a name collision where there was only a shared prefix.
+    """
+
+    def _vault(self, tmp_path, names):
+        from forge.config import Settings
+        from forge.domain import Concept, ConceptKind, Derivation, Provenance, ProvenanceTier
+        from forge.storage import SqliteStore
+
+        vault = tmp_path / "vault"
+        (vault / ".forge").mkdir(parents=True)
+        store = SqliteStore(Settings.load(vault).db_path)
+        store.initialize()
+        for name in names:
+            store.put_concept(
+                Concept(
+                    id=Concept.make_id(name),
+                    canonical_name=name,
+                    kind=ConceptKind.TECHNOLOGY,
+                    vault_path=f"Technologies/Docs/{name}.md",
+                    provenance=Provenance(
+                        tier=ProvenanceTier.USER_ASSERTION,
+                        derivation=Derivation.DETERMINISTIC,
+                        agent="test/1",
+                    ),
+                )
+            )
+        store.close()
+        return vault
+
+    def _run(self, vault, name):
+        from typer.testing import CliRunner
+
+        from forge.cli.main import app
+
+        return CliRunner().invoke(app, ["concept", "--vault", str(vault), name]).output
+
+    def test_a_differently_cased_name_finds_the_concept(self, tmp_path):
+        vault = self._vault(tmp_path, ["rag", "rag-architecture-review"])
+
+        output = self._run(vault, "RAG")
+
+        assert "distinct concepts" not in output
+        assert "rag-architecture-review" not in output
+        assert "concept   : rag" in output
+
+    def test_a_real_collision_still_asks_which_one(self, tmp_path):
+        """Two concepts genuinely sharing a name is the case the message was
+        written for, and it still reads that way."""
+        vault = self._vault(tmp_path, ["Heap"])
+        from forge.config import Settings
+        from forge.domain import Concept, ConceptKind, Derivation, Provenance, ProvenanceTier
+        from forge.storage import SqliteStore
+
+        store = SqliteStore(Settings.load(vault).db_path)
+        store.initialize()
+        store.put_concept(
+            Concept(
+                id=Concept.make_id("Heap", "data-structure"),
+                canonical_name="Heap",
+                namespace="data-structure",
+                kind=ConceptKind.DATA_STRUCTURE,
+                vault_path="DSA/03_DataStructures/Heap.md",
+                provenance=Provenance(
+                    tier=ProvenanceTier.USER_ASSERTION,
+                    derivation=Derivation.DETERMINISTIC,
+                    agent="test/1",
+                ),
+            )
+        )
+        store.close()
+
+        output = self._run(vault, "Heap")
+
+        assert "names 2 distinct concepts" in output
+
+    def test_a_prefix_match_says_it_is_not_a_name(self, tmp_path):
+        vault = self._vault(tmp_path, ["rag-architecture-review", "rag-eval-checklist"])
+
+        output = self._run(vault, "RAG")
+
+        assert "no concept is named" in output
+        assert "contain it" in output

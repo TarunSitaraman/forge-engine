@@ -17,7 +17,7 @@ concrete ways:
 
 1. **The corpus is not in this tree.** 42 integration tests run against
    the vault and skip without it. Set `FORGE_TEST_VAULT=/path/to/forge`
-   to run them, `1,420 passed, 42 skipped` becomes `1,462 passed`. See
+   to run them, `1,423 passed, 42 skipped` becomes `1,465 passed`. See
    `docs/test-strategy.md` §"Running the corpus tests".
 2. **Vault knowledge does not belong here.** `docs/` is engineering
    documentation *for the engine*, architecture, ADRs, research,
@@ -44,6 +44,24 @@ are measurement records: renaming the corpus a number was measured
 against would falsify it.
 
 ## Known Stale/Legacy Items
+
+**`forge concept "RAG"` reported a name collision that did not exist,
+2026-09-08.** The vault's concept is `rag`, named after `rag.md`.
+`concepts_named` compared with `WHERE canonical_name = ?` — case-sensitive —
+so an exact-case miss fell through to a **substring** search, which returned
+`rag` and the template `rag-architecture-review`, and the command announced
+*"'RAG' names 2 distinct concepts"*.
+
+Two defects behind one symptom. The lookup was stricter than the link
+resolver, which has always treated a case mismatch as resolved — and a vault
+names its concepts after filenames (`rag`, `llms`, `ai-agents`) while a person
+types RAG. And the message described search hits as a name collision:
+`rag-architecture-review` is not named RAG, it merely starts with it.
+
+`concepts_named(..., ignore_case=True)` is the fallback before searching, and
+the ambiguity message now distinguishes *names this* from *contains this*. The
+real collision case — two concepts genuinely sharing `Heap` — still reads
+exactly as before, and is tested.
 
 **A grounded quote is not automatically evidence, 2026-09-08.** Fixing the
 evidence display immediately paid for itself: with the real quotes visible, the
@@ -1183,7 +1201,7 @@ touching Python in this repo.*
 | `engine/forge/evolution/` | Phase 4: LangGraph workflow that evaluates new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering docs for the engine, distinct from the vault's own content. |
-| `tests/`, `scripts/` | 1,462 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,465 tests; demos and per-phase validation scripts. |
 
 **Rules that are load-bearing, not stylistic**
 
@@ -1208,12 +1226,12 @@ touching Python in this repo.*
 
 ```bash
 pip install -e ".[dev]"          # needs Python 3.10+
-python -m pytest tests           # 1,420 passed, 42 skipped, offline, no model
+python -m pytest tests           # 1,423 passed, 42 skipped, offline, no model
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by executing them
 python scripts/phase4_demo.py    # the end-to-end story
 
 # the 42 skips are the corpus tests; point them at a vault checkout
-FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,462 passed
+FORGE_TEST_VAULT=/path/to/forge python -m pytest tests   # 1,465 passed
 ```
 
 CI and the whole test suite run **offline** against a scripted provider.
