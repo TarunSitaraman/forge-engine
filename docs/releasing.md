@@ -3,6 +3,20 @@
 A release is a pushed tag. Everything else is automated, and nothing about
 it requires a credential on your machine.
 
+**The tag goes on `forge-engine`, not on the vault.** They are two
+repositories with similar names and the vault is the one you are usually
+standing in. A tag pushed there does nothing except sit on the wrong repo
+looking like a release happened, because the workflow that reacts to it
+lives here. It has happened once already. Before tagging, check both:
+
+```bash
+git remote -v | head -1
+grep '^version' pyproject.toml
+```
+
+The first must name `forge-engine` and the second must match the tag you
+are about to write.
+
 ## The one-time setup
 
 PyPI needs to be told, once, that this repository's release workflow is
@@ -37,8 +51,17 @@ publish if you ever want one.
 4. Tag and push:
 
    ```bash
+   cd /path/to/forge-engine
+   git remote -v | head -1
    git tag -a v0.2.0 -m "0.2.0"
    git push origin v0.2.0
+   ```
+
+   Pushed to the wrong repository, delete it from there and start again:
+
+   ```bash
+   git push origin :refs/tags/v0.2.0
+   git tag -d v0.2.0
    ```
 
 The `release` workflow then checks that the tag matches the version in
