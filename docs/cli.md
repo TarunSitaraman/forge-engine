@@ -446,7 +446,7 @@ forge changes --days 30                  # what changed, from the revision log
 rejects the pending ones that fail. Two ways to fail: a quote that is not in
 its span was never evidence, and a quote that is in its span but comes from a
 fenced code block is grounded and still unreadable as support. When a rule
-tightens, run this rather than re-extracting — re-extraction discards every
+tightens, run this rather than re-extracting, because re-extraction discards every
 cached result to re-derive what a string check settles in seconds.
 
 `forge gaps` reports and never acts. Every finding is a structural fact about
@@ -693,7 +693,7 @@ Five tabs, selected with `1`-`5`:
 
 **Every screen is deterministic.** Nothing on any tab calls a model or touches
 the network, and the title bar carries an `llm calls` counter that stays at `0`
-while you browse the whole vault — a test drives the entire interface and
+while you browse the whole vault, and a test drives the entire interface and
 asserts that count. Model-derived knowledge appears where it exists and is
 absent without complaint where it does not: a concept with no claims says so,
 and names the command that would produce some.
@@ -934,7 +934,7 @@ FRONTMATTER
     FM002: 215    nested-list wikilinks
     FM003: 268    no frontmatter
     FM008: 18     truncated final wikilink
-  283 file(s) have verified repair proposals (NOT applied — approval required)
+  283 file(s) have verified repair proposals (NOT applied, approval required)
 
 LINKS
   4656 total (4113 wiki, 589 markdown)
@@ -942,7 +942,7 @@ LINKS
   unresolved: 282 occurrences across 89 distinct targets
      74x [ambiguous] 'Heap'  candidates=[...Patterns/Heap.md, ...DataStructures/Heap.md]
 
-CONVENTIONS — UNRESOLVED — requires human decision (ADR-001 D3)
+CONVENTIONS  UNRESOLVED, requires human decision (ADR-001 D3)
 ```
 
 "Verified" means the proposed repair was applied in memory and re-parsed
@@ -1186,7 +1186,7 @@ claims, and its relationships. If a bare name matches several concepts it
 
 ```
 $ forge concept Heap
-'Heap' names 2 distinct concepts — specify one:
+'Heap' names 2 distinct concepts. Specify one:
   data-structure/Heap   (data_structure)
   pattern/Heap          (pattern)
 ```
@@ -1256,7 +1256,7 @@ actual identities, and `clear` returns one to undecided.
 **`alias` is what you need after a real extraction run.** A page named
 `rag.md` becomes the concept `rag`; a model reading that page calls the same
 thing `Retrieval-Augmented Generation`. Nothing connects the two names, so the
-extractor proposes a *second* concept for a page that already has one — the
+extractor proposes a *second* concept for a page that already has one: the
 one-canonical-home rule broken by the tool meant to enforce it. An alias says
 the two names are one thing, and the matcher has honoured aliases since Phase
 3; until 2026-09-07 nothing but a hand edit could write one.
@@ -1417,7 +1417,7 @@ Forge is provider-agnostic; selection is configuration, and no paid API is ever
 required.
 
 ```bash
-# Self-hosted and free — the default deployment path.
+# Self-hosted and free. The default deployment path.
 export FORGE_LLM_PROVIDER=ollama
 export FORGE_MODEL_DEFAULT=qwen3:8b
 
@@ -1426,7 +1426,7 @@ export FORGE_LLM_PROVIDER=ollama
 export FORGE_OLLAMA_URL=http://192.168.1.50:11434
 
 # Hosted open-weights, for machines that cannot host a model. The `openai`
-# vendor is a wire format — Groq, OpenRouter, Together, vLLM, llama.cpp and
+# vendor is a wire format: Groq, OpenRouter, Together, vLLM, llama.cpp and
 # most other servers speak it.
 export FORGE_LLM_PROVIDER=cloud
 export FORGE_CLOUD_VENDOR=openai

@@ -34,7 +34,7 @@ engine/forge/
   config.py        typed settings from env, validated at startup
   logging.py       structlog, run_id-correlated
   ids.py           deterministic + time-ordered identity, content hashing
-  domain/          THE MODEL — no I/O, no storage, no LLM
+  domain/          THE MODEL: no I/O, no storage, no LLM
     enums.py         closed vocabularies + tier strength ordering
     provenance.py    Provenance + the floor rule (enforced here)
     entities.py      Source, Document, Span, Concept, Claim, *Link

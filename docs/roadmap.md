@@ -582,7 +582,7 @@ Where the vision's questions become answerable.
       | finding | count |
       | ---- | ---- |
       | `concept_without_claims` | 544 of 545 |
-      | `isolated_concept` | **72** — see below; 71 of these were wrong |
+      | `isolated_concept` | **72** (see below; 71 of these were wrong) |
       | `claim_with_single_source` | 1 |
 
       That run changed the design. 544 of 545 is *one* fact about the state of
@@ -598,7 +598,7 @@ Where the vision's questions become answerable.
       reported page was checked against the vault's own links: 115 links point
       at those 72 pages, and not one comes from a page the graph counts.
       `isolated_concept` was reporting graph degree, and edges only run between
-      concept pages — the `_index.md` hubs that do the linking in a
+      concept pages, and the `_index.md` hubs that do the linking in a
       hub-and-spoke vault are deliberately excluded as navigation, so all 658 of
       their links are dropped. The most-linked page on the "isolated" list had
       **12** inbound links.
@@ -606,7 +606,7 @@ Where the vision's questions become answerable.
       Worse than noisy: a genuinely unreferenced page
       (`DSA/Forge Engineering Constitution.md`) was linked from the index page
       its four siblings are linked from, exactly as the vault's conventions
-      require, and stayed on the list — because that index is navigation. A
+      require, and stayed on the list, because that index is navigation. A
       finding a user cannot clear by doing the right thing teaches them to
       ignore the report.
 
@@ -616,7 +616,7 @@ Where the vision's questions become answerable.
       outgoing links that nothing points at is exactly as unreachable as one
       with none, so an intermediate version requiring degree 0 *and* inbound 0
       was rejected for hiding 52 real cases. The corpus now reports **53
-      findings, all true** — 26 cheat sheets and 8 templates nothing links to,
+      findings, all true**: 26 cheat sheets and 8 templates nothing links to,
       14 problem pages missing from their pattern's index, one interview guide,
       the losing side of three decided name collisions, and one orphaned page.
       A store that predates the count falls back to degree and says so in the

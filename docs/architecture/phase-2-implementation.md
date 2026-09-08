@@ -38,7 +38,7 @@ research, graph or vector databases, web frontend, Obsidian plugin, MCP.
         |
    AdapterRegistry.for_path
         |
-   SourceAdapter.acquire         deterministic — no LLM
+   SourceAdapter.acquire         deterministic, no LLM
         |  -> AcquisitionResult { text, blocks[], hash, metadata }
         |
    change detection (content hash vs stored Source)
@@ -46,7 +46,7 @@ research, graph or vector databases, web frontend, Obsidian plugin, MCP.
         |
    Source + Document registration
         |
-   chunking.build_spans          deterministic — structure-aware
+   chunking.build_spans          deterministic, structure-aware
         |  -> Span[] with page / heading_path / lines / char offsets
         |
    persist (spans + FTS index, one transaction)

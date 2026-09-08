@@ -256,13 +256,13 @@ cheap deterministic methods beat one expensive semantic one:
    +-- metadata filter         kind, tier, confidence, date, source
    |
    v
- FUSION (reciprocal rank fusion — deterministic)
+ FUSION (reciprocal rank fusion, deterministic)
    |
    v
  OPTIONAL RERANK (local cross-encoder; off by default)
    |
    v
- RESULTS  — every hit carries its provenance tier
+ RESULTS: every hit carries its provenance tier
 ```
 
 Two requirements that follow from the principles:

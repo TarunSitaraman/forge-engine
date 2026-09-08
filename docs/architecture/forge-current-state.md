@@ -311,10 +311,10 @@ The intended syntax was a list of wikilinks. What was written is not
 valid for either purpose:
 
 ```yaml
-# 68 files — HARD YAML PARSE FAILURE (ParserError)
+# 68 files: HARD YAML PARSE FAILURE (ParserError)
 related: [[Pattern Index]], [[Template Index]]
 
-# 215 files — parses, but WRONG: yields nested lists, not links
+# 215 files, parses but WRONG: yields nested lists, not links
 related: [[[DFS]], [[BFS]], [[Graph Traversal]]]
 #  -> [[['DFS']], [['BFS']], [['Graph Traversal']]]
 ```

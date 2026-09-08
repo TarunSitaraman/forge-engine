@@ -484,11 +484,11 @@ Recommended order, highest concept density first:
 # Windows / ASUS. Provider and model come from ~/.config/forge/forge.env, so
 # the only thing worth overriding per-run is the timeout.
 #
-# PICK THIS DEliberately — bigger is NOT safer. Ollama retries twice, so the
+# PICK THIS DEliberately: bigger is NOT safer. Ollama retries twice, so the
 # worst case for one call is timeout x 3 before any work resumes. At 900 s that
 # is 45 minutes of waiting per stalled call, and 2026-08-20 measured exactly
 # that: one span burned 2,792 s, of which 2,700 s was three timeouts and 92 s
-# was the attempt that succeeded. The stalls are hangs, not slow completions —
+# was the attempt that succeeded. The stalls are hangs, not slow completions:
 # the retry that worked was among the fastest calls of the run.
 #
 # Successful calls have measured 73-250 s on this hardware. 420 s gives ~1.7x

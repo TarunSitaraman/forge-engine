@@ -47,20 +47,20 @@ against would falsify it.
 
 **`forge concept "RAG"` reported a name collision that did not exist,
 2026-09-08.** The vault's concept is `rag`, named after `rag.md`.
-`concepts_named` compared with `WHERE canonical_name = ?` — case-sensitive —
-so an exact-case miss fell through to a **substring** search, which returned
+`concepts_named` compared with `WHERE canonical_name = ?`, a case-sensitive
+comparison, so an exact-case miss fell through to a **substring** search, which returned
 `rag` and the template `rag-architecture-review`, and the command announced
 *"'RAG' names 2 distinct concepts"*.
 
 Two defects behind one symptom. The lookup was stricter than the link
-resolver, which has always treated a case mismatch as resolved — and a vault
+resolver, which has always treated a case mismatch as resolved, and a vault
 names its concepts after filenames (`rag`, `llms`, `ai-agents`) while a person
 types RAG. And the message described search hits as a name collision:
 `rag-architecture-review` is not named RAG, it merely starts with it.
 
 `concepts_named(..., ignore_case=True)` is the fallback before searching, and
 the ambiguity message now distinguishes *names this* from *contains this*. The
-real collision case — two concepts genuinely sharing `Heap` — still reads
+real collision case, two concepts genuinely sharing `Heap`, still reads
 exactly as before, and is tested.
 
 **A grounded quote is not automatically evidence, 2026-09-08.** Fixing the
@@ -68,20 +68,20 @@ evidence display immediately paid for itself: with the real quotes visible, the
 thin claims from the first extraction run all had one thing in common. They came
 out of fenced code blocks.
 
-`rag.md` is **20% fenced** — Mermaid diagrams and Python examples. The model
+`rag.md` is **20% fenced**: Mermaid diagrams and Python examples. The model
 read a diagram correctly and produced *"In ingestion, source documents are
 chunked, then embedded, then stored in a vector database"*, whose evidence is
 
     DOCS[Source Documents] --> CHUNK[Chunking]
     CHUNK --> EMBED1[Embedding Model]
 
-The grounding check passes — that string really is in the span — and the
+The grounding check passes, because that string really is in the span, and the
 evidence chain is broken anyway, because **diagram syntax asserts nothing a
 reviewer can read as support**. The whole reason the quote is stored is that a
 human can look at it and decide; this one gives them nothing to decide with.
 
 `_from_code_block` now drops those, reported as `quote_from_code_block`
-alongside `ungrounded_quote` — never silently discarded. The test is
+alongside `ungrounded_quote`, never silently discarded. The test is
 deliberately two-sided: a sentence that appears in a paragraph *and* is echoed
 in a code comment is still supported by the paragraph, so a quote is rejected
 only when it is inside a fence and absent from the prose.
@@ -89,14 +89,14 @@ only when it is inside a fence and absent from the prose.
 The rule applies **retroactively** too: `proposals audit-grounding` now checks
 both rules, so `--reject --no-dry-run` clears the code-block claims already in a
 store. That path matters because the alternative is re-extraction, and
-`EXTRACTOR_VERSION` is part of the derivation key — bumping it to force a re-run
+`EXTRACTOR_VERSION` is part of the derivation key, so bumping it to force a re-run
 discards every cached result to re-derive what a string check settles in
 seconds.
 
 **And the audit's own closing advice was wrong the first time it ran under
 two rules.** It printed *"These were admitted under the pre-2026-08-19
-bag-of-words rule"* over six code-block quotes admitted the previous afternoon
-— a sentence that names a cause it cannot know, hardcoded when there was only
+bag-of-words rule"* over six code-block quotes admitted the previous afternoon:
+a sentence that names a cause it cannot know, hardcoded when there was only
 one way to fail. It now reports each rule's count separately. Small, and the
 same defect class as a metric measuring something other than its label:
 `isolated_concept`, `grounded`, and this, all in two days.
@@ -104,27 +104,27 @@ same defect class as a metric measuring something other than its label:
 **Two lessons stack here.** The display bug hid the diagnosis: while every
 claim showed the same file header, "some claims are thin" was a vague
 impression, and one look at the real quotes made it a mechanical rule. And
-"grounded" was doing less work than its name promised — the check answers *is
+"grounded" was doing less work than its name promised: the check answers *is
 this string present*, which is necessary and not sufficient for *is this
 support*.
 
 **`forge proposals show` printed the wrong evidence, 2026-09-07.** It showed
 the first 110 characters of the evidence span instead of the quote that
-grounds the claim — and the quote was in the proposal all along, in
+grounds the claim, and the quote was in the proposal all along, in
 `operation.details["evidence_quote"]`, put there by `claim_proposal` and
 verified by `_grounded` before the proposal existed.
 
 The cost is precise. A span is a couple of thousand characters, so on the first
-real extraction run two claims with nothing in common —
+real extraction run two claims with nothing in common,
 *"Retrieval failures cannot be fixed by prompt engineering"* and *"In
 ingestion, source documents are chunked, then embedded, then stored in a vector
-database"* — both displayed the same document header,
+database"*, both displayed the same document header,
 `# RAG (Retrieval-Augmented Generation) *One authoritative reference…`. A
 reviewer had nothing to decide on. **This is the command where a human approves
 model output**, and it was showing them a header.
 
 The gate "from a claim, reach the exact source span in one interaction" was
-tested and passing the whole time — `test_gate_one_a_claim_reaches_its_exact_
+tested and passing the whole time on the API. `test_gate_one_a_claim_reaches_its_exact_
 source_span_in_one_request` asserts the API returns the span's verbatim text.
 The API was right and the CLI was wrong, and no test covered
 `proposals show` at all. **A gate proved on one interface is not proved on the
@@ -136,8 +136,8 @@ the start, plus the concept the claim is about. Three tests, checked by
 reverting.
 
 **`forge identity alias`, 2026-09-07.** The matcher has consulted
-config-declared aliases since Phase 3 — `ConceptMatcher.match` checks
-`IdentityState.ALIAS_MATCH` before anything else — and `IdentityConfig` could
+config-declared aliases since Phase 3 (`ConceptMatcher.match` checks
+`IdentityState.ALIAS_MATCH` before anything else), and `IdentityConfig` could
 store and round-trip them. **Nothing could write one but a hand edit**, so the
 map was empty on the only vault that exists, and the feature was dead in
 practice while looking alive in the code.
@@ -146,8 +146,8 @@ The first extraction run made the cost concrete. `Technologies/Docs/rag.md`
 becomes the concept `rag` by filename. A model reading that page calls the same
 thing `Retrieval-Augmented Generation`. `normalize()` maps those to `rag` and
 `retrievalaugmentedgeneration`, so no lexical route connects them, and the
-extractor correctly proposed a **new** concept for a page that already had one
-— the vault's one-canonical-home rule broken by the tool built to enforce it.
+extractor correctly proposed a **new** concept for a page that already had one:
+the vault's one-canonical-home rule broken by the tool built to enforce it.
 
 Worth separating the two failures, because only one is the engine's: matching
 did exactly what it should with the configuration it had. The defect was that
@@ -166,7 +166,7 @@ This run proposed 17 new concepts (11 of the 28 matched existing ones, so the
 identity layer worked silently), of which roughly 12 are things the vault would
 want a page for: `Chunking`, `Reranker`, `Reciprocal Rank Fusion`, `BM25`,
 `Hybrid search`, `Metadata filtering`, `Embedding Model`, `Agentic RAG`,
-`Recall@k`. The failures are **over-granularity, not nonsense** — `Retrieval`,
+`Recall@k`. The failures are **over-granularity, not nonsense**: `Retrieval`,
 `Generation` and `Citation` are too generic to own a page. That is a
 tractable prompt problem where `VARCHAR(n)` was not.
 
@@ -175,7 +175,7 @@ carefully, though: `proposals audit-grounding` re-checks claims that already
 passed the same `_grounded` test on the way in, so it can only ever agree with
 itself. `forge.evaluation.extraction` documents this exact trap. What it
 establishes is that the check is consistent and nothing corrupted a quote in
-storage — not that the model never fabricates one. Only the *dropped* count, in
+storage, not that the model never fabricates one. Only the *dropped* count, in
 the denominator, measures that.
 
 **The claims are worth keeping, which was the open question.** "Retrieval
@@ -198,7 +198,7 @@ link is gone is not history, it is a false statement about the vault.**
 Two things about how it was found are worth keeping.
 
 It was found **on a second machine**. The same vault, freshly bootstrapped
-there, reported 2,799 edges where this checkout reported 2,822 — and the
+there, reported 2,799 edges where this checkout reported 2,822, and the
 difference was exactly the 23 corrected links. A store that has only ever been
 bootstrapped once cannot show this; it takes a store with history, or a second
 one without.
@@ -212,7 +212,7 @@ about that rule. Corrected in place, with the reason.
 `forge bootstrap --apply` now deletes the bootstrap-authored edges the current
 plan does not produce, and reports the count on a `pruned` line. Scoped by
 provenance agent: only edges whose agent is `BOOTSTRAP_VERSION` are candidates,
-so a relationship a human approved or a model proposed is untouched — those are
+so a relationship a human approved or a model proposed is untouched: those are
 superseded through activation, never deleted here. A test asserts a
 hand-authored edge survives a re-bootstrap.
 
@@ -231,15 +231,15 @@ Measured by resolving every wikilink in the vault and counting inbound links
 per reported page: 115 links point at the 72 "isolated" pages, and **zero**
 come from a page the graph counts. Exactly one page has no inbound link at
 all. The worst case is `Technologies/Docs/vector-databases.md`, reported
-isolated with **12** inbound links — one of the better-connected pages in the
+isolated with **12** inbound links, one of the better-connected pages in the
 corpus.
 
 The cause is `bootstrap.is_concept_page()` meeting the corpus's linking
 convention. Edges come only from links between concept pages, and that
 predicate excludes `_index.md` hubs, `00_Index/` pages and numbered
 project/course docs as navigation. The exclusion is defensible: a hub is not a
-concept. But that vault links hub-and-spoke — `Technologies/Docs/_index.md`
-is what points at every technology doc — so those links are dropped, 658 of
+concept. But that vault links hub-and-spoke: `Technologies/Docs/_index.md`
+is what points at every technology doc, so those links are dropped, 658 of
 them, which `forge bootstrap` already reports as `outside_the_graph`. The
 number was there all along; nothing connected it to the gap report.
 
@@ -256,8 +256,8 @@ to ignore the report.
 graph as concepts, which is wrong. The store could not answer "does any page
 link here?" at all: it holds `ClaimLink`s between concepts and nothing about
 links from non-concept pages. So `build_plan` now counts inbound links per
-concept over **every** page in the vault — the same pass that already has every
-resolved link in hand — `forge bootstrap --apply` writes them to a new
+concept over **every** page in the vault, in the same pass that already has every
+resolved link in hand. `forge bootstrap --apply` writes them to a new
 `concept_inbound_links` table (schema v6), and `research.gaps` reads that count
 instead of graph degree.
 
@@ -281,7 +281,7 @@ unreferenced_concepts()` returns `None` in that case, never `[]`.
 defect this fix introduced. The counts are replaced wholesale each bootstrap, so
 a concept without a row was not seen in the last pass: its page has been deleted
 or renamed. Deleting a vault page and re-bootstrapping then reported the
-leftover concept as isolated — "nothing links to this page", about a page that
+leftover concept as isolated: "nothing links to this page", about a page that
 no longer exists. `concept_inbound` now returns `None` for a missing row, the
 detector skips those, and `forge bootstrap` reports them on their own line
 (`stale: N concept(s) in the store whose page is no longer in the vault`).
@@ -295,12 +295,12 @@ beside it carrying the number that means unreachable.
 
 **The throttle was never reachable from the engine's own commands,
 2026-09-07.** `ThrottledProvider` was written in August for exactly the
-problem a free cloud tier poses — its limit is requests per minute, not
+problem a free cloud tier poses: its limit is requests per minute, not
 concurrency, so extraction issues calls as fast as it can and collects 429s
 that the retry backoff only reacts to afterwards. But it was wired only into
 `scripts/concept_extraction_eval.py` and `scripts/assessment_eval.py`, through
 their `--sleep` flag. **No `forge` command could ask for pacing**, which meant
-`forge ingest --extract` against Groq's free tier could not be run at all —
+`forge ingest --extract` against Groq's free tier could not be run at all:
 the one step the entire knowledge layer depends on, unrunnable against the
 provider actually available, while the code to fix it had existed for weeks in
 a module nothing but two scripts imported.
