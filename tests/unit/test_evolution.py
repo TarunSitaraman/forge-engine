@@ -1289,3 +1289,73 @@ class TestTheQuoteCheck:
 
         assert batch.records[0].classification is AssessmentClass.INSUFFICIENT_EVIDENCE
         assert "not found" in batch.corroboration.demotions[0]["reason"]
+
+
+class TestEveryModelChangeIsTraceable:
+    """Phase 5's gate: every model change traces to a workflow id and a Revision.
+
+    The roadmap carried this box unticked with the annotation "(already true)",
+    which is an assertion rather than a measurement, and no test in the suite
+    mentioned `workflow_run_id` at all. These are what make it true.
+
+    The property matters because it is what "the model changed something and a
+    human can find out why" reduces to. A Revision without a workflow id says
+    a change happened; the workflow id is what leads back to the run, the
+    source that prompted it, and the assessment that argued for it.
+    """
+
+    def _revisions(self, store, claim_id):
+        return list(store.revisions_for(EntityType.CLAIM, claim_id))
+
+    def test_a_refinement_records_a_revision_carrying_the_workflow_id(self, knowledge):
+        store, claim = knowledge["store"], knowledge["claim"]
+        before = len(self._revisions(store, claim.id))
+
+        EvolutionActivator(store).activate(
+            approved_proposal(store, knowledge, AssessmentClass.REFINES, refined="Sharper.")
+        )
+
+        written = [
+            r for r in self._revisions(store, claim.id) if r.workflow_run_id is not None
+        ]
+        assert len(self._revisions(store, claim.id)) > before, "no Revision was written"
+        assert written, "a model change was recorded with no workflow id"
+        assert all(r.workflow_run_id == "wf1" for r in written)
+
+    def test_a_conflict_records_a_revision_carrying_the_workflow_id(self, knowledge):
+        store, claim = knowledge["store"], knowledge["claim"]
+
+        EvolutionActivator(store).activate(
+            approved_proposal(store, knowledge, AssessmentClass.POTENTIAL_CONFLICT)
+        )
+
+        written = [
+            r for r in self._revisions(store, claim.id) if r.workflow_run_id is not None
+        ]
+        assert written, "disputing a claim is a model change and must be traceable"
+        assert all(r.workflow_run_id == "wf1" for r in written)
+
+    def test_the_workflow_id_reaches_the_provenance_of_what_is_created(self, knowledge):
+        """Not only the Revision. The new claim itself has to name the run.
+
+        A Revision is the log; provenance is what travels with the object. If
+        only the log carried it, deleting revisions would sever the trace.
+        """
+        store = knowledge["store"]
+        result = EvolutionActivator(store).activate(
+            approved_proposal(store, knowledge, AssessmentClass.REFINES, refined="Sharper still.")
+        )
+
+        created = store.get_claim(result.entity_id)
+        assert created.provenance.workflow_run_id == "wf1"
+
+    def test_the_id_leads_back_to_the_proposal_that_argued_for_it(self, knowledge):
+        """`cause` is the other half. Together they answer "why did this change?"."""
+        store, claim = knowledge["store"], knowledge["claim"]
+        proposal = approved_proposal(store, knowledge, AssessmentClass.REFINES, refined="Yet sharper.")
+
+        EvolutionActivator(store).activate(proposal)
+
+        traced = [r for r in self._revisions(store, claim.id) if r.workflow_run_id == "wf1"]
+        assert traced
+        assert all(r.cause == proposal.id for r in traced)

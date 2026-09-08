@@ -753,6 +753,9 @@ class SqliteStore:
                     _as_dict(retired),
                     superseded_by=new_claim.id,
                     cause=cause or new_claim.id,
+                    # The retired claim's own provenance names the run that
+                    # created it, which is not the run that retired it.
+                    workflow_run_id=new_claim.provenance.workflow_run_id,
                 )
             )
             self._append(record_create(EntityType.CLAIM, new_claim.id, _as_dict(new_claim)))
@@ -833,6 +836,7 @@ class SqliteStore:
         not depend on timestamp resolution; two revisions written in the same
         millisecond must still be orderable.
         """
+        revision = _traced(revision)
         row = self._conn.execute("SELECT COALESCE(MAX(seq), 0) + 1 AS nxt FROM revisions").fetchone()
         self._conn.execute(
             "INSERT OR REPLACE INTO revisions(id, entity_type, entity_id, op, created_at, seq, data)"
@@ -1458,6 +1462,32 @@ def _split_fingerprint(value: str) -> tuple[str, ...] | None:
     if len(parts) < len(_FINGERPRINT_FIELDS):
         return None
     return (parts[0], parts[1], "|".join(parts[2:-1]), parts[-1])
+
+
+def _traced(revision: Revision) -> Revision:
+    """Carry a model change's workflow run id onto the Revision recording it.
+
+    Phase 5's gate is that every model change traces to a workflow id and a
+    Revision. The Revision half was true; the workflow half was not, and the
+    roadmap carried the box annotated "(already true)" with no test in the
+    suite so much as naming `workflow_run_id`.
+
+    Read out of the entity's own provenance in ``after`` rather than passed in
+    by each caller. The entity is the thing that knows which run produced it,
+    and there are fourteen places in this file that write a revision: a
+    parameter every one of them has to remember is a parameter one of them
+    will eventually forget. An entity with no provenance, or a deterministic
+    one with no run behind it, is left alone.
+
+    Supersession is the exception and passes its own, because the run that
+    retires a claim is the one that produced its replacement, not the one that
+    created the claim years earlier.
+    """
+    if revision.workflow_run_id:
+        return revision
+    provenance = (revision.after or {}).get("provenance") or {}
+    run = provenance.get("workflow_run_id")
+    return revision.model_copy(update={"workflow_run_id": run}) if run else revision
 
 
 def _describe_drift(claim_id: str, before: str, after: str) -> str:

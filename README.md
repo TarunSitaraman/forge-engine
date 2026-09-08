@@ -72,7 +72,7 @@ carries a model-call counter that stays at zero to prove it. With nothing beyond
 the core install, `forge index && forge diagnostics` reports the same findings
 as text.
 
-~30,600 lines of Python, 1,477 tests that need no model, no paid API required.
+~30,600 lines of Python, 1,485 tests that need no model, no paid API required.
 
 ## Where it is going
 
@@ -242,21 +242,22 @@ and serves all of it through a dashboard, a read-only HTTP API and an MCP
 server.
 
 Two things are open, and neither is finished work being described as done.
-**Phase 5** still has two gates unticked: extraction has run against this
-corpus but has not been scored against its 545 filename-derived concepts, so
-the knowledge half is demonstrated rather than measured at scale. **Phase 7**,
-an Obsidian plugin, is not started. See [`docs/roadmap.md`](docs/roadmap.md),
+**Phase 5** has one gate left: extraction has run against this corpus but has
+not been scored against its 545 filename-derived concepts, so the knowledge
+half is demonstrated rather than measured at scale. The harness for it is
+built and re-verified; only the model run is outstanding. **Phase 7**, an
+Obsidian plugin, is not started. See [`docs/roadmap.md`](docs/roadmap.md),
 where every gate is ticked or not.
 
 ```bash
 forge demo                       # the end-to-end story, in a vault it writes
-python -m pytest tests           # 1,477 tests, no model needed
+python -m pytest tests           # 1,485 tests, no model needed
 bash scripts/validate_phase4.sh  # proves the phase's exit criteria by running them
 ```
 
-In this repository 1,435 pass and 42 skip: those 42 are integration tests that
+In this repository 1,443 pass and 42 skip: those 42 are integration tests that
 run against the private Markdown vault, and they skip when it is not checked
-out. Point them at a checkout to run the full 1,477:
+out. Point them at a checkout to run the full 1,485:
 
 ```bash
 FORGE_TEST_VAULT=/path/to/forge python -m pytest tests
@@ -278,7 +279,7 @@ The suite is otherwise complete and requires no model. CI and every test run
 | `engine/forge/evolution/` | LangGraph workflow evaluating new evidence against existing knowledge. |
 | `engine/forge/llm/` | Provider abstraction: ollama / cloud / mock. |
 | `docs/` | Engineering documentation: architecture, ADRs, research, test strategy. |
-| `tests/`, `scripts/` | 1,477 tests; demos and per-phase validation scripts. |
+| `tests/`, `scripts/` | 1,485 tests; demos and per-phase validation scripts. |
 
 Start with [`docs/`](docs/README.md): the
 [current-state audit](docs/architecture/forge-current-state.md),

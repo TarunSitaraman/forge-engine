@@ -305,7 +305,19 @@ with a real model**, and populate the graph at corpus scale.
       works (the silent-no-op defect `_ingest_one` documents), and that
       extraction over stored spans does not re-chunk or bump the document
       version.
-- [ ] Every model change traces to a workflow id and a `Revision` *(already true)*
+- [x] **Every model change traces to a workflow id and a `Revision`,
+      2026-09-08.** This box carried the annotation "(already true)" and was
+      not. The Revision half held; the workflow half did not, and no test in
+      the suite so much as named `workflow_run_id`. Writing the four that do
+      (`TestEveryModelChangeIsTraceable`) failed two of them immediately:
+      `supersede_claim` wrote both of its revisions with no workflow id, so a
+      **refinement**, the model's most consequential change, was the one that
+      could not be traced back to the run that made it. The id is now stamped
+      from the entity's own provenance inside `_append`, rather than passed by
+      each of the fourteen callers that write a revision, because a parameter
+      every caller must remember is one a caller will forget. Supersession
+      passes its own: the run that retires a claim is the one that produced
+      the replacement, not the one that created the claim.
 - [x] **Graph populated deterministically, 2026-09-06.** `forge bootstrap
       --apply` over the vault: **545 concepts, 2,752 RELATED_TO edges, 0 LLM
       calls**, 125 navigation and template pages skipped. Graph stats: mean
@@ -327,7 +339,24 @@ with a real model**, and populate the graph at corpus scale.
       would be arithmetic rather than a finding. One command when the key is
       next available:
 
-          python3 scripts/concept_extraction_eval.py --provider cloud --limit 40
+          python3 scripts/concept_extraction_eval.py --provider cloud --limit 40 --sleep 20
+
+      **`--sleep` is not optional, and this line said so only after somebody
+      tried the command.** It defaults to 0, and the version printed here
+      until 2026-09-08 omitted it. A free hosted tier limits tokens per minute
+      rather than requests: with `max_tokens` reserved against an 8,000 TPM
+      budget the ceiling is about two calls a minute however they are spaced,
+      so an unpaced run spends its budget in the first few seconds and 429s
+      for the rest. Each failed page is recorded incomplete rather than
+      crashing, so the result would have been a report full of holes that took
+      an hour to produce. The script now prints its call budget and expected
+      wall clock before starting, and warns when cloud is paired with no
+      pacing. At `--sleep 20` the 240 calls are about 80 minutes.
+
+      The harness was re-run offline against the vault on 2026-09-08, after a
+      week of extractor changes: 544 concept pages, seeded sample, and every
+      adversarial probe came back dropped. What remains is the model run,
+      which needs a key.
 
       Building it produced one result already, out of the offline mode, and a
       fix. The scripted provider pairs every verbatim quote with an

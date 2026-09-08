@@ -2,8 +2,11 @@
 """Score concept extraction against the vault's own 545 page names.
 
     python3 scripts/concept_extraction_eval.py                        # scripted (offline)
-    python3 scripts/concept_extraction_eval.py --provider cloud --limit 40
+    python3 scripts/concept_extraction_eval.py --provider cloud --limit 40 --sleep 20
     python3 scripts/concept_extraction_eval.py --provider ollama --model qwen3:8b
+
+`--sleep` is not optional on a rate-limited hosted key, and the run prints its
+call budget and expected wall clock before it starts.
 
 **The reference set nobody wrote for this purpose.** `forge bootstrap` derives
 545 concepts from the vault's directory listing with zero model calls: a human
@@ -28,7 +31,8 @@ scoring itself. Only a real provider measures extraction quality.
 
 **Cost.** One page is up to `--max-spans` concept calls plus the same number of
 claim calls. Default `--limit 40` and `--max-spans 3` is roughly 240 calls,
-which is what a rate-limited hosted key will tolerate in one sitting. Raise
+which is what a rate-limited hosted key will tolerate in one sitting, and at
+`--sleep 20` that is about 80 minutes. Raise
 `--limit` when you have the budget; the sample is seeded, so a larger run is a
 superset of nothing and must be compared as its own measurement.
 """
@@ -331,6 +335,36 @@ def main() -> int:
         ))
         for page in sample
     ]
+
+    # What this run will cost, before it starts, in the same spirit as
+    # `forge extract-plan`. One page is up to --max-spans concept calls plus
+    # the same number of claim calls.
+    calls = len(sample) * args.max_spans * 2
+    print(f"budget     : up to {calls} model call(s)", file=sys.stderr)
+    if args.provider != "scripted":
+        if args.sleep:
+            minutes = calls * args.sleep / 60
+            print(
+                f"pacing     : {args.sleep:g}s between calls, so at least "
+                f"{minutes:.0f} minute(s) of wall clock",
+                file=sys.stderr,
+            )
+        else:
+            # Measured, not guessed. A hosted free tier limits tokens per
+            # minute, not requests: with max_tokens reserved against an 8,000
+            # TPM budget the ceiling is about two calls a minute however the
+            # requests are spaced, and an unpaced run spends its budget in the
+            # first few seconds and then 429s for the rest of the run. Each
+            # failed page is recorded as incomplete rather than crashing the
+            # run, so the result is a report full of holes that took an hour
+            # to produce.
+            print(
+                "pacing     : NONE (--sleep 0). On a rate-limited key this "
+                "will 429 within seconds.\n"
+                "             Free hosted tiers limit tokens per minute, not "
+                "requests: try --sleep 20.",
+                file=sys.stderr,
+            )
 
     current: dict = {"page": sample[0] if sample else None}
     if args.provider == "scripted":
