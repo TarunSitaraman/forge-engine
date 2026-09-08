@@ -746,6 +746,106 @@ def dash(
     raise typer.Exit(code=run_dashboard(settings, build_snapshot(settings)))
 
 
+# --------------------------------------------------------------------------
+# Help panels.
+#
+# Thirty-eight commands in one alphabetical list is a reference, not an
+# interface: it tells a new reader everything except where to start. Grouping
+# them answers that, and keeping the map here rather than as a keyword argument
+# on thirty-eight decorators means the grouping can be read, and corrected, in
+# one place.
+#
+# The panels are ordered by how far into the tool you are, so `forge --help`
+# reads top to bottom as a path: look at a vault, then model what is in it, then
+# ask it questions.
+
+HELP_PANELS: dict[str, tuple[str, ...]] = {
+    "Start here": ("demo", "index", "dash", "diagnostics", "status"),
+    "Read the vault": (
+        "corpus-stats",
+        "inspect",
+        "search",
+        "ask",
+        "shell",
+        "tui",
+        "serve",
+    ),
+    "Build the knowledge model": (
+        "bootstrap",
+        "ingest",
+        "extract-plan",
+        "proposals",
+        "activate",
+        "relationships",
+        "identity",
+        "embeddings",
+    ),
+    "Question what it knows": (
+        "concepts",
+        "concept",
+        "claim",
+        "documents",
+        "graph",
+        "belief",
+        "changes",
+        "gaps",
+        "question",
+        "evolve",
+        "workflow",
+    ),
+    "Maintain and integrate": ("backup", "restore", "upstream", "mcp"),
+    "Measure": ("model-test", "extraction-eval", "retrieval-eval"),
+}
+
+
+def _command_name(info: Any) -> str:
+    """The name a command is invoked by, whether or not it was given one."""
+    if info.name:
+        return info.name
+    callback = getattr(info, "callback", None)
+    return getattr(callback, "__name__", "").replace("_", "-")
+
+
+def assign_help_panels(target: typer.Typer, panels: dict[str, tuple[str, ...]]) -> list[str]:
+    """Put every command in a panel and order them. Returns the names with no panel.
+
+    Returning the leftovers rather than silently ignoring them is what keeps a
+    new command from disappearing into an unlabelled group at the bottom of the
+    help: a test asserts the list is empty, so adding a command without deciding
+    where it belongs fails the suite instead of shipping.
+
+    The registration list is also sorted to match. Typer draws panels in the
+    order it first meets one, which is the order the phase modules happen to
+    attach their commands, so without this the map above would describe the
+    grouping but not the sequence — `Measure` came third because `model-test` is
+    defined early in this file.
+    """
+    rank: dict[str, tuple[int, int]] = {}
+    of: dict[str, str] = {}
+    for panel_index, (panel, names) in enumerate(panels.items()):
+        for name_index, name in enumerate(names):
+            of[name] = panel
+            rank[name] = (panel_index, name_index)
+
+    unplaced: list[str] = []
+    for info in list(target.registered_commands) + list(target.registered_groups):
+        name = _command_name(info)
+        panel = of.get(name)
+        if panel is None:
+            unplaced.append(name)
+        else:
+            info.rich_help_panel = panel
+
+    # Anything unplaced sorts last rather than first, so a command that has not
+    # been given a home does not open the help.
+    last = (len(panels), 0)
+    target.registered_commands.sort(key=lambda i: rank.get(_command_name(i), last))
+    return unplaced
+
+
+assign_help_panels(app, HELP_PANELS)
+
+
 def main() -> None:  # pragma: no cover
     try:
         app()
