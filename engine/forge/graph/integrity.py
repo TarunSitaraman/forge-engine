@@ -1,7 +1,7 @@
 """Graph integrity diagnostics.
 
 Detects structural problems and **reports them**. Nothing is repaired
-automatically — the same discipline the frontmatter diagnostics follow, for the
+automatically, the same discipline the frontmatter diagnostics follow, for the
 same reason: an automatic repair to a knowledge graph is an unreviewed change
 to what the user believes.
 
@@ -49,8 +49,8 @@ CODE_DESCRIPTIONS: dict[IntegrityCode, str] = {
         "Claim requires evidence by its provenance tier but has none."
     ),
     IntegrityCode.ORPHAN_CONCEPT: (
-        "Concept has no origin proposal, no claims, and no canonical vault page "
-        "— nothing explains why it exists."
+        "Concept has no origin proposal, no claims, and no canonical vault page; "
+        "nothing explains why it exists."
     ),
     IntegrityCode.SELF_RELATIONSHIP: "Relationship connects an entity to itself.",
 }

@@ -5,7 +5,7 @@ of them are easy to regress into something that reassures:
 
 * **Junk beats recall.** An extractor emitting every name in the vocabulary
   scores 1.000 self-recovery. If that run does not also show its junk, the
-  headline is worthless — this is the failure the labelled set was built for
+  headline is worthless; this is the failure the labelled set was built for
   and it has to hold on this set too.
 * **Off-vocabulary is not junk.** A concept the vault has no page for is
   extraction working. Folding it into junk would score a correct extractor as

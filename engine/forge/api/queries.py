@@ -673,7 +673,7 @@ CAPABILITIES: dict[str, Callable[..., Any]] = {
     "list_recent_revisions": list_recent_revisions,
     "search_spans": search_spans,
     "find_path": find_path,
-    # Phase 9 — the six vision questions.
+    # Phase 9, the six vision questions.
     "get_belief": get_belief,
     "list_questions": list_questions,
     "get_question": get_question,

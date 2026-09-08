@@ -48,7 +48,7 @@ def configure_logging(level: str = "INFO", fmt: str = "console") -> None:
         ),
         # Route through stdlib logging rather than structlog's PrintLogger.
         # PrintLogger binds the output stream at construction time and, with
-        # cache_logger_on_first_use, holds it for the process lifetime — so any
+        # cache_logger_on_first_use, holds it for the process lifetime, so any
         # caller that swaps sys.stderr (test runners and CLI harnesses do)
         # leaves logging writing to a closed file. Logging must never be able
         # to crash the program that is logging.

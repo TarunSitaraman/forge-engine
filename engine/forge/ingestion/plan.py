@@ -1,6 +1,6 @@
 """What would an extraction run cost, before you start it? Zero model calls.
 
-Extraction is the only expensive thing this engine does — measured at 49.0 s
+Extraction is the only expensive thing this engine does, measured at 49.0 s
 per call on the 8B local box, and 3,372 calls to cover the vault. Until now the
 only way to learn a run's size was to start it and watch, which is exactly
 backwards for a decision about whether to spend three hours.
@@ -14,7 +14,7 @@ this module computes it.
 **It calls the real selection and the real key.** ``ExtractionPlanner`` uses
 ``CandidateExtractor._select`` and ``extraction_key`` rather than restating
 their rules. A cost preview that reimplements either would drift away from what
-actually runs — and would then be worse than no preview, because it would be
+actually runs, and would then be worse than no preview, because it would be
 believed. The same reasoning that made ``_spans_for_source`` filter by chunker:
 predicting the cost of the wrong chunking is how 98 spans were reported as 208.
 
@@ -153,7 +153,7 @@ class ExtractionPlanner:
         # The derivation key is the *content* hash, so two files holding the
         # same bytes share one cache entry: the first pays, the second is a
         # hit. Pricing them independently inflated the fixture vault's estimate
-        # from 16 calls to 18, and would inflate the real one further — six
+        # from 16 calls to 18, and would inflate the real one further, six
         # project packs contain an `01-overview.md`, and `_index.md` recurs
         # throughout. Discovery order is shared with the run, so whichever
         # source the run charges is the one charged here.

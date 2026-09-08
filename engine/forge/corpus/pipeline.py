@@ -37,7 +37,7 @@ class IndexResult:
     persisted_sources: int = 0
     persisted_documents: int = 0
     persisted_spans: int = 0
-    #: Always 0 in Phase 1 — indexing is fully deterministic.
+    #: Always 0 in Phase 1, indexing is fully deterministic.
     llm_calls: int = 0
     reports_written: list[str] = field(default_factory=list)
 
@@ -84,7 +84,7 @@ class IndexPipeline:
     def _persist(self, index: CorpusIndex, changes: ChangeSet, result: IndexResult) -> None:
         """Persist only what changed.
 
-        Unchanged sources are skipped entirely — no re-parse, no re-span, no
+        Unchanged sources are skipped entirely; no re-parse, no re-span, no
         write. This is the mechanism behind incremental processing.
         """
         by_path = index.by_path()

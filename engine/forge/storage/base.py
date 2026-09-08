@@ -28,7 +28,7 @@ from ..domain import (
 
 @runtime_checkable
 class SourceStore(Protocol):
-    """Sources, documents, and spans — the evidence chain."""
+    """Sources, documents, and spans: the evidence chain."""
 
     def put_source(self, source: Source) -> None: ...
     def get_source(self, source_id: str) -> Source | None: ...

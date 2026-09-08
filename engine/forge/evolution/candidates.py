@@ -1,9 +1,9 @@
-"""Deterministic candidate narrowing — what might this evidence affect?
+"""Deterministic candidate narrowing: what might this evidence affect?
 
 **The rule this module exists to enforce:** the LLM is never handed the corpus
 and asked what is relevant. It is handed a small, already-justified candidate
-set. That is not only a cost decision — though it is that too, since scanning
-600 documents per model call is unaffordable — it is a groundedness decision.
+set. That is not only a cost decision, though it is that too, since scanning
+600 documents per model call is unaffordable; it is a groundedness decision.
 A model asked "what in my knowledge base does this affect?" will answer
 fluently and unverifiably. A model asked "does this evidence bear on *this*
 claim?" can be checked.
@@ -24,7 +24,7 @@ Selectors, in the order they are applied (cheapest and most certain first):
 ===================  ==========================================================
 
 Embeddings are consulted only when a provider is genuinely available, and are
-not used at all by default — Phase 3 measured them as a retrieval regression
+not used at all by default, Phase 3 measured them as a retrieval regression
 (``docs/research/retrieval-baseline.md``), so switching them on here without
 new evidence would contradict a measurement.
 """
@@ -84,7 +84,7 @@ class NarrowingResult:
 class CandidateNarrower:
     """Finds which canonical concepts new evidence might affect.
 
-    Entirely deterministic. Makes **zero** LLM calls — asserted in tests, since
+    Entirely deterministic. Makes **zero** LLM calls, asserted in tests, since
     "deterministic first" is a claim that decays silently if nothing checks it.
     """
 
@@ -154,7 +154,7 @@ class CandidateNarrower:
                 take(concept, "heading", f"{concept.canonical_name!r} appears in a heading")
 
         # 4. User-decided identities. If the evidence mentions a colliding bare
-        # name the user has resolved, the resolved concept is a candidate —
+        # name the user has resolved, the resolved concept is a candidate,
         # this is the identity config doing work rather than sitting inert.
         for name, qualified in self.identity.resolved_names().items():
             if len(name) >= MIN_NAME_CHARS and normalize(name) in haystack:
@@ -167,7 +167,7 @@ class CandidateNarrower:
                         )
 
         # 5. Lexical retrieval. Uses the evidence's own headings as the query,
-        # which is what a person would type — the section titles are the
+        # which is what a person would type, the section titles are the
         # densest available summary of what the new material is about.
         for concept in self._lexical(spans, concepts):
             take(*concept)

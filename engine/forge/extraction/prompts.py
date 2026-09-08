@@ -4,8 +4,8 @@ Prompts are versioned because they participate in the derivation key: changing
 a prompt must invalidate cached extractions, or the store ends up holding a mix
 of results from different instructions with no way to tell them apart.
 
-Kept as data, not logic. The rules that matter — what may be asserted, what
-must be evidenced — are enforced in code, not requested politely here.
+Kept as data, not logic. The rules that matter, what may be asserted, what
+must be evidenced, are enforced in code, not requested politely here.
 """
 
 from __future__ import annotations

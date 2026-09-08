@@ -10,7 +10,7 @@ back to them.
 and every list on every tab comes from the vault on disk and the derived store.
 It works on the whole corpus, with no API key, no network and no rate limit,
 and it works the same on a 6-file vault and a 670-file one. Model-derived
-knowledge — claims, syntheses — appears when it exists and is absent without
+knowledge (claims, syntheses) appears when it exists and is absent without
 complaint when it does not, rather than the screen pretending the vault is
 broken because nothing has been extracted yet.
 
@@ -64,7 +64,7 @@ TABS: tuple[tuple[str, str], ...] = (
     ("gaps", "Gaps"),
 )
 
-# One palette, shared with `forge tui` by convention rather than by import —
+# One palette, shared with `forge tui` by convention rather than by import,
 # they are separate screens and a shared stylesheet would couple their layouts.
 BG = "#0b0e14"
 PANEL = "#11151c"
@@ -91,7 +91,7 @@ def textual_available() -> bool:
 
 # --------------------------------------------------------------------------
 # Rendering. Pure functions over the snapshot and the API models, returning
-# Rich markup — no widgets, no Textual import, directly testable.
+# Rich markup; no widgets, no Textual import, directly testable.
 # --------------------------------------------------------------------------
 
 
@@ -99,7 +99,7 @@ def escape(text: str) -> str:
     """Vault text is data, not markup.
 
     A note is entitled to contain `[[Heap]]` or `[dsa/pattern]`, and an
-    unescaped bracket is swallowed as a style tag — taking the rest of the line
+    unescaped bracket is swallowed as a style tag, taking the rest of the line
     with it. Every string that came from the vault goes through here.
     """
     return str(text).replace("[", r"\[")
@@ -136,7 +136,7 @@ def _row(left: str, right: str = "") -> str:
 def render_header(snapshot: VaultSnapshot, *, llm_calls: int = 0) -> str:
     """The title bar: what this vault is, in one line.
 
-    `llm calls` is here for the same reason it is in `forge tui` — the design
+    `llm calls` is here for the same reason it is in `forge tui`, the design
     asserts that everything on this screen is deterministic, and a counter that
     sits at zero while you browse the whole vault is that claim, checkable.
     """
@@ -202,7 +202,7 @@ def render_overview(snapshot: VaultSnapshot, width: int = 96) -> str:
             for line in _wrap(
                 "Indexing reads every Markdown file, resolves its wikilinks and "
                 "records what it found. It makes no model calls and touches no "
-                "network, and it never writes to your vault — everything derived "
+                "network, and it never writes to your vault; everything derived "
                 "lives in .forge/ and can be deleted and rebuilt.",
                 width,
                 indent="",
@@ -333,7 +333,7 @@ def render_overview(snapshot: VaultSnapshot, width: int = 96) -> str:
 
 
 def _provenance_note(provenance: Any) -> str:
-    """`deterministic` or the model that said it — never both, never neither.
+    """`deterministic` or the model that said it: never both, never neither.
 
     The distinction is the whole point of the provenance model, and a UI that
     renders a bootstrapped edge and an inferred one identically throws away the
@@ -383,7 +383,7 @@ def render_concept(detail: ConceptDetail) -> str:
             )
     else:
         lines.append(
-            f"  [{DIM}]nothing extracted yet — "
+            f"  [{DIM}]nothing extracted yet, "
             f"forge ingest <path> --extract reads this page with a model[/]"
         )
     lines.append("")
@@ -400,7 +400,7 @@ def render_concept(detail: ConceptDetail) -> str:
             )
     else:
         lines.append(
-            f"  [{WARN}]isolated[/] [{DIM}]— no page in the vault links to this one, "
+            f"  [{WARN}]isolated[/] [{DIM}]no page in the vault links to this one, "
             f"and it links to none[/]"
         )
 
@@ -452,7 +452,7 @@ def render_gap_header(report: GapResponse) -> str:
     for saturated in report.saturated:
         lines.append(
             f"[{DIM}]{escape(saturated.kind)}: {saturated.count:,} of "
-            f"{saturated.population:,} — collapsed, "
+            f"{saturated.population:,}, collapsed, "
             f"forge gaps --kind {escape(saturated.kind)} lists them[/]"
         )
     return "\n".join(lines)
@@ -526,7 +526,7 @@ def build_dashboard(settings: Settings, snapshot: VaultSnapshot):
         # the search box types a q rather than quitting mid-word. Measured on
         # Textual 8.2.8 a focused Input wins even against a priority binding, so
         # this expresses the intent rather than being the thing that enforces
-        # it — `test_typing_in_a_box_does_not_trigger_a_binding` guards the
+        # it: `test_typing_in_a_box_does_not_trigger_a_binding` guards the
         # behaviour, and passes under either choice on this version.
         BINDINGS: ClassVar[list] = [
             Binding("q", "quit", "quit"),
@@ -590,7 +590,7 @@ def build_dashboard(settings: Settings, snapshot: VaultSnapshot):
             """The footer, which changes with focus.
 
             While a text box has focus every binding is a character being typed
-            — "q" in the middle of "queue" must not quit — so the keys really
+            "q" in the middle of "queue" must not quit, so the keys really
             are different, and a footer that claims otherwise is worse than no
             footer.
             """
@@ -609,7 +609,7 @@ def build_dashboard(settings: Settings, snapshot: VaultSnapshot):
             )
 
         # `focused` is a reactive on the Screen, not on the App, so a
-        # `watch_focused` here is never called — it looks like it works and
+        # `watch_focused` here is never called; it looks like it works and
         # silently does nothing. These events do bubble to the App.
         def on_descendant_focus(self, event: Any) -> None:
             self._refresh_keys()
@@ -647,7 +647,7 @@ def build_dashboard(settings: Settings, snapshot: VaultSnapshot):
         # -- tabs ----------------------------------------------------------
 
         #: Where focus goes when a tab opens. Switching tabs hides the focused
-        #: widget, and Textual then hands focus to whatever is next in the DOM —
+        #: widget, and Textual then hands focus to whatever is next in the DOM,
         #: which was the search box, three tabs away. The effect was that
         #: visiting Search once left every number key going into that box, and
         #: the only way out was a key nobody had been told about. Focusing the
@@ -756,7 +756,7 @@ def build_dashboard(settings: Settings, snapshot: VaultSnapshot):
                     return f"[{WARN}]nothing matches {escape(repr(query))}[/]"
                 return (
                     f"[{WARN}]no {noun}s yet[/] "
-                    f"[{DIM}]— forge bootstrap --apply builds the graph from your "
+                    f"[{DIM}]forge bootstrap --apply builds the graph from your "
                     f"filenames and wikilinks, with no model calls[/]"
                 )
             if shown < total:
@@ -769,7 +769,7 @@ def build_dashboard(settings: Settings, snapshot: VaultSnapshot):
             """Debounce: a query runs when typing pauses, not per keystroke.
 
             Span search touches the source of every hit, which is a hundred-odd
-            queries — fast, but not fast enough to run between two keystrokes
+            queries, fast, but not fast enough to run between two keystrokes
             without the box going gummy.
             """
             if self._debounce is not None:

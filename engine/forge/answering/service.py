@@ -7,7 +7,7 @@ a question *might* be answerable was measured at 3,372 calls and 153 hours.
 Two rules make the answer trustworthy rather than merely fluent:
 
 * **Retrieval failure is not a model problem.** With no hits, no call is made
-  and the caller is told the vault has nothing — never "let the model try".
+  and the caller is told the vault has nothing, never "let the model try".
 * **Citations are verified deterministically.** The model cites `[n]`; every
   `n` is checked against the passages actually supplied. A citation to `[7]`
   when six passages were given is a fabrication, and it is reported rather
@@ -79,7 +79,7 @@ TITLE_BOOST = 1.0
 #: 0.774 vs 0.733) matters more than its rank within it, and the residual
 #: lexical weight still catches exact-term queries an embedding blurs.
 #:
-#: The two are within noise of each other on 24 queries — this is the better
+#: The two are within noise of each other on 24 queries; this is the better
 #: available choice, not a tuned optimum. With no embeddings stored, retrieval
 #: degrades to lexical on its own.
 ANSWER_SEMANTIC = True

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 3 demonstration — Forge learns something.
+"""Phase 3 demonstration: Forge learns something.
 
     python3 scripts/phase3_demo.py
 
@@ -10,8 +10,8 @@ that Forge refuses to guess at.
 
 **No local model is reachable in this environment** (the sandbox network policy
 blocks ollama.com and huggingface.co), so extraction runs against a *scripted*
-provider through the real `LLMProvider` interface. Everything else — pipeline,
-grounding check, matcher, activation, graph, retrieval, evaluation — is the
+provider through the real `LLMProvider` interface. Everything else, pipeline,
+grounding check, matcher, activation, graph, retrieval, evaluation, is the
 production path, unchanged. On a machine with Ollama the same arc runs with
 `forge ingest paper.pdf --extract`.
 """
@@ -139,7 +139,7 @@ def main() -> int:
     corpus = pipeline.ingest_path(settings.vault_path)
     ingested = [s for s in corpus.sources if s.ok]
     print(f"ingested {len(ingested)} existing vault documents in {time.time() - started:.1f}s")
-    print("(the whole corpus — retrieval and co-occurrence are only meaningful at real scale)")
+    print("(the whole corpus, retrieval and co-occurrence are only meaningful at real scale)")
     print(f"store: {json.dumps({k: v for k, v in store.counts().items() if v})}")
 
     # ---------------------------------------------------------------------- 2
@@ -148,12 +148,12 @@ def main() -> int:
     source = report.sources[0]
     print(f"source   : {source.locator}")
     print(f"status   : {source.status.value}  ({source.pages} pages, {source.spans} spans)")
-    print(f"LLM calls: {source.llm_calls} (scripted local provider — no paid API)")
+    print(f"LLM calls: {source.llm_calls} (scripted local provider; no paid API)")
 
     # ---------------------------------------------------------------------- 3
     step("Extract candidate concepts and claims")
     print(f"{source.concepts_proposed} concept candidate(s), {source.claims_proposed} claim candidate(s)")
-    print(f"{source.proposals_created} proposal(s) created — nothing is canonical yet")
+    print(f"{source.proposals_created} proposal(s) created; nothing is canonical yet")
 
     # ---------------------------------------------------------------------- 4
     step("Show the evidence spans behind them")
@@ -175,7 +175,7 @@ def main() -> int:
     concept_proposal = next(p for p in pending if p.type is ProposalType.NEW_CONCEPT)
     proposals.approve(concept_proposal.id, note="reviewed: correct concept")
     print(f"approved {concept_proposal.id[:12]} -> {concept_proposal.operation.target}")
-    print("approval alone creates nothing — activation is a separate step")
+    print("approval alone creates nothing, activation is a separate step")
 
     # ---------------------------------------------------------------------- 7
     step("Approve a claim")
@@ -246,7 +246,7 @@ def main() -> int:
     # ---------------------------------------------------------------------- 13
     step("Run retrieval evaluation (measured, not asserted)")
     dataset = EvalDataset.load(settings.vault_path / DEFAULT_DATASET)
-    print(f"dataset: {dataset.path} v{dataset.version} — {len(dataset)} queries, {dataset.label_count()} labels")
+    print(f"dataset: {dataset.path} v{dataset.version}, {len(dataset)} queries, {dataset.label_count()} labels")
     evaluation = RetrievalEvaluator(store, embeddings=HashingEmbeddingProvider()).run(
         dataset, methods=("lexical",)
     )
@@ -314,7 +314,7 @@ def main() -> int:
             print(f"  canonical concept: {concept.qualified_name}  (namespace preserved)")
 
     # ---------------------------------------------------------------------- summary
-    step("Summary — Forge learned something")
+    step("Summary, Forge learned something")
     counts = {k: v for k, v in store.counts().items() if v}
     print(f"store            : {json.dumps(counts)}")
     print(f"graph            : {json.dumps(graph.metrics().to_dict())}")

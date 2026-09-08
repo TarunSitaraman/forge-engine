@@ -6,7 +6,7 @@ deliberately applied none of them. Phase 2 exposes them for review.
 Safety classification is derived, never asserted:
 
 * A repair that was applied in memory and **re-parsed successfully** is
-  ``DETERMINISTIC_VERIFIED`` — software computed it and software checked it.
+  ``DETERMINISTIC_VERIFIED``, software computed it and software checked it.
 * A repair that was computed but could not be verified is
   ``DETERMINISTIC_UNVERIFIED``.
 * An LLM-generated repair would be ``MODEL_GENERATED``, and the domain layer

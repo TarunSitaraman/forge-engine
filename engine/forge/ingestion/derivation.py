@@ -1,11 +1,11 @@
-"""Derivation keys — the cost-control primitive.
+"""Derivation keys: the cost-control primitive.
 
     SOURCE HASH + PROCESSOR VERSION + MODEL ID + PROMPT/SCHEMA VERSION
     = DERIVATION KEY
 
 If any component changes, the key changes and the derived result is recomputed.
-If none changed, the cached result is reused and the expensive work — LLM calls
-above all — is skipped entirely.
+If none changed, the cached result is reused and the expensive work, LLM calls
+above all, is skipped entirely.
 
 This is deliberately **not** a generic caching framework. It is one function
 that builds a key and a small typed record, because that is all Phase 2 needs

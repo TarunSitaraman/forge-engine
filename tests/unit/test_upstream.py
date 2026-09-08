@@ -1,8 +1,8 @@
 """Drift detection for documented external repositories.
 
 `Projects/` documents repos that live elsewhere and change without the vault
-noticing. Detection is deterministic — `git ls-remote` against a recorded
-commit — so it needs no model, no API token, and no rate limit budget.
+noticing. Detection is deterministic: `git ls-remote` against a recorded
+commit, so it needs no model, no API token, and no rate limit budget.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ class TestStates:
         assert s.drifted is True
 
     def test_never_pinned_is_not_reported_as_drift(self):
-        """Unpinned means nobody has claimed to have reviewed it — not stale."""
+        """Unpinned means nobody has claimed to have reviewed it, not stale."""
         [s] = check([("p.md", "u", None)], _fetch({"u": "abc"}))
         assert s.state == "unpinned"
         assert s.drifted is False

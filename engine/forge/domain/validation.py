@@ -1,7 +1,7 @@
 """Cross-entity invariants.
 
 Single-entity rules live in the models themselves (pydantic validators).
-Rules that span entities — a claim needing evidence, a link needing endpoints —
+Rules that span entities, a claim needing evidence, a link needing endpoints,
 live here, and are called by the storage layer before any write.
 
 The point is that these are enforced *at the domain boundary*. It must not be
@@ -25,7 +25,7 @@ def validate_claim(claim: Claim, evidence: Sequence[EvidenceLink]) -> None:
     """A claim must be evidenced unless its tier is exempt.
 
     Only ``USER_ASSERTION`` is exempt: the user saying so *is* the warrant.
-    Everything else — extraction, inference, synthesis — must point at a span.
+    Everything else (extraction, inference, synthesis) must point at a span.
     This is the mechanical enforcement of "every important generated claim
     should be traceable to evidence".
     """

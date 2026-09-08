@@ -10,7 +10,7 @@ inspect` works even with LangGraph uninstalled.
 
 **Provider identity on resume.** A run paused under one model and resumed under
 another is not the same run. Rather than silently mixing judgements, the resume
-is refused unless the caller acknowledges it — see :meth:`resume`.
+is refused unless the caller acknowledges it, see :meth:`resume`.
 """
 
 from __future__ import annotations
@@ -142,7 +142,7 @@ class EvolutionService:
         existing = self.store.get_workflow(workflow_id)
 
         if existing is not None and existing.awaiting_review:
-            # Re-running a paused workflow must not restart it — that would
+            # Re-running a paused workflow must not restart it; that would
             # re-pay for the semantic work and could duplicate proposals.
             log.info("workflow_already_waiting", workflow=workflow_id[:12])
             return self.resume(workflow_id)
@@ -180,7 +180,7 @@ class EvolutionService:
         Refuses by default when the configured provider differs from the one
         that produced the run's assessments. Continuing would leave the run
         holding judgements from two models with no way to tell which said what
-        — exactly the silent provenance ambiguity the brief forbids. The caller
+        exactly the silent provenance ambiguity the brief forbids. The caller
         may override explicitly, and the change is then recorded as a warning.
         """
         run = self.store.get_workflow(workflow_id)
@@ -264,7 +264,7 @@ class EvolutionService:
         return self.store.list_workflows(status=status, limit=limit)
 
     def explain(self, workflow_id: str) -> dict[str, Any] | None:
-        """Everything behind one run — the "why did Forge propose this?" answer."""
+        """Everything behind one run: the "why did Forge propose this?" answer."""
         run = self.get(workflow_id)
         if run is None:
             return None
@@ -308,7 +308,7 @@ def build_service(
     """Construct a service with the configured provider resolved.
 
     When ``require_semantic`` is false, an unavailable provider yields a
-    service with no provider rather than an exception — the workflow then
+    service with no provider rather than an exception, the workflow then
     reports ``SEMANTIC_ANALYSIS_UNAVAILABLE`` and remains resumable, which is
     the honest outcome and the one the brief specifies.
     """

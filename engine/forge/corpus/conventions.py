@@ -3,9 +3,9 @@
 The Phase 0 audit found two convention systems in active use in *this* vault
 that contradict each other on filenames, tags, and frontmatter:
 
-* ``CONVENTIONS.md``            — repo-wide: kebab-case, namespaced ``#type/``
+* ``CONVENTIONS.md``           , repo-wide: kebab-case, namespaced ``#type/``
   tags, minimal frontmatter "only when it carries real metadata".
-* ``DSA/Documentation Standards.md`` — DSA-local: Title Case filenames,
+* ``DSA/Documentation Standards.md``, DSA-local: Title Case filenames,
   ``dsa/pattern`` style tags, frontmatter mandatory on every page.
 
 **This module does not choose between them.** Choosing is an architectural
@@ -16,15 +16,15 @@ evidence instead of preference.
 **A system is only applied when the document defining it is actually in the
 vault.** These rulesets are transcriptions of two specific Markdown files, not
 universal truths about note-taking. Asserting them against a vault that has
-never heard of them measures conformance to rules its author never agreed to —
+never heard of them measures conformance to rules its author never agreed to,
 and reports conflicts between two documents that do not exist there. Before
 2026-09-02 this module did exactly that: a three-file test vault was told its
 filenames were 33% conforming and that ``dsa-local`` claimed 0 files, which is
 noise at best and, to anyone running the tool on their own notes, a bug.
 
 The check is deliberately presence-only. Inferring a vault's conventions from
-its contents is a different and much larger question — a majority pattern is
-not the same as an intended rule — and guessing wrong is worse than saying
+its contents is a different and much larger question, a majority pattern is
+not the same as an intended rule, and guessing wrong is worse than saying
 nothing.
 """
 
@@ -147,7 +147,7 @@ KNOWN_CONFLICTS: tuple[dict[str, str], ...] = (
 #: is the ordinary case for any vault that is not this one, and it is not a
 #: failure: there is simply nothing to measure conformance against.
 NO_SYSTEMS_STATUS = (
-    "NOT APPLICABLE — no convention document found in this vault "
+    "NOT APPLICABLE; no convention document found in this vault "
     "(looked for: {documents})"
 )
 
@@ -167,7 +167,7 @@ class ConventionReport:
     systems: list[dict[str, Any]] = field(default_factory=list)
     conflicts: list[dict[str, str]] = field(default_factory=list)
     conformance: dict[str, dict[str, Any]] = field(default_factory=dict)
-    resolution_status: str = "UNRESOLVED — requires human decision (ADR-001 D3)"
+    resolution_status: str = "UNRESOLVED, requires human decision (ADR-001 D3)"
     #: Systems whose defining document was found. Empty is normal elsewhere.
     applied: list[str] = field(default_factory=list)
 
@@ -258,8 +258,8 @@ def analyze_conventions(index: CorpusIndex) -> ConventionReport:
         conformance=conformance,
         applied=[s.id for s in systems],
         resolution_status=(
-            "UNRESOLVED — requires human decision (ADR-001 D3)"
+            "UNRESOLVED, requires human decision (ADR-001 D3)"
             if len(systems) > 1
-            else f"SINGLE SYSTEM — {systems[0].name}; no competing document found"
+            else f"SINGLE SYSTEM, {systems[0].name}; no competing document found"
         ),
     )

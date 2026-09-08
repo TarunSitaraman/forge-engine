@@ -1,4 +1,4 @@
-"""Deterministic hashing embeddings — a zero-dependency, zero-download vector.
+"""Deterministic hashing embeddings: a zero-dependency, zero-download vector.
 
 **What this is, precisely.** A hashed bag-of-features vector over word tokens
 and character 4-grams, with sublinear term frequency and L2 normalization. It
@@ -13,8 +13,8 @@ vector form", nothing more.
 **Why it exists.** Phase 3 requires that embeddings be *measured* rather than
 assumed to help. No neural model could be obtained in this environment (the
 sandbox network policy blocks both ollama.com and huggingface.co), so without
-this provider the entire embedding pathway — storage, cache invalidation,
-fusion, evaluation — would ship untested and unmeasured. With it, the pathway
+this provider the entire embedding pathway, storage, cache invalidation,
+fusion, evaluation, would ship untested and unmeasured. With it, the pathway
 is exercised end to end and produces real numbers, while
 :class:`OllamaEmbeddingProvider` remains the intended production provider.
 

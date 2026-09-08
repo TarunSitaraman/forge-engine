@@ -1,4 +1,4 @@
-"""Retrieval — Phase 2 scope only.
+"""Retrieval: Phase 2 scope only.
 
 Implemented: lexical search, metadata filtering, source filtering, and concept /
 document / span lookup. Optional semantic re-ranking when embeddings exist.
@@ -9,7 +9,7 @@ provenance*, not prose.
 
 The API shape is the point. Callers ask :meth:`SearchService.search` with a
 :class:`SearchQuery` and receive :class:`SearchHit` values. Adding vector or
-graph retrieval later means adding a scorer inside this service — not changing
+graph retrieval later means adding a scorer inside this service, not changing
 any caller.
 """
 
@@ -46,7 +46,7 @@ class SearchQuery:
     #: from `docs/cli.md` retrieves the manual instead of the knowledge.
     #: Measured before this existed, `docs/` took five of the top eight spans.
     #:
-    #: **Prefix, not substring** — that distinction cost an hour. A substring
+    #: **Prefix, not substring**; that distinction cost an hour. A substring
     #: test for `"docs/"` also matches `Technologies/Docs/rag.md`, so excluding
     #: the engine manual silently deleted the entire canonical technology
     #: reference folder, and the best possible answer to "what is retrieval
@@ -215,7 +215,7 @@ class SearchService:
         Semantic retrieval used to be a re-rank of the lexical candidates,
         which quietly capped it: a span BM25 never retrieved could not be
         recovered no matter how well it matched in embedding space. That is
-        precisely the failing case — the labelled set's `fuzzy_concept`
+        precisely the failing case, the labelled set's `fuzzy_concept`
         queries score R@10 0.100 because a question like "stopping a language
         model from making things up by giving it real passages" shares almost
         no vocabulary with `rag.md`, so it was never a candidate at all.
@@ -354,7 +354,7 @@ def _fts_query(text: str) -> str:
     """Turn user text into a safe FTS5 MATCH expression.
 
     FTS5 treats several characters as operators, so each token is wrapped in
-    double quotes. Any double quote *inside* a token must then be doubled —
+    double quotes. Any double quote *inside* a token must then be doubled,
     otherwise a query like ``quote"inside`` terminates the string early and
     SQLite raises a syntax error the user has no way to diagnose. This is the
     same shape as SQL injection, in a query language most callers never see.

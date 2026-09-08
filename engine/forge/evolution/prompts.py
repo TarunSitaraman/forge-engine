@@ -2,7 +2,7 @@
 
 Prompts participate in the derivation key. Changing the wording here changes
 what the model was asked, so cached assessments produced under the old wording
-must not be reused — bump :data:`PROMPT_VERSION` with any edit.
+must not be reused, bump :data:`PROMPT_VERSION` with any edit.
 
 The rules that actually matter are enforced in code, not requested here:
 grounding is checked against the store, the classification vocabulary is a

@@ -209,13 +209,13 @@ def _concept_gaps(store: SqliteStore, claims_by_concept: dict, wanted: set) -> l
 
     **Isolation is measured by inbound links over the whole vault, not by graph
     degree.** Edges run between concept pages, and the pages that do most of
-    the linking in a vault organised hub-and-spoke — `_index.md`, `00_Index/` —
+    the linking in a vault organised hub-and-spoke: `_index.md`, `00_Index/`,
     are deliberately not concepts, so their links never become edges. Reporting
     degree 0 as isolation was measured wrong on the real corpus on 2026-09-07:
     72 findings, 115 inbound links pointing at them, and exactly **one** page
     that nothing in the vault linked to. Worse, a genuinely unreferenced page
     that was then linked from the index its siblings are linked from stayed on
-    the list, because that index is navigation — a finding a user cannot clear
+    the list, because that index is navigation, a finding a user cannot clear
     by doing the right thing teaches them to ignore the report.
 
     Counting inbound links instead moved the corpus from 72 findings, 71 of
@@ -272,7 +272,7 @@ def _concept_gaps(store: SqliteStore, claims_by_concept: dict, wanted: set) -> l
             else:
                 isolated = degree == 0
                 detail = (
-                    "no edges in either direction — but inbound links have not "
+                    "no edges in either direction, but inbound links have not "
                     "been counted for this store, and links from pages that are "
                     "not concepts do not make edges. Run `forge bootstrap "
                     "--apply` before trusting this finding"

@@ -1,7 +1,7 @@
 """PDF acquisition against real PDF fixtures.
 
 Every fixture is a genuine PDF built from raw PDF syntax
-(scripts/make_pdf_fixtures.py), not a mock — a PDF parser tested against mocks
+(scripts/make_pdf_fixtures.py), not a mock, a PDF parser tested against mocks
 tests nothing.
 """
 

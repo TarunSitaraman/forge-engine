@@ -1,7 +1,7 @@
 """Deterministic wikilink resolution and classification.
 
 No LLM. Where a link is ambiguous, this module **produces candidates rather
-than guessing** — picking a target on the user's behalf would silently rewrite
+than guessing**, picking a target on the user's behalf would silently rewrite
 the meaning of their corpus.
 
 Obsidian resolves ``[[Some Note]]`` by filename stem across the whole vault,
@@ -48,7 +48,7 @@ STATUS_DESCRIPTIONS: dict[LinkStatus, str] = {
     LinkStatus.PATH_MISMATCH: "Target names a path that does not exist, though the basename does.",
     LinkStatus.RENAMED_CANDIDATE: (
         "No exact match, but a file matches after normalizing punctuation and "
-        "spacing — consistent with a rename."
+        "spacing, consistent with a rename."
     ),
     LinkStatus.AMBIGUOUS: "Several files share this stem; the intended target is undetermined.",
     LinkStatus.MALFORMED: "Not a usable link target (empty or punctuation/digits only).",
@@ -96,7 +96,7 @@ class LinkIndex:
     #: legitimately target a directory (``](../personal-agent/)``), which
     #: resolves fine on GitHub and in Obsidian but has no ``.md`` path.
     directories: set[str] = field(default_factory=set)
-    #: Non-Markdown files that exist in the repository — config, code, images.
+    #: Non-Markdown files that exist in the repository, config, code, images.
     #:
     #: The index is built from indexed `.md` paths, so a Markdown link to
     #: `config/concept-identity.yaml` or a PNG has no entry and was reported
@@ -108,7 +108,7 @@ class LinkIndex:
     #: disambiguated. Keyed through `normalize()` on both sides, so a decision
     #: recorded for "Binary Search" also settles `[[binary search]]`.
     #:
-    #: Two files may legitimately share a stem — `DSA/01_Patterns/Heap.md` and
+    #: Two files may legitimately share a stem: `DSA/01_Patterns/Heap.md` and
     #: `DSA/03_DataStructures/Heap.md` both exist and both should. A bare
     #: `[[Heap]]` is then genuinely ambiguous, and the engine must not guess.
     #: But once a human has recorded what the bare name means, continuing to
@@ -208,7 +208,7 @@ def resolve_wikilink(link: WikiLink, source_path: str, index: LinkIndex) -> Reso
                 return make(LinkStatus.PATH_MISMATCH, resolved_path=hits[0])
             return make(LinkStatus.AMBIGUOUS, candidates=tuple(hits))
 
-    # 6. Normalized match — consistent with a rename (punctuation/spacing drift).
+    # 6. Normalized match, consistent with a rename (punctuation/spacing drift).
     if (hits := index.by_normalized.get(normalize(target))) is not None:
         if len(hits) == 1:
             return make(LinkStatus.RENAMED_CANDIDATE, candidates=(hits[0],))
@@ -227,7 +227,7 @@ def resolve_markdown_link(
 
     URL-decodes the target first. The Phase 0 audit initially reported two
     false-positive broken links in README.md because ``DSA%20Home.md`` was
-    compared against the filesystem without decoding — correct for GitHub,
+    compared against the filesystem without decoding, correct for GitHub,
     wrong for a naive checker.
     """
     target = link.target

@@ -159,7 +159,7 @@ class TestASourceNeverMatchesItself:
     """The defect the equality test caught, pinned directly.
 
     Extraction is cached, so a resumed run re-derives nothing, but it still
-    reaches `_propose` — and by then the matcher has learned about the
+    reaches `_propose`, and by then the matcher has learned about the
     proposals the *first* run made. A source that proposed `Test Concept` as
     NEW_CONCEPT came back and raised a CONCEPT_MATCH against its own earlier
     proposal, leaving one source holding two live proposals for one name.

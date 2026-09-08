@@ -1,6 +1,6 @@
 """Local embeddings via Ollama.
 
-Uses Ollama's ``/api/embed`` endpoint. No key, no account, no paid service —
+Uses Ollama's ``/api/embed`` endpoint. No key, no account, no paid service,
 the same local-first guarantee as the generation provider.
 
 Dimensionality is discovered from the first successful call rather than
@@ -24,7 +24,7 @@ DEFAULT_EMBED_MODEL = "nomic-embed-text"
 #:
 #: `nomic-embed-text` is trained with `search_document:` on stored text and
 #: `search_query:` on queries; without them the two sit in different regions of
-#: the space and similarity degrades silently — output is still a valid vector,
+#: the space and similarity degrades silently, output is still a valid vector,
 #: so nothing errors and no stub test notices. This is the same class of defect
 #: as the cloud provider's message ordering: a shape bug a mock cannot catch.
 PREFIXED_MODELS: tuple[str, ...] = ("nomic-embed-text",)
@@ -61,7 +61,7 @@ class OllamaEmbeddingProvider:
         """Identity for the derivation key, including the prefix scheme.
 
         Prefixed and unprefixed vectors are not comparable, so they must not
-        share a cache entry or be mixed in one index — the same reason the
+        share a cache entry or be mixed in one index, the same reason the
         generation provider appends `+nothink`.
         """
         return f"{self._model}+prefixed" if self.needs_prefix else self._model
@@ -76,7 +76,7 @@ class OllamaEmbeddingProvider:
         """Whether Ollama is reachable *and* has this embedding model pulled.
 
         Cached after the first check so a run does not probe repeatedly. Never
-        raises — an unavailable provider is a normal state, not an error.
+        raises, an unavailable provider is a normal state, not an error.
         """
         if self._available is not None:
             return self._available

@@ -270,7 +270,7 @@ class TestSourceExclusion:
 
     A substring test for "docs/" also matches `Technologies/Docs/rag.md`, so
     excluding the engine's own manual silently deleted the entire canonical
-    technology reference folder — the best answer to "what is retrieval
+    technology reference folder, the best answer to "what is retrieval
     augmented generation?" stopped appearing anywhere in the top 40.
     """
 
@@ -327,11 +327,11 @@ def _make_span(text):
 
 class TestPrefixedEmbeddingModels:
     """`nomic-embed-text` needs asymmetric task prefixes, and nothing errors
-    without them — the vectors are still valid, just in the wrong region.
+    without them, the vectors are still valid, just in the wrong region.
 
     Verified against Nomic's model card: `search_document:` on stored text,
     `search_query:` on queries. This is the same class of defect as the cloud
-    provider's message ordering — a shape bug a stub cannot catch.
+    provider's message ordering, a shape bug a stub cannot catch.
     """
 
     def _provider(self, model="nomic-embed-text"):
@@ -408,7 +408,7 @@ class TestSemanticFusionCanWin:
     """Prove the hybrid path works when the embeddings are actually semantic.
 
     Hybrid currently scores *worse* than lexical on the labelled set, but the
-    stored embeddings are a hashed bag of tokens — not semantic at all. This
+    stored embeddings are a hashed bag of tokens, not semantic at all. This
     separates the two questions: given embeddings that do encode meaning, does
     fusion surface the right span? If not, no embedding model would fix it.
     """

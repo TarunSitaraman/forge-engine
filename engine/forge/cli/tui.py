@@ -1,6 +1,6 @@
 """A full-screen terminal UI for Forge: `forge tui`.
 
-`forge shell` is a line-oriented REPL — it prints and scrolls like any other
+`forge shell` is a line-oriented REPL; it prints and scrolls like any other
 command. This is the other thing: an alternate-screen application with a title
 bar, a scrolling transcript, a persistent input box and a footer of key hints,
 in the shape the current generation of agent CLIs has settled on.
@@ -16,7 +16,7 @@ everybody.
 Two things are shared with the shell rather than reimplemented, because a second
 copy is a second thing to drift:
 
-* `shell.parse` decides what a line means — slash command, question, or builtin.
+* `shell.parse` decides what a line means, slash command, question, or builtin.
 * `shell.command_names` is the command list, read off the typer group.
 
 What is *not* shared is dispatch. The shell calls the CLI in-process and lets it
@@ -101,7 +101,7 @@ class Stats:
 class LineWriter(io.TextIOBase):
     """A stdout stand-in that hands finished lines to a callback.
 
-    Commands print with `print`, which arrives here in fragments — a line's text
+    Commands print with `print`, which arrives here in fragments, a line's text
     and its newline are separate writes. Buffering to the newline is what makes
     the transcript show whole lines rather than a word at a time.
     """
@@ -161,7 +161,7 @@ def build_app(app_typer: typer.Typer, settings: Settings, stats: Stats):
     """Construct the Textual application.
 
     A factory rather than a module-level class so importing this module does not
-    require Textual — `forge tui` can then fail with an instruction instead of
+    require Textual: `forge tui` can then fail with an instruction instead of
     an ImportError traceback, and the rest of the CLI is unaffected.
     """
     from textual import work
@@ -290,7 +290,7 @@ def build_app(app_typer: typer.Typer, settings: Settings, stats: Stats):
 
         def on_mount(self) -> None:
             log = self.query_one("#transcript", RichLog)
-            log.write("[#4d9de0]Forge[/] — knowledge OS, read-only with respect to the vault")
+            log.write("[#4d9de0]Forge[/], knowledge OS, read-only with respect to the vault")
             log.write(f"[#4d5566]{settings.vault_path}[/]")
             log.write("")
             log.write("[#4d5566]Type a question, or /help for commands.[/]")
@@ -394,13 +394,13 @@ def build_app(app_typer: typer.Typer, settings: Settings, stats: Stats):
                 return
 
             # The worker is `exclusive`, so starting a second command would
-            # cancel the first — silently, and with nothing on screen to say
+            # cancel the first, silently, and with nothing on screen to say
             # either had been running. Refusing is the honest answer: the user
             # can wait or press esc, and either way knows what is happening.
             if self._busy:
                 self.say(
                     f"[#d7875f]still running {self._running} "
-                    f"({self._elapsed}s) — esc to interrupt[/]"
+                    f"({self._elapsed}s), esc to interrupt[/]"
                 )
                 return
 
@@ -472,8 +472,8 @@ def build_app(app_typer: typer.Typer, settings: Settings, stats: Stats):
         def _set_busy(self, busy: bool, argv: list[str] | None = None) -> None:
             """Show that something is happening, and for how long.
 
-            A command that reaches a provider can take many seconds — the cloud
-            timeout defaults to minutes — and with no indicator a slow command
+            A command that reaches a provider can take many seconds, the cloud
+            timeout defaults to minutes, and with no indicator a slow command
             and a dead one look identical. That ambiguity is the whole problem
             this solves.
             """
@@ -520,7 +520,7 @@ def _escape(text: str) -> str:
     """Command output is data, not markup.
 
     A vault path or a diagnostic can legitimately contain square brackets, and
-    an unescaped `[dsa/pattern]` would be swallowed as a style tag — the tag
+    an unescaped `[dsa/pattern]` would be swallowed as a style tag, the tag
     disappears and takes the text with it.
     """
     return text.replace("[", r"\[")

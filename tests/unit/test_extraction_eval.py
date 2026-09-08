@@ -3,7 +3,7 @@
 Closes the gap `docs/research/` records twice: the `0.2.0` -> `0.3.0` prompt
 rewrite was judged by reading fifty proposals by hand, and the reasoning-off
 experiment had to run against the *assessment* set because no extraction set
-existed — which is why its conclusion covered classification and said nothing
+existed, which is why its conclusion covered classification and said nothing
 about extraction, while reasoning-off was silently governing a 5.66-hour run.
 """
 
@@ -95,7 +95,7 @@ class TestGrounding:
         assert score.grounded_claims == 0
 
     def test_grounding_rate_is_one_when_no_claims_were_made(self):
-        """Nothing asserted is nothing wrong — not a zero."""
+        """Nothing asserted is nothing wrong: not a zero."""
         report = ExtractionReport(model_id="m", prompt_version="p")
         report.scores.append(score_case(CASE, ["Redis"]))
         assert report.grounding_rate == 1.0
@@ -161,12 +161,12 @@ class TestRunnerUsesTheRealExtractor:
 
 
 class TestATruncatedRunCannotLookClean:
-    """A timeout does not raise — it returns fewer concepts.
+    """A timeout does not raise: it returns fewer concepts.
 
     Found on the first real run, 2026-08-29: four timeouts in a 12-call run
     reported `junk=0.00`, which was in part the absence of output rather than
     the absence of junk. Same class as the cached-empty-result bug and the
-    `+nothink` confound — plausible output, no exception thrown.
+    `+nothink` confound, plausible output, no exception thrown.
     """
 
     def _case(self, **kw):

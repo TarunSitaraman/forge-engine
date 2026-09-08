@@ -14,7 +14,7 @@ Three rules, in priority order:
    byte-identical spans with identical ids.
 
 This is explicitly *not* tuned for a vector database. No overlap windows, no
-token targets — those are retrieval-quality decisions that belong to a later
+token targets; those are retrieval-quality decisions that belong to a later
 phase, once there is something to measure them against.
 """
 
@@ -98,7 +98,7 @@ def _group(blocks: Sequence[TextBlock]) -> list[list[TextBlock]]:
 def _merge_tiny(groups: list[list[TextBlock]]) -> list[list[TextBlock]]:
     """Fold undersized groups into the next one when they share a page.
 
-    Prevents a bare heading from becoming a span of its own — such a span
+    Prevents a bare heading from becoming a span of its own, such a span
     carries a location but almost no content, which is noise in retrieval.
     """
     if len(groups) < 2:
@@ -151,7 +151,7 @@ def _split_oversized(group: list[TextBlock]) -> list[list[TextBlock]]:
 def split_sentences(text: str, limit: int = MAX_CHUNK_CHARS) -> list[str]:
     """Split overlong text at sentence boundaries.
 
-    Exposed for the case where a single block exceeds the ceiling on its own —
+    Exposed for the case where a single block exceeds the ceiling on its own,
     a PDF paragraph with no internal structure. Falls back to returning the
     text whole rather than cutting mid-sentence: an oversized span is a
     retrieval inefficiency, a truncated one is a provenance error.

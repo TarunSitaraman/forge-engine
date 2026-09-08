@@ -1,4 +1,4 @@
-"""Adapter registry — selects the adapter for a path.
+"""Adapter registry: selects the adapter for a path.
 
 Phase 2 registers exactly two adapters. Speculative connectors (web, GitHub,
 YouTube, Notion, …) are deliberately absent: the extension point exists, and

@@ -7,7 +7,7 @@ Prefer the CLI:
 
 The audit lives in `forge.proposals.grounding_audit` and is reachable from the
 installed command, which is the form that works on a machine where the engine
-was installed with pipx — there, the `python3` on PATH is not the interpreter
+was installed with pipx; there, the `python3` on PATH is not the interpreter
 that owns the engine's dependencies, and running this file directly fails with
 ModuleNotFoundError. This wrapper stays for scripted use from inside a checkout.
 """

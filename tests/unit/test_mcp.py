@@ -1,8 +1,8 @@
 """The Phase 8 MCP server, and the two gates it exists to satisfy.
 
-* `test_gate_one_...` — an external agent can query the model and receive
+* `test_gate_one_...`, an external agent can query the model and receive
   provenance with every result.
-* `test_gate_two_...` — identical semantics to the HTTP API, and no capability
+* `test_gate_two_...`, identical semantics to the HTTP API, and no capability
   lives in only one interface.
 
 Gate two is asserted twice over, because the two halves fail differently. The

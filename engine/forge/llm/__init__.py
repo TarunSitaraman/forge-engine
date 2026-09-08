@@ -43,7 +43,7 @@ def get_provider(settings: Settings) -> LLMProvider:
     `FORGE_LLM_FALLBACK` relaxes that, but narrowly and on purpose:
 
     * It is **opt-in**. With nothing set, behaviour is exactly as before.
-    * Failover happens **once, before any work**, decided by a health check —
+    * Failover happens **once, before any work**, decided by a health check,
       never mid-run and never per call. Whichever provider is returned is the
       one that answers every call in that run, so the model identity recorded
       in each derivation key is the model that actually produced the result.
@@ -135,7 +135,7 @@ def require_provider(settings: Settings, *, role: str = "analysis") -> LLMProvid
     This is the gate in front of every high-risk semantic operation. It exists
     to make one behaviour impossible: quietly answering a knowledge-mutation
     question with whatever model happens to be reachable. If the configured
-    provider is not usable, the caller gets an explicit unavailability — never
+    provider is not usable, the caller gets an explicit unavailability, never
     a substitute.
     """
     provider = get_provider(settings)

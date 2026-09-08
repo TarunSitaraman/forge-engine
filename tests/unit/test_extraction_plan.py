@@ -1,6 +1,6 @@
 """The cost preview must be exact, free, and honest about what it cannot know.
 
-Extraction is the only expensive operation in this engine — 49.0 s/call
+Extraction is the only expensive operation in this engine, 49.0 s/call
 measured on 8B-local, 3,372 calls to cover the vault. A preview that is wrong
 is worse than no preview, because a number in a cost report gets believed.
 """

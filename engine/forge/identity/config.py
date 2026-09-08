@@ -1,4 +1,4 @@
-"""Concept identity configuration — the user's explicit naming decisions.
+"""Concept identity configuration: the user's explicit naming decisions.
 
 The corpus contains three genuine collisions: `Heap`, `Binary Search`, and
 `Trie` each exist twice, once as a pattern and once as an algorithm or data
@@ -12,7 +12,7 @@ Three properties matter:
   matcher. Burying them in Python would make the user's naming choices
   invisible and untestable.
 * **The matcher learns from it.** A resolved collision stops being ambiguous
-  and starts resolving to whichever concept the user named — with
+  and starts resolving to whichever concept the user named, with
   ``IdentityState.RESOLVED_BY_USER`` recorded, so the reason is never lost.
 * **Forge never invents an entry.** No default resolutions ship. An unresolved
   collision stays ambiguous forever until a human says otherwise, and the file
@@ -90,7 +90,7 @@ class CollisionResolution:
     #: The distinct identities this name resolves to.
     identities: tuple[ConceptIdentity, ...]
     #: Which identity a bare, unqualified mention means. ``None`` means the
-    #: user deliberately left it ambiguous — a valid, recorded decision.
+    #: user deliberately left it ambiguous, a valid, recorded decision.
     default: str | None = None
     decided_by: str | None = None
     decided_at: str | None = None
@@ -168,7 +168,7 @@ class IdentityConfig:
         """Write the configuration back, deterministically ordered.
 
         Sorted so that regenerating the file produces a clean diff rather than
-        reshuffled lines — this file is meant to be reviewed in a pull request.
+        reshuffled lines; this file is meant to be reviewed in a pull request.
         """
         target = Path(path or self.path or DEFAULT_CONFIG_PATH)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -180,7 +180,7 @@ class IdentityConfig:
     def load(cls, path: Path | None = None) -> IdentityConfig:
         """Load configuration, returning an empty one when absent.
 
-        Absence is normal — a vault with no decided collisions is a valid
+        Absence is normal, a vault with no decided collisions is a valid
         state, and the matcher simply keeps reporting them as ambiguous.
         """
         target = Path(path or DEFAULT_CONFIG_PATH)
@@ -266,13 +266,13 @@ def _sorted_resolutions(values: Iterable[CollisionResolution]) -> list[Collision
 
 def _render(data: dict[str, Any]) -> str:
     header = (
-        "# Forge — concept identity configuration\n"
+        "# Forge, concept identity configuration\n"
         "#\n"
         "# Explicit user decisions about concept naming. Forge never writes a\n"
         "# resolution here on its own: an unresolved collision stays ambiguous\n"
         "# until a human decides, and that is a valid state to leave it in.\n"
         "#\n"
-        "# Managed by `forge identity` — hand edits are fine and are preserved.\n"
+        "# Managed by `forge identity`, hand edits are fine and are preserved.\n"
         "#\n"
         "# `default` names which identity a bare, unqualified mention means.\n"
         "# Omitting it means \"still ambiguous, deliberately\".\n\n"

@@ -2,7 +2,7 @@
 
 The model says how new evidence relates to *one claim*. Deciding what that
 means for the knowledge base as a whole is a different question, and it is a
-policy question rather than a semantic one — so ordinary software answers it.
+policy question rather than a semantic one, so ordinary software answers it.
 
 Asking a model to also classify overall impact would add a second call, a
 second failure mode, and a second thing to audit, in exchange for a decision
@@ -23,8 +23,8 @@ from typing import Sequence
 
 from ..domain import AssessmentClass, AssessmentRecord, ImpactClass
 
-#: Assessment classes that produce a reviewable proposal. The other two —
-#: IRRELEVANT and INSUFFICIENT_EVIDENCE — are honest outcomes that correctly
+#: Assessment classes that produce a reviewable proposal. The other two
+#: (IRRELEVANT and INSUFFICIENT_EVIDENCE) are honest outcomes that correctly
 #: produce nothing.
 ACTIONABLE: frozenset[AssessmentClass] = frozenset(
     {
@@ -83,7 +83,7 @@ def requires_human_review(impact: ImpactClass) -> bool:
     """Whether policy forces a stop.
 
     Only ``POTENTIAL_CONFLICT`` forces it. Everything else still *produces*
-    proposals, and proposals always require approval before activation — so a
+    proposals, and proposals always require approval before activation, so a
     human decides in every case. The difference is that a conflict halts the
     workflow itself rather than leaving a proposal in the queue.
     """

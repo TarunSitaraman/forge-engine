@@ -2,7 +2,7 @@
 
 The premise: this vault's concepts are its filenames. A human decided
 `Binary Search` deserves one canonical home and created the page, and that is
-the judgement LLM extraction was failing to reproduce — measured 2026-08-20, it
+the judgement LLM extraction was failing to reproduce, measured 2026-08-20, it
 returned `RAM`, `Answer`, `Fluency` and `VARCHAR(n)` as concepts.
 """
 
@@ -286,7 +286,7 @@ class TestTheCommandWritesThem:
 
     Every unit test above calls `build_plan` directly, so none of them would
     notice if `forge bootstrap --apply` stored the concepts and forgot the
-    counts — the same shape of gap that let `forge backup` ship with a
+    counts, the same shape of gap that let `forge backup` ship with a
     NameError while every unit test passed.
     """
 
@@ -323,7 +323,7 @@ class TestTheCommandWritesThem:
 
         Measured on the real corpus 2026-09-07: 24 pattern pages had pointed at
         the wrong problem index, the vault was fixed, and the store still
-        served all 23 of those relationships afterwards — `forge graph path`,
+        served all 23 of those relationships afterwards: `forge graph path`,
         the dashboard's RELATED list and the MCP neighbour queries all reported
         a relationship the vault denies. A derived edge whose source link is
         gone is not history; it is a false statement about the vault.

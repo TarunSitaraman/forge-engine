@@ -1,4 +1,4 @@
-"""Activating evolution proposals — where approved judgement becomes knowledge.
+"""Activating evolution proposals: where approved judgement becomes knowledge.
 
 Phase 3 activated proposals that *add* knowledge. These activate proposals that
 *change* knowledge, which is a materially riskier operation, so each of the
@@ -6,7 +6,7 @@ three is deliberately conservative:
 
 ``CLAIM_EVIDENCE``
     Attaches an ``INFERS_FROM`` evidence link. The claim's statement is
-    untouched. This is purely additive — the safest possible knowledge change.
+    untouched. This is purely additive, the safest possible knowledge change.
 
 ``CLAIM_REFINEMENT``
     Creates a **new** claim and supersedes the old one. The original is

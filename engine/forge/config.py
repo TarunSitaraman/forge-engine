@@ -27,7 +27,7 @@ ModelRole = Literal["extraction", "analysis", "resolution", "synthesis"]
 #: property of the *machine*, not of the vault: the same checkout is a GPU box
 #: on one machine and a laptop borrowing a hosted endpoint on another, and the
 #: vault is shared between them by Git. Keeping it out of the repo is the point
-#: — it holds an API key.
+#: it holds an API key.
 #:
 #: Process environment always wins, so anything here can be overridden for a
 #: single command without editing the file.
@@ -85,7 +85,7 @@ def env_value(name: str, default: str | None = None) -> str | None:
 
     Used for the API key as well as for configuration, so a key placed in the
     settings file is found at call time without ever being copied into
-    :data:`os.environ` — loading settings must not mutate the environment.
+    :data:`os.environ`, loading settings must not mutate the environment.
     """
     found = os.environ.get(name)
     if found is not None:
@@ -96,7 +96,7 @@ def env_value(name: str, default: str | None = None) -> str | None:
 #: Convenience presets for OpenAI-compatible hosts, which is the wire format
 #: essentially every open-weights service and local server speaks.
 #:
-#: A preset only supplies values you have **not** set explicitly — every field
+#: A preset only supplies values you have **not** set explicitly, every field
 #: remains individually overridable, and any host works without a preset by
 #: setting `FORGE_CLOUD_BASE_URL` directly. These are a convenience against the
 #: most common setup error (a base URL with the wrong path prefix or a stray
@@ -114,7 +114,7 @@ CLOUD_PRESETS: dict[str, dict[str, object]] = {
     # just the prompt. The free tier's TPM limit is 8,000, so an 8192 ceiling
     # exceeds the whole per-minute allowance on its own: every request 413s
     # with "Request too large", before any prompt is added. Measured
-    # 2026-08-29 — a ~400-token prompt was rejected as 8,595 requested.
+    # 2026-08-29, a ~400-token prompt was rejected as 8,595 requested.
     #
     # 4096 rather than 2048 because the gpt-oss models reason by default and
     # max_tokens caps thinking *plus* response; too low a ceiling truncates the
@@ -196,7 +196,7 @@ class CloudSettings(BaseModel):
     """
 
     #: Vendor identifier, e.g. "anthropic". Nothing above the provider layer
-    #: branches on this — it selects a wire format, not behaviour.
+    #: branches on this; it selects a wire format, not behaviour.
     vendor: str = "anthropic"
     model: str = "claude-sonnet-5"
     api_key_env: str = "ANTHROPIC_API_KEY"
@@ -204,7 +204,7 @@ class CloudSettings(BaseModel):
     timeout_seconds: float = Field(default=120.0, gt=0)
     max_retries: int = Field(default=2, ge=0, le=5)
     #: Caps thinking *and* response text together on current Anthropic models,
-    #: which think by default — so this has to leave room for both. See
+    #: which think by default, so this has to leave room for both. See
     #: `CloudProvider.__init__`.
     #:
     #: **Lower it for open-weights models.** The default is sized for a frontier
@@ -213,7 +213,7 @@ class CloudSettings(BaseModel):
     #: clamping it. `FORGE_CLOUD_MAX_TOKENS` exists for exactly this.
     max_tokens: int = Field(default=16000, gt=0)
     #: Seconds before the first retry, doubling thereafter. A rate limit is
-    #: per-minute, so retrying immediately cannot succeed — it just spends the
+    #: per-minute, so retrying immediately cannot succeed; it just spends the
     #: budget inside one window. `Retry-After` wins over this when the host
     #: sends it.
     retry_backoff: float = Field(default=1.0, ge=0)
@@ -224,7 +224,7 @@ class CloudSettings(BaseModel):
     @field_validator("model")
     @classmethod
     def _model_is_named(cls, v: str) -> str:
-        """A preset supplies an endpoint, never a model — that choice is yours.
+        """A preset supplies an endpoint, never a model: that choice is yours.
 
         Catching it here turns "which model?" into a startup error with an
         instruction, instead of an opaque rejection from the host.
@@ -232,7 +232,7 @@ class CloudSettings(BaseModel):
         if not v.strip():
             raise ValueError(
                 "no cloud model configured. A preset supplies the endpoint and "
-                "credential variable but not the model — set FORGE_CLOUD_MODEL "
+                "credential variable but not the model, set FORGE_CLOUD_MODEL "
                 "to one the host serves."
             )
         return v.strip()
@@ -243,7 +243,7 @@ class OllamaSettings(BaseModel):
 
     ``base_url`` is what makes a remote box usable: Forge runs on a laptop that
     cannot host a model, and points at one that can. Nothing here assumes the
-    remote host is reachable — an unreachable provider is reported as
+    remote host is reachable, an unreachable provider is reported as
     unavailable, never worked around.
     """
 
@@ -333,7 +333,7 @@ class LLMSettings(BaseModel):
 class Settings(BaseModel):
     """Top-level engine settings."""
 
-    #: Repository root — the Obsidian vault. Read-only in Phase 1 (ADR-001 D2).
+    #: Repository root, the Obsidian vault. Read-only in Phase 1 (ADR-001 D2).
     vault_path: Path
 
     #: Derived-state directory. Deletable: everything in it rebuilds from the vault.
@@ -374,7 +374,7 @@ class Settings(BaseModel):
 
         Three layers, highest first: an explicit argument, the process
         environment, then the per-machine settings file. :data:`os.environ` is
-        read but never written — a settings file must not leak into the
+        read but never written, a settings file must not leak into the
         environment of everything this process later spawns.
         """
         env = _environment()
@@ -386,7 +386,7 @@ class Settings(BaseModel):
         retries = int(env.get("FORGE_LLM_MAX_RETRIES", "2"))
         cloud_defaults = _cloud_preset(env.get("FORGE_CLOUD_PRESET"))
         # Wrapped so a bad provider knob is a ConfigError like every other
-        # configuration failure — the CLI maps that to a clean exit 2, whereas a
+        # configuration failure, the CLI maps that to a clean exit 2, whereas a
         # raw pydantic ValidationError would surface as a traceback.
         try:
             llm = LLMSettings(
@@ -481,7 +481,7 @@ def _cloud_preset(name: str | None) -> dict[str, object]:
 
     A preset supplies *defaults only*; every field it fills is still
     individually overridable, which is what keeps it a convenience rather than a
-    mode. An unknown name fails loudly with the list — silently falling back to
+    mode. An unknown name fails loudly with the list, silently falling back to
     Anthropic defaults would point a request at the wrong endpoint entirely.
     """
     base: dict[str, object] = {
@@ -498,7 +498,7 @@ def _cloud_preset(name: str | None) -> dict[str, object]:
         raise ConfigError(
             f"unknown FORGE_CLOUD_PRESET {name!r}. Known presets: "
             f"{', '.join(sorted(CLOUD_PRESETS))}.\n"
-            "Any other OpenAI-compatible host works without a preset — set "
+            "Any other OpenAI-compatible host works without a preset, set "
             "FORGE_CLOUD_VENDOR=openai and FORGE_CLOUD_BASE_URL yourself."
         )
     # Presets describe OpenAI-compatible hosts; none of them are Anthropic.
@@ -559,13 +559,13 @@ def _resolve_vault_root() -> Path:
 
     It must not fall back to the current directory itself: ``forge index`` would
     then treat an arbitrary directory as a vault, write a ``.forge/`` into it, and
-    report success — silently indexing the wrong thing instead of saying it could
+    report success, silently indexing the wrong thing instead of saying it could
     not find the right thing.
 
     **A module-adjacent rule used to come first, and was removed on 2026-09-01.**
     While the engine lived inside the vault repository, ``forge/config.py`` sat
     under the vault root, so resolving next to the module pinned an editable
-    install to that vault from any directory — genuinely useful. Once the engine
+    install to that vault from any directory, genuinely useful. Once the engine
     moved to its own repository that rule resolved to *the engine's own checkout*,
     every time, from everywhere. It did not merely stop helping: because the rule
     was tried first and always matched under an editable install, ``forge index``

@@ -3,9 +3,9 @@
 **Reuses the Phase 1 parser wholesale.** There is exactly one Markdown parser
 in Forge (:mod:`forge.parsing.markdown`), and this adapter wraps it rather than
 reimplementing heading, wikilink, tag, or frontmatter handling. That parser
-already carries the hard-won behaviour — code-fence masking so Python list
+already carries the hard-won behaviour, code-fence masking so Python list
 literals are not read as wikilinks, frontmatter exclusion that preserves line
-numbers, CRLF normalization — and duplicating any of it would guarantee the two
+numbers, CRLF normalization, and duplicating any of it would guarantee the two
 copies drift.
 
 The adapter's own contribution is small and specific: turn the parsed document
@@ -100,7 +100,7 @@ class MarkdownAdapter:
     def _blocks(self, text: str, parsed: Any) -> list[TextBlock]:
         """Split into heading-delimited blocks with exact offsets.
 
-        Mirrors the Phase 1 indexer's span boundaries — content before the
+        Mirrors the Phase 1 indexer's span boundaries, content before the
         first heading becomes a preamble block, so no part of the document is
         unattributable.
         """

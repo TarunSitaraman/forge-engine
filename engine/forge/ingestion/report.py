@@ -1,4 +1,4 @@
-"""Ingestion reporting — the observability surface.
+"""Ingestion reporting: the observability surface.
 
 Structured logs plus a typed result record. Not an observability platform:
 enough to answer "what happened, how long did it take, what did it cost", and

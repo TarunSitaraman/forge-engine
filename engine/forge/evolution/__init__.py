@@ -1,4 +1,4 @@
-"""Knowledge evolution — evaluating how new evidence affects what Forge knows.
+"""Knowledge evolution: evaluating how new evidence affects what Forge knows.
 
 The services here are ordinary Python and are individually testable with no
 orchestration framework installed. LangGraph lives in :mod:`.workflow` and is

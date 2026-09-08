@@ -1,4 +1,4 @@
-"""Provenance rules — the floor rule and its companions.
+"""Provenance rules: the floor rule and its companions.
 
 These are enforced in the domain layer, so the tests construct objects directly
 rather than going through a service. If it is possible to build a violating

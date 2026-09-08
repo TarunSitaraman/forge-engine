@@ -3,7 +3,7 @@
 Grounding is deterministic, so a rule change can be applied retroactively to
 an existing store without re-calling a model. These tests pin that: the audit
 must flag a quote the current rule rejects even though an earlier, looser rule
-admitted it — which is precisely the corpus state the 2026-08-19 fix leaves
+admitted it, which is precisely the corpus state the 2026-08-19 fix leaves
 behind, since bumping the extractor version to force re-extraction would
 discard every cached result.
 """
@@ -114,7 +114,7 @@ def test_a_grounded_quote_from_a_code_fence_fails_the_audit(tmp_path):
 
     Extraction now drops a claim quoting a fenced block. The proposals already
     in a store were admitted before that rule existed, and re-extracting to
-    flush them would discard every cached result — which is the whole reason
+    flush them would discard every cached result, which is the whole reason
     this audit exists.
     """
     from forge.domain import Document, Source, SourceKind, Span
@@ -200,7 +200,7 @@ class TestAuditCli:
     """The audit has to be reachable from the installed `forge` command.
 
     It was a script under `scripts/` first, which meant running it needed the
-    interpreter that owns the engine's dependencies — not the `python3` on
+    interpreter that owns the engine's dependencies, not the `python3` on
     PATH. On a pipx install those are different, so the script failed with
     ModuleNotFoundError on the machine that actually held the store.
     """

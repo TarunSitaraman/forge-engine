@@ -155,14 +155,14 @@ class TestKnownHardCases:
     def test_real_stem_collisions_resolve_through_recorded_decisions(self, real_index):
         """The stem collisions are real; the ambiguity they caused is decided.
 
-        `Heap`, `Binary Search` and `Trie` each name two legitimate files — a
+        `Heap`, `Binary Search` and `Trie` each name two legitimate files, a
         pattern page and a data-structure/algorithm page. This test used to
         assert the resulting links stayed AMBIGUOUS, which was right until a
         human recorded what the bare names mean. They now resolve to the
         decided target, which cleared 180 of 274 unresolved link occurrences.
 
-        The invariant that must not break — the engine never guessing an
-        undecided collision — is pinned in `tests/unit/test_links.py`, where it
+        The invariant that must not break, the engine never guessing an
+        undecided collision, is pinned in `tests/unit/test_links.py`, where it
         can be tested without requiring the corpus to stay broken.
         """
         by_stem: dict[str, set[str]] = {}
@@ -215,7 +215,7 @@ class TestDiagnosticsOnRealData:
 
         This assertion used to require the defects to be *present*, as a way of
         proving the detector worked. That made it a test which fails when the
-        vault improves — the detector's behaviour is properly covered by
+        vault improves, the detector's behaviour is properly covered by
         `tests/unit/test_frontmatter.py` against synthetic input, which needs no
         broken file in the user's knowledge base to stay meaningful.
 
@@ -246,30 +246,30 @@ class TestDiagnosticsOnRealData:
 
         `related:` is recovered by text-extracting `[[...]]` from raw
         frontmatter, so a repair emitting bare strings would have silently
-        zeroed this graph — measured at 746 edges before the repair, and the
+        zeroed this graph, measured at 746 edges before the repair, and the
         reason the repair quotes each wikilink whole rather than its name.
         """
         with_related = [f for f in real_index.files if f.related]
         assert with_related, "the related: graph must not be empty"
 
         # A floor, not an equality. The bug this guards against zeroed the
-        # graph — 746 edges to 0 — so any assertion that catches a collapse
+        # graph (746 edges to 0) so any assertion that catches a collapse
         # does the job. Pinning the exact count instead made the test fail
         # every time real content was added, which is not a regression and
         # trains people to edit the number without reading the reason.
         #
         # 745 was the count on 2026-08-27, after the repair and after removing
-        # one dangling entry pointing at `Dynamic Array` — a concept with no
+        # one dangling entry pointing at `Dynamic Array`, a concept with no
         # page and no business having one, since it belongs inside `Array.md`.
         # Writing 12 new DSA problem pages on 2026-08-31 took it to 780.
         edges = sum(len(f.related) for f in with_related)
         assert edges >= 745, (
             f"related: graph has {edges} edges, below the 745 measured on "
-            "2026-08-27 — frontmatter handling has dropped links"
+            "2026-08-27, frontmatter handling has dropped links"
         )
 
     def test_unresolved_links_are_reported(self, real_index):
-        """Exit criterion 3 — that unresolved links are *reported*, which is a
+        """Exit criterion 3: that unresolved links are *reported*, which is a
         property of the reporter, not of the corpus.
 
         This asserted `unresolved_total > 0` until 2026-09-02, which passed

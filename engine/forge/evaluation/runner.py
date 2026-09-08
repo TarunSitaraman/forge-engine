@@ -5,14 +5,14 @@ metrics. Its purpose is to make "is this better?" a measured question.
 
 Four methods can be compared:
 
-* ``lexical``  — FTS5/BM25. The baseline, and the default retrieval path.
-* ``semantic`` — cosine over stored embeddings.
-* ``hybrid``   — weighted fusion of the two, swept across several weights
+* ``lexical`` , FTS5/BM25. The baseline, and the default retrieval path.
+* ``semantic``, cosine over stored embeddings.
+* ``hybrid``  , weighted fusion of the two, swept across several weights
   rather than assuming a 50/50 split.
-* ``title``    — lexical with the heading/filename boost applied, swept across
+* ``title``   , lexical with the heading/filename boost applied, swept across
   several multipliers. The boost already existed in ``SearchQuery`` and was
   used by the answering service at a hard-coded 1.25, but had never been run
-  against the labelled set — so the value was chosen, not measured. This makes
+  against the labelled set, so the value was chosen, not measured. This makes
   it measurable, which is the only reason it is here.
 
 Nothing here tunes retrieval. The set is for measuring; optimizing against it
@@ -37,7 +37,7 @@ log = get_logger(__name__)
 
 #: Fusion weights swept for hybrid retrieval. `weight` is the share given to
 #: the semantic score; the remainder goes to lexical. 0.0 and 1.0 are included
-#: as sanity anchors — they must reproduce the pure methods.
+#: as sanity anchors; they must reproduce the pure methods.
 DEFAULT_FUSION_WEIGHTS = (0.0, 0.25, 0.5, 0.75, 1.0)
 
 #: Title/heading boost multipliers swept for the ``title`` method. 1.0 is the
@@ -214,7 +214,7 @@ class RetrievalEvaluator:
     def _hybrid(self, text: str, semantic_weight: float) -> list[str]:
         """Weighted fusion of normalized lexical and semantic scores.
 
-        Scores are min-max normalized per method before fusion — BM25 and
+        Scores are min-max normalized per method before fusion, BM25 and
         cosine are on incomparable scales, and blending them raw would let
         whichever happens to have the larger range dominate regardless of
         weight.
@@ -226,7 +226,7 @@ class RetrievalEvaluator:
         # descending score. `dict` keeps the last occurrence, so every document
         # collapsed to its **worst** span while the lexical and semantic
         # methods used its best. Measured 2026-08-28, that alone made hybrid
-        # score below both of the signals it blends — impossible for a convex
+        # score below both of the signals it blends, impossible for a convex
         # combination, and the tell that the inputs were not what they claimed.
         lexical = _best_per_key((h.source.locator, h.score) for h in lexical_hits if h.source)
         semantic = _best_per_key(self._semantic_scores(text))

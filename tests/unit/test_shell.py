@@ -196,7 +196,7 @@ class TestHeader:
 class TestHistoryLocation:
     def test_history_sits_beside_the_settings_file_not_in_the_vault(self, tmp_path, monkeypatch):
         """The vault is content. Shell history is machine state and must not
-        land in it — the engine is read-only with respect to the vault."""
+        land in it, the engine is read-only with respect to the vault."""
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
 
         got = history_path()

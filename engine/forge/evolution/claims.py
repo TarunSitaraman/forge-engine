@@ -2,7 +2,7 @@
 
 Small module, one job, and one rule: **bounded**. Traversal reuses the Phase 3
 graph, which cannot be asked for an unbounded walk, and the result is capped
-before it reaches a prompt. The failure this prevents is not slowness — it is
+before it reaches a prompt. The failure this prevents is not slowness; it is
 sending forty claims to a model and getting forty shallow judgements back.
 """
 
@@ -83,7 +83,7 @@ class ClaimRetriever:
             # doubtful is still live knowledge, and later evidence may support
             # it, sharpen it, or add a second reason to doubt it. Excluding
             # them would make "disputed" a terminal state that no amount of new
-            # evidence could ever revisit — and would also have let this
+            # evidence could ever revisit, and would also have let this
             # module fake idempotency, which belongs to the assessment cache.
             claims = [
                 c

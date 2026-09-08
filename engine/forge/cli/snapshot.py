@@ -15,7 +15,7 @@ exists and is absent without complaint when it does not.
 layer the HTTP API and the MCP server wrap. That is deliberate: a fourth
 hand-written copy of "get a concept with its claims and neighbours" would agree
 with the other three on the day it was written and drift by the next change.
-What is *not* shared is the store's lifetime — each call opens and closes its
+What is *not* shared is the store's lifetime; each call opens and closes its
 own connection, because these run on Textual worker threads and a SQLite
 connection belongs to the thread that made it.
 """
@@ -216,8 +216,8 @@ def build_snapshot(
     snapshot.files = index.file_count
     snapshot.duplicate_files = len(index.duplicate_hashes)
 
-    # Two categories, kept apart until the end so broken links — the ones that
-    # cost the graph an edge — are never pushed off the list by a long tail of
+    # Two categories, kept apart until the end so broken links, the ones that
+    # cost the graph an edge, are never pushed off the list by a long tail of
     # missing frontmatter.
     link_issues: list[Issue] = []
     metadata_issues: list[Issue] = []
@@ -307,7 +307,7 @@ def _hubs(store: SqliteStore, *, limit: int = 5) -> list[tuple[str, int]]:
 
     Counted in Python over every edge rather than in SQL, because the whole
     edge table is 2,752 rows on the largest vault this has been run against and
-    reads in 58ms — a query worth adding to the store is one that would not.
+    reads in 58ms, a query worth adding to the store is one that would not.
     """
     degree: dict[str, int] = {}
     for link in store.all_links():
@@ -441,7 +441,7 @@ def browse_search(settings: Settings, query: str, *, limit: int = 50) -> list[Se
     """Lexical span search. Empty and whitespace-only queries return nothing.
 
     `queries.search_spans` raises `BadRequest` on an empty query, which is right
-    for an API — a caller asked for something malformed. Here the empty query is
+    for an API, a caller asked for something malformed. Here the empty query is
     just an empty search box, and an error dialog for "you have not typed
     anything yet" is the wrong answer.
     """

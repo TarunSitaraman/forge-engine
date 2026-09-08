@@ -8,7 +8,7 @@ Why SQLite, and why it is not a commitment:
   objects they describe, or history can end up describing a state that was
   never committed.
 * **Single file, deletable.** ``.forge/forge.db`` is derived state. Deleting it
-  loses nothing that cannot be rebuilt from the vault — which is exactly the
+  loses nothing that cannot be rebuilt from the vault, which is exactly the
   property the architecture promises.
 * **Replaceable.** Everything upstream depends on the protocols in
   :mod:`forge.storage.base`, not on this module.
@@ -283,7 +283,7 @@ CREATE INDEX IF NOT EXISTS idx_question_answers_claim ON question_answers(claim_
 --
 -- It exists because the graph cannot answer "does anything point here?".
 -- Edges run between concept pages, and `bootstrap.is_concept_page` excludes
--- `_index.md` hubs and other navigation as not-concepts — correctly, a hub is
+-- `_index.md` hubs and other navigation as not-concepts, correctly, a hub is
 -- not a concept. But a vault that links hub-and-spoke puts all of its inbound
 -- links on exactly those pages: reviewed on the real corpus 2026-09-07, 115
 -- links pointed at the 72 concepts the gap report called isolated, and not one
@@ -325,7 +325,7 @@ class SqliteStore:
 
         # Structural migrations run BEFORE the schema script. The v3 script
         # creates an index over `concepts.namespace`, which does not exist on a
-        # v2 table — and CREATE TABLE IF NOT EXISTS will not add it. The table
+        # v2 table, and CREATE TABLE IF NOT EXISTS will not add it. The table
         # has to be reshaped first, or initialize() fails on an upgrade.
         if previous and previous < SCHEMA_VERSION:
             self._migrate_structure(previous)
@@ -350,7 +350,7 @@ class SqliteStore:
 
         The FTS index is derived from spans, so a v1 database arrives with it
         empty. Left alone that would make ``forge search`` silently return
-        nothing on an upgraded database — a wrong answer rather than an error,
+        nothing on an upgraded database, a wrong answer rather than an error,
         which is the worse failure. Rebuilding is cheap and self-healing.
         """
         if previous < 2:
@@ -403,7 +403,7 @@ class SqliteStore:
         log.info("concepts_migrated_to_namespaced", rows=len(rows))
 
     def reset(self) -> None:
-        """Drop every table. Derived state only — nothing unrecoverable here."""
+        """Drop every table. Derived state only: nothing unrecoverable here."""
         with self._conn:
             for table in (
                 "workflows",
@@ -455,7 +455,7 @@ class SqliteStore:
                 # ON CONFLICT DO UPDATE, not INSERT OR REPLACE. SQLite implements
                 # REPLACE as DELETE-then-INSERT, which fires ON DELETE CASCADE and
                 # would silently destroy every document and span belonging to a
-                # source the moment its content changed — exactly the historical
+                # source the moment its content changed, exactly the historical
                 # provenance Phase 2 must preserve.
                 "INSERT INTO sources(id, locator, kind, content_hash, trust_tier, data)"
                 " VALUES(?,?,?,?,?,?)"
@@ -625,7 +625,7 @@ class SqliteStore:
 
         Without a namespace this returns the first match in a stable order.
         Callers that care about which `Heap` they mean must pass the namespace
-        — the ambiguity is real and the API does not hide it.
+        the ambiguity is real and the API does not hide it.
         """
         if namespace is not None:
             row = self._one(
@@ -645,8 +645,8 @@ class SqliteStore:
     ) -> list[Concept]:
         """Every concept sharing this bare name, across namespaces.
 
-        `ignore_case` because a vault names concepts after its filenames —
-        `rag`, `llms`, `ai-agents` — and a human types RAG. The link resolver
+        `ignore_case` because a vault names concepts after its filenames
+        (`rag`, `llms`, `ai-agents`) and a human types RAG. The link resolver
         has always treated a case mismatch as resolved; this lookup did not, so
         `forge concept "RAG"` found nothing, fell through to a substring
         search, and reported the template `rag-architecture-review` as a second
@@ -710,7 +710,7 @@ class SqliteStore:
         return [EvidenceLink.model_validate_json(r["data"]) for r in rows]
 
     def supersede_claim(self, old_id: str, new_claim: Claim, *, cause: str | None = None) -> None:
-        """Non-destructive replacement — Principle 11's enforcement point.
+        """Non-destructive replacement: Principle 11's enforcement point.
 
         The old claim is retained, marked SUPERSEDED, and a SUPERSEDE revision
         records both states.
@@ -830,7 +830,7 @@ class SqliteStore:
         """Append within an existing transaction.
 
         ``seq`` is a monotonic counter giving revisions a total order that does
-        not depend on timestamp resolution — two revisions written in the same
+        not depend on timestamp resolution; two revisions written in the same
         millisecond must still be orderable.
         """
         row = self._conn.execute("SELECT COALESCE(MAX(seq), 0) + 1 AS nxt FROM revisions").fetchone()
@@ -1214,7 +1214,7 @@ class SqliteStore:
 
         `None` means no row, which is **not** the same as a row of zero: the
         counts are replaced wholesale on every bootstrap, so a concept without
-        one was not seen in the last pass — its page has been deleted or
+        one was not seen in the last pass; its page has been deleted or
         renamed and the concept is a leftover. Saying "nothing links to this
         page" about a page that no longer exists is a false statement dressed
         as a finding, so callers must tell the two apart.
@@ -1321,7 +1321,7 @@ class SqliteStore:
         """Stale every synthesis whose snapshot of this claim no longer matches.
 
         Deterministic and cheap: a status string and a float, compared. Never a
-        model call, which is the point of the invariant — "does this make an
+        model call, which is the point of the invariant: "does this make an
         existing synthesis outdated?" is answered by software.
         """
         rows = self._all(

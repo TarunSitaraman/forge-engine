@@ -68,7 +68,7 @@ class TestTheStrataAreIntact:
     def test_the_regression_probes_are_the_classes_that_regressed(self, cases):
         """0.2.0 escalated a REFINES case to POTENTIAL_CONFLICT. These probe
         for the cure being worse than the disease, so they must be cases a
-        conflict-happy prompt would over-escalate — never conflicts."""
+        conflict-happy prompt would over-escalate, never conflicts."""
         probes = [c for c in cases if c["stratum"] == "regression-probe"]
         assert {c["expected_classification"] for c in probes} == {"REFINES", "SUPPORTS"}
 
@@ -119,7 +119,7 @@ class TestFarTransferIsNotTaughtByThePrompt:
             note = case["note"].lower()
             leaked = [t for t in self.CUE_TERMS if t in flat and t in note]
             assert not leaked, (
-                f"{case['id']} is now described by prompt cue(s) {leaked} — it has "
+                f"{case['id']} is now described by prompt cue(s) {leaked}; it has "
                 "become a fitted case and must move to near-transfer, with a "
                 "replacement written for far-transfer"
             )

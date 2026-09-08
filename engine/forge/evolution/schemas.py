@@ -3,7 +3,7 @@
 Same discipline as the Phase 2 extraction schemas, for the same reason: a
 schema whose fields all have defaults accepts ``{}`` as valid, so a model that
 produced nothing scores as a success. Here that would mean silently concluding
-"no impact" whenever the model failed — the most dangerous possible default,
+"no impact" whenever the model failed, the most dangerous possible default,
 because it is indistinguishable from a real answer.
 
 Every field that carries meaning is required and non-empty.
@@ -36,7 +36,7 @@ class ClaimAssessment(StrictSchema):
 
     claim_id: str = Field(min_length=1, max_length=64)
     classification: AssessmentClass
-    #: Why. Shown to the human reviewer, so it must be substantive — a
+    #: Why. Shown to the human reviewer, so it must be substantive, a
     #: one-word rationale is not reviewable.
     rationale: str = Field(min_length=12, max_length=800)
     #: Spans from the *new* evidence that justify this classification.
@@ -64,7 +64,7 @@ class RelevanceJudgement(StrictSchema):
     """Optional LLM refinement of the deterministic candidate set.
 
     The model may only *narrow* what deterministic selection already found. It
-    is never given the corpus and asked what is relevant — that would be both
+    is never given the corpus and asked what is relevant; that would be both
     expensive and ungroundable.
     """
 
@@ -77,7 +77,7 @@ class CorroborationCheck(StrictSchema):
 
     Measured 2026-09-04, three of five held-out failures were the model
     answering SUPPORTS where the passage never reported the outcome the claim
-    asserts — twice while the passage itself contained the sentence that should
+    asserts, twice while the passage itself contained the sentence that should
     have blocked the inference. Two prompt revisions did not move it, and cases
     the cues named scored no better than cases they did not, so the constraint
     is not what the model was told.

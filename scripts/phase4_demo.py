@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 4 demonstration — Forge evaluates how new evidence changes what it knows.
+"""Phase 4 demonstration: Forge evaluates how new evidence changes what it knows.
 
     python3 scripts/phase4_demo.py
 
@@ -14,9 +14,9 @@ the checkpoint on disk, so "resumable" is demonstrated rather than asserted.
 
 **No local model is reachable in this environment** (the sandbox network policy
 blocks ollama.com and huggingface.co), so assessment runs against a *scripted*
-provider through the real ``LLMProvider`` interface. Everything else — the
+provider through the real ``LLMProvider`` interface. Everything else, the
 graph, the grounding check, the derivation cache, the proposal system, the
-activation, the revision log — is the production path, unchanged. On a machine
+activation, the revision log, is the production path, unchanged. On a machine
 with Ollama or a cloud key, the same arc runs with `forge evolve paper-b.pdf`.
 """
 
@@ -98,8 +98,8 @@ def extraction_provider() -> MockProvider:
 def assessment_provider() -> MockProvider:
     """Answers as a competent local *analysis* model would.
 
-    Reads the real prompt — the span ids and claim ids it cites are parsed out
-    of the message Forge actually sent — so the grounding check downstream is
+    Reads the real prompt, the span ids and claim ids it cites are parsed out
+    of the message Forge actually sent, so the grounding check downstream is
     exercised for real rather than fed pre-baked ids.
     """
 
@@ -160,7 +160,7 @@ def main() -> int:
     original_claim = claims[0]
 
     # ---------------------------------------------------------------- 2
-    step("Ingest paper B — a second document that qualifies the first")
+    step("Ingest paper B, a second document that qualifies the first")
     report_b = pipeline.ingest_path(PAPER_B)  # deterministic only: no extraction
     source_b = report_b.sources[0]
     print(f"source   : {source_b.locator}")
@@ -188,7 +188,7 @@ def main() -> int:
     print(f"nodes    : {' -> '.join(n.node for n in run.nodes)}")
 
     # ---------------------------------------------------------------- 5
-    step("Existing concept identified — deterministically, and it says why")
+    step("Existing concept identified, deterministically, and it says why")
     for candidate in run.candidates:
         print(f"  {candidate.concept_name}   [{candidate.selector}]  {candidate.detail}")
     narrowing_calls = next(
@@ -215,7 +215,7 @@ def main() -> int:
             print(f"                   {' '.join(span.text.split())[:80]}")
 
     # ---------------------------------------------------------------- 8
-    step("Impact classified, and a proposal generated — knowledge is NOT yet changed")
+    step("Impact classified, and a proposal generated, knowledge is NOT yet changed")
     print(f"impact   : {run.impact.value}")
     for proposal_id in run.proposal_ids:
         proposal = store.get_proposal(proposal_id)
@@ -233,7 +233,7 @@ def main() -> int:
     print(f"checkpoint on disk: {checkpoint.name}  ({checkpoint.stat().st_size} bytes)")
 
     # ---------------------------------------------------------------- 10
-    step("Process exits — every workflow object is destroyed")
+    step("Process exits, every workflow object is destroyed")
     service.close()
     del service, outcome, run
     store.close()
@@ -253,7 +253,7 @@ def main() -> int:
         print(f"approved {decided.id[:12]} -> {decided.status.value} by {decided.decided_by}")
 
     # ---------------------------------------------------------------- 12
-    step("Workflow resumes from the checkpoint — it does not restart")
+    step("Workflow resumes from the checkpoint; it does not restart")
     service = EvolutionService(
         store,
         settings,
@@ -287,7 +287,7 @@ def main() -> int:
         print(f"       {' '.join((evidence['text'] or '').split())[:80]}")
 
     # ---------------------------------------------------------------- 15
-    step("Original evidence preserved — nothing was overwritten")
+    step("Original evidence preserved; nothing was overwritten")
     print("both the paper-A quote and the paper-B qualification are attached:")
     sources = {e["source_id"] for e in graph.get_claim_evidence(changed.id)}
     print(f"  distinct sources evidencing this claim: {len(sources)}")
@@ -307,7 +307,7 @@ def main() -> int:
     ][0]
     print(f"evidence link       : relation={link.relation.value} "
           f"tier={link.provenance.tier.value}")
-    print("                      (INFERS_FROM, never QUOTES — a model may not assert a verbatim quote)")
+    print("                      (INFERS_FROM, never QUOTES, a model may not assert a verbatim quote)")
 
     # ---------------------------------------------------------------- 17
     step("The workflow can be inspected afterwards")
@@ -321,10 +321,10 @@ def main() -> int:
     for candidate in detail["candidates_detail"]:
         print(f"  considered {candidate['concept']} because {candidate['detail']}")
     for assessment in detail["assessments_detail"]:
-        print(f"  assessed {assessment['classification']} — {assessment['rationale'][:70]}")
+        print(f"  assessed {assessment['classification']}, {assessment['rationale'][:70]}")
 
     # ---------------------------------------------------------------- 18
-    step("Re-running is safe — no duplicate knowledge, no wasted model calls")
+    step("Re-running is safe; no duplicate knowledge, no wasted model calls")
     before = (
         store.count_revisions(),
         len(store.list_claims()),

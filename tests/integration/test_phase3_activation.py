@@ -1,7 +1,7 @@
 """Phase 3 end-to-end: the proposal → approval → canonical knowledge loop.
 
 These tests exercise the CLI as a user would, because the loop is only closed
-if it is closed *through the commands* — an activator that works when driven
+if it is closed *through the commands*, an activator that works when driven
 from Python but not from `forge activate` has not shipped.
 
 Two properties recur and are asserted repeatedly:
@@ -205,7 +205,7 @@ class TestActivationCli:
         """Namespacing is a user decision, not something extraction may assert.
 
         A proposal carrying ``namespace`` in its details must not be able to
-        create a namespaced concept — otherwise the model would be choosing
+        create a namespaced concept, otherwise the model would be choosing
         the vocabulary the identity config exists to let the user choose.
         """
         service = ProposalService(cli_store)

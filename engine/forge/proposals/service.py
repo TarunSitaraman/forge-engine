@@ -1,4 +1,4 @@
-"""Proposal service — create, list, decide.
+"""Proposal service: create, list, decide.
 
 The engine's only route to changing anything a human owns. Approving a proposal
 records a decision; it does not enact it. Enactment is a separate, explicitly
@@ -44,7 +44,7 @@ class ProposalService:
     def create(self, proposal: Proposal) -> tuple[Proposal, bool]:
         """Store a proposal if unseen. Returns ``(proposal, created)``.
 
-        An existing proposal is returned untouched — including its decision. A
+        An existing proposal is returned untouched, including its decision. A
         rejected proposal is never silently reopened.
         """
         existing = self.store.get_proposal(proposal.id)
@@ -96,7 +96,7 @@ class ProposalService:
         """Resolve a possibly-abbreviated id.
 
         Returns ``(proposal, ambiguous_matches)``. An abbreviation matching
-        several proposals resolves to none of them — the same discipline the
+        several proposals resolves to none of them, the same discipline the
         concept matcher applies.
         """
         exact = self.store.get_proposal(proposal_id)
@@ -136,7 +136,7 @@ class ProposalService:
 
 
 # --------------------------------------------------------------------------
-# Builders — one per proposal type
+# Builders; one per proposal type
 # --------------------------------------------------------------------------
 
 

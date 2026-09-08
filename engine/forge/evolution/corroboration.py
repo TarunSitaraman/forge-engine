@@ -4,8 +4,8 @@
 on `openai/gpt-oss-120b`, three of five held-out failures were the model
 returning SUPPORTS where the passage never reported the outcome the claim
 asserts. In two of those the passage contained the sentence that should have
-blocked the inference — one stated the adoption being measured was voluntary
-and self-selected, the other defined the claim's key term differently — and
+blocked the inference; one stated the adoption being measured was voluntary
+and self-selected, the other defined the claim's key term differently, and
 the model asserted support anyway.
 
 Two prompt revisions did not move it. `assess-prompts/0.2.0` added an explicit
@@ -18,8 +18,8 @@ So this does not tell the model more. It asks it less: one question, about one
 claim, with the four other classifications and the whole vocabulary of the
 main prompt out of view.
 
-**What it can and cannot do.** It only ever *demotes* — SUPPORTS or REFINES to
-INSUFFICIENT_EVIDENCE — so it cannot manufacture a relationship, only decline
+**What it can and cannot do.** It only ever *demotes*, SUPPORTS or REFINES to
+INSUFFICIENT_EVIDENCE, so it cannot manufacture a relationship, only decline
 one. IRRELEVANT and POTENTIAL_CONFLICT are never checked: the failure being
 targeted is over-assertion, and a check that could promote would be a second
 place for the same error to enter.

@@ -36,7 +36,7 @@ class ProviderUnavailable(LLMError):
     """The provider could not be reached. Distinct from a bad response.
 
     Kept separate so the CLI and spike can report "no local model is running"
-    differently from "the model answered badly" — they need different fixes.
+    differently from "the model answered badly"; they need different fixes.
     """
 
 
@@ -121,7 +121,7 @@ class LLMProvider(Protocol):
     def structured(self, request: CompletionRequest, schema: type[T]) -> T: ...
 
     def health(self) -> tuple[bool, str]:
-        """``(reachable, detail)`` — never raises. Used by ``forge status``."""
+        """``(reachable, detail)``: never raises. Used by ``forge status``."""
         ...
 
 
@@ -137,7 +137,7 @@ def extract_json(text: str) -> str:
 
     Local models very often wrap JSON in prose or code fences even when told
     not to. Recovering deterministically here is cheaper and more reliable than
-    spending another model call asking for a correction — and, importantly,
+    spending another model call asking for a correction, and, importantly,
     this is a parsing problem, so software solves it (Principle 7).
     """
     stripped = text.strip()

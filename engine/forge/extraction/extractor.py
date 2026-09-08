@@ -12,7 +12,7 @@ Boundaries this module enforces, all of them Phase 1 rules made operational:
 * **Malformed output is a failure, not a repair opportunity.** Structured
   responses are schema-validated; failures produce ``FAILED`` or ``PARTIAL``.
 
-Extraction is entirely optional. With no provider, ingestion still succeeds —
+Extraction is entirely optional. With no provider, ingestion still succeeds,
 it just produces spans without candidates.
 """
 
@@ -64,8 +64,8 @@ EXTRACTOR_VERSION = "extractor/0.2.0"
 #: order is the load-bearing part.
 #:
 #: Chosen from the observed margin, not by feel. Eliding words *from* a quote
-#: does not lower this ratio — only a word the source does not have in that
-#: position does — so every legitimate quote measured (hyphenation changes,
+#: does not lower this ratio, only a word the source does not have in that
+#: position does, so every legitimate quote measured (hyphenation changes,
 #: curly quotes, ellipsis, dropped interior words) scored **1.000**, while
 #: quotes reassembled from the span's own vocabulary scored **0.500-0.857**.
 #: 0.9 sits in that gap and still tolerates one substituted word in ten, which
@@ -76,14 +76,14 @@ QUOTE_GROUNDING_THRESHOLD = 0.9
 MIN_SPAN_CHARS = 40
 
 #: A span whose lines are this proportion Markdown links is a navigation
-#: artifact — a table of contents or an index — not prose. See `_is_navigation`.
+#: artifact (a table of contents or an index) not prose. See `_is_navigation`.
 #:
 #: Measured over all 1,532 vault spans on 2026-08-20 rather than chosen by feel.
 #: Prose sits far below: median 0.079, p90 0.280, p95 0.440. The index files
 #: form a clearly separated cluster at 0.75-0.90 (`DSA/00_Index/*`,
 #: `Technologies/Prompt-Library/_index.md`, the project `_index.md` hubs).
 #: 0.5 sits in the empty gap between them and skips 59 spans, 3.9% of the
-#: corpus — 118 model calls that would produce concepts whose only evidence is
+#: corpus, 118 model calls that would produce concepts whose only evidence is
 #: a link row.
 #:
 #: **Deliberately not lowered further.** `Technologies/Docs/_index.md`'s first
@@ -143,7 +143,7 @@ class ExtractionResult:
     failures: list[dict[str, str]] = field(default_factory=list)
     model_id: str | None = None
     provider: str | None = None
-    #: The provider became unusable — a rejected credential, a vanished
+    #: The provider became unusable, a rejected credential, a vanished
     #: endpoint. Distinct from a failed span: retrying cannot help, and every
     #: remaining call would fail identically. The pipeline aborts the run on it.
     provider_unavailable: bool = False
@@ -211,7 +211,7 @@ class CandidateExtractor:
     def model_id(self) -> str:
         """Resolved model name, for the derivation key. 'none' when disabled.
 
-        A provider may append an ``identity_variant`` — a mode it is running in
+        A provider may append an ``identity_variant``, a mode it is running in
         that makes its output non-comparable with the same model in another
         mode, such as a reasoning model with reasoning switched off. It belongs
         in the model id because that is what the derivation key hashes: two
@@ -274,7 +274,7 @@ class CandidateExtractor:
                 span_ok = False
                 if failure["kind"] == "provider_unavailable":
                     # A rejected credential is not a bad span. Continuing would
-                    # make one identically-failing call per remaining span —
+                    # make one identically-failing call per remaining span,
                     # 190 of them on 2026-08-22, reported as `llm_calls: 0`
                     # against a rate-limited free tier. Stop at the first one.
                     result.provider_unavailable = True
@@ -357,7 +357,7 @@ class CandidateExtractor:
         """Returns (claims, calls, call_failure, dropped).
 
         ``call_failure`` means the model's response was unusable. ``dropped``
-        means individual candidates were rejected by the grounding check —
+        means individual candidates were rejected by the grounding check,
         a different thing, and not a failure of the span.
         """
         parsed, calls, failure = self._call(CLAIM_INSTRUCTION, span, ClaimExtractionResponse)
@@ -449,8 +449,8 @@ class CandidateExtractor:
         deterministic.
 
         The floor is deliberately low. An earlier 120-character threshold
-        silently discarded short but entirely meaningful sections — a two-line
-        definition of a data structure, for instance — which then never
+        silently discarded short but entirely meaningful sections, a two-line
+        definition of a data structure, for instance, which then never
         appeared as a candidate at all. Dropping content without saying so is
         the wrong failure: better to spend a cheap call than to lose the
         concept.
@@ -467,7 +467,7 @@ class CandidateExtractor:
 def _is_navigation(text: str) -> bool:
     """Is this span a table of contents rather than prose?
 
-    An index span — `| Azure | [`azure.md`](azure.md) |` repeated 18 times —
+    An index span: `| Azure | [`azure.md`](azure.md) |` repeated 18 times,
     contains no assertions and no concepts of its own. Extracting from it is
     wrong twice over: it produces a concept whose only evidence is a navigation
     row, when that concept's canonical home is the document being linked to,
@@ -480,7 +480,7 @@ def _is_navigation(text: str) -> bool:
     budget. Skipping costs nothing and removes 21 minutes of dead waiting per
     run at a 420 s timeout.
 
-    Deliberately conservative — it must not catch prose that merely cites
+    Deliberately conservative; it must not catch prose that merely cites
     sources. A span qualifies only when it has several linked lines *and* they
     dominate it.
     """
@@ -510,7 +510,7 @@ def extraction_provenance(
     """Provenance for a model-extracted object.
 
     Tier is capped at ``EXTRACTED_CLAIM``. ``SOURCE_FACT`` is rejected outright
-    rather than silently downgraded — asking for it is a programming error, and
+    rather than silently downgraded, asking for it is a programming error, and
     quietly fixing it would hide the bug.
     """
     if tier in (ProvenanceTier.SOURCE_FACT, ProvenanceTier.USER_ASSERTION):
@@ -543,8 +543,8 @@ def _squash(text: str) -> str:
     """Reduce text to lower-case alphanumerics.
 
     Deletes every distinction a model routinely gets wrong when transcribing a
-    quote — whitespace, straight vs curly quotes, hyphens, em dashes, trailing
-    punctuation — while preserving the one that carries meaning: the order of
+    quote, whitespace, straight vs curly quotes, hyphens, em dashes, trailing
+    punctuation, while preserving the one that carries meaning: the order of
     the characters.
     """
     return "".join(c for c in text.lower() if c.isalnum())
@@ -659,8 +659,8 @@ def _from_code_block(quote: str, text: str) -> bool:
         DOCS[Source Documents] --> CHUNK[Chunking]
         CHUNK --> EMBED1[Embedding Model]
 
-    which asserts nothing a reviewer can check. The grounding test passes —
-    the string really is in the span — and the evidence chain is still broken,
+    which asserts nothing a reviewer can check. The grounding test passes
+    (the string really is in the span) and the evidence chain is still broken,
     because diagram syntax is not a statement.
 
     The test is deliberately two-sided: a quote is only rejected when it is
@@ -688,7 +688,7 @@ def _grounded(quote: str, text: str) -> bool:
     """Is this quote actually present in the span?
 
     **Order is the whole point.** An earlier version compared bag-of-words
-    overlap, which accepts any quote assembled from the span's own vocabulary —
+    overlap, which accepts any quote assembled from the span's own vocabulary,
     including one that inverts the meaning. Given a span saying "RAG improves
     accuracy", the fabricated quote "RAG does not improve accuracy" scored 100%
     and was stored as evidence. That defeats the rule this function exists to

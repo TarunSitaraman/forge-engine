@@ -1,4 +1,4 @@
-"""Ollama provider — the local-first default.
+"""Ollama provider: the local-first default.
 
 Ollama is reached over plain HTTP on localhost. No API key, no account, no
 paid service. This is what satisfies "the engine must run without a paid API".
@@ -150,7 +150,7 @@ class OllamaProvider:
                 last_error = exc
                 # Ollama rejects `think` outright for models that have no
                 # reasoning mode. Retrying without the field is not a silent
-                # downgrade — there is no reasoning to lose on such a model —
+                # downgrade; there is no reasoning to lose on such a model,
                 # but it is a departure from what was asked for, so it is said
                 # out loud and done exactly once.
                 if (
@@ -187,7 +187,7 @@ class OllamaProvider:
         """Request schema-conforming JSON, with bounded repair retries.
 
         One repair attempt is made by feeding the model its own invalid output
-        and the validation error. If that fails, the error is raised — a
+        and the validation error. If that fails, the error is raised, a
         malformed response never becomes a degraded write.
         """
         schema_json = schema.model_json_schema()

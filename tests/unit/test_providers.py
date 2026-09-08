@@ -278,7 +278,7 @@ class TestCloudWireFormats:
 
         Forge asks for ``temperature=0.0`` everywhere for determinism. Current
         Anthropic models reject non-default sampling parameters outright, so
-        forwarding it meant the cloud path could never complete a single call —
+        forwarding it meant the cloud path could never complete a single call,
         which is why it stayed unmeasured. Assert the whole family, not just
         ``temperature``, so adding one back is a test failure.
         """
@@ -296,7 +296,7 @@ class TestCloudWireFormats:
         assert "top_k" not in seen["body"]
 
     def test_openai_compatible_still_sends_temperature(self, monkeypatch):
-        """The removal is Anthropic-specific — OpenAI-shaped gateways accept it."""
+        """The removal is Anthropic-specific: OpenAI-shaped gateways accept it."""
         seen: dict = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -347,7 +347,7 @@ class TestCloudWireFormats:
         the user turn. The Anthropic branch hoists system into its own top-level
         field so order never mattered; served through a gateway the messages hit
         the model's own chat template, and a dropped instruction would strip the
-        schema silently — a 200 response that fails to parse, on every call.
+        schema silently, a 200 response that fails to parse, on every call.
         """
         seen: dict = {}
 
@@ -538,7 +538,7 @@ class TestOllamaThinking:
 
     Qwen3 and friends reason before answering by default. For a bounded
     extraction task that reasoning is generated at full token cost and then
-    discarded, which dominates wall time — but turning it off changes what the
+    discarded, which dominates wall time, but turning it off changes what the
     model does, so it is opt-in and separately identified rather than a silent
     default.
     """
@@ -563,7 +563,7 @@ class TestOllamaThinking:
         assert provider.identity_variant == ("+think" if think else "+nothink")
 
     def test_model_without_reasoning_falls_back_once_and_says_so(self, caplog):
-        """A model with no reasoning mode has none to lose — but say it aloud."""
+        """A model with no reasoning mode has none to lose: but say it aloud."""
         attempts: list[bool] = []
 
         def handler(req: httpx.Request) -> httpx.Response:
@@ -611,7 +611,7 @@ class TestOllamaThinking:
 
 
 class TestProviderFallback:
-    """`FORGE_LLM_FALLBACK` relaxes explicit selection — narrowly, and loudly.
+    """`FORGE_LLM_FALLBACK` relaxes explicit selection: narrowly, and loudly.
 
     The engine's rule is that an unavailable provider is reported, never
     silently replaced, because model identity is part of every derivation key.
@@ -843,7 +843,7 @@ class TestCloudHealthActuallyChecks:
         assert provider.health()[0] is False
 
     def test_the_probe_runs_once_however_often_health_is_called(self, monkeypatch):
-        """extract() calls health() per source — 642 times on a full vault run."""
+        """extract() calls health() per source: 642 times on a full vault run."""
         calls = []
 
         def handler(request):
@@ -915,12 +915,12 @@ class TestModelTestReportsWhyItFailed:
 
 
 class TestRateLimitBackoff:
-    """Retrying a 429 immediately cannot work — the limit is per minute.
+    """Retrying a 429 immediately cannot work: the limit is per minute.
 
     Observed 2026-08-31 on Groq's free tier: three attempts landed inside 120
     milliseconds, all failed identically, and the retry budget was spent before
     the rate window had moved at all. Every task the spike reported as 0/3 was
-    a rate limit, not a capability — the run measured the free tier, not the
+    a rate limit, not a capability, the run measured the free tier, not the
     model.
     """
 
@@ -963,7 +963,7 @@ class TestRateLimitBackoff:
         assert provider._retry_delay(5, None) == 15.0
 
     def test_a_retried_call_actually_sleeps(self, monkeypatch):
-        """Pins the wiring, not just the arithmetic — the bug was a missing sleep."""
+        """Pins the wiring, not just the arithmetic: the bug was a missing sleep."""
         slept: list[float] = []
         monkeypatch.setattr("forge.llm.cloud.time.sleep", lambda s: slept.append(s))
 

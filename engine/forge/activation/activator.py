@@ -1,4 +1,4 @@
-"""Proposal activation — approved decisions become canonical knowledge.
+"""Proposal activation: approved decisions become canonical knowledge.
 
 This closes the loop Phase 2 deliberately left open:
 
@@ -12,7 +12,7 @@ intended:
 
 * **Idempotent.** Entity identity is deterministic, derived from what the
   entity *is*. Approving twice, re-indexing, and approving again converge on
-  the same single concept, claim, and evidence link — with no duplicate
+  the same single concept, claim, and evidence link, with no duplicate
   revisions.
 * **Never claims more than happened.** The proposal is marked ``ACTIVATED``
   only *after* the entity is persisted, inside the same transaction. A
@@ -63,7 +63,7 @@ class ActivationOutcome(str, Enum):
     """What happened to one proposal."""
 
     CREATED = "created"
-    #: Entity already existed with identical identity — the idempotent path.
+    #: Entity already existed with identical identity, the idempotent path.
     ALREADY_ACTIVE = "already_active"
     #: Refused for a stated reason (not approved, ambiguous, unsupported type).
     REFUSED = "refused"
@@ -227,14 +227,14 @@ class ProposalActivator:
     def _activate_concept_match(self, proposal: Proposal) -> ActivationResult:
         """A match proposal links an extracted name to an existing concept.
 
-        It creates no new concept — it registers the extracted name as an
+        It creates no new concept; it registers the extracted name as an
         alias, which is the whole point of having decided they are the same
         thing.
 
         One exception: a proposal that was *ambiguous* when it was created has
         no match target at all, because the matcher deliberately refused to
         pick one. Once the user resolves the collision, the right action is to
-        create the concept they chose — not to look for a match target that
+        create the concept they chose, not to look for a match target that
         was never recorded.
         """
         if proposal.safety is SafetyClass.AMBIGUOUS:
@@ -350,7 +350,7 @@ class ProposalActivator:
         The link carries **deterministic** provenance, even though the claim
         itself is model-derived. These describe different things: the claim is
         a model's assertion, while the link asserts "this text really is in
-        this span" — which the activator establishes by string comparison, in
+        this span", which the activator establishes by string comparison, in
         code, right here.
 
         Phase 1 forbids a model asserting ``QUOTES`` precisely because a model
@@ -493,7 +493,7 @@ def _evidence_relation(quote: str, span_text: str) -> EvidenceRelation:
     """Verbatim quotes are QUOTES; anything else is a paraphrase.
 
     Checked deterministically here rather than trusting the model's own claim
-    about whether it quoted — the domain layer forbids a model asserting
+    about whether it quoted, the domain layer forbids a model asserting
     ``QUOTES`` for exactly that reason.
     """
     if quote and " ".join(quote.split()).lower() in " ".join(span_text.split()).lower():

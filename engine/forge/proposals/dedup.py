@@ -4,14 +4,14 @@
 the model physically cannot know that another span already produced
 "Evaluating retrieval quality involves calculating recall at k" when it emits
 "Evaluating a RAG system requires a labelled evaluation set with recall@k
-metrics". Asking the prompt to deduplicate was a category error — measured
+metrics". Asking the prompt to deduplicate was a category error, measured
 2026-08-19, three such clusters appeared in a 20-claim sample, and the same
 sample carried three concept alias pairs in 14: `RAG` / `Retrieval Augmented
 Generation`, `Reranking` / `Reranker`, `Hybrid search` / `hybrid (keyword +
 vector) search`.
 
 Deduplication is deterministic, so it applies retroactively to proposals that
-already exist — the same property that let the grounding audit re-check a
+already exist, the same property that let the grounding audit re-check a
 corpus without re-running extraction.
 
 **Nothing is merged automatically.** This reports clusters and a suggested
@@ -37,7 +37,7 @@ DEDUP_VERSION = "dedup/0.1.0"
 #: free win.** The original was calibrated on eight hand-picked pairs from a
 #: 2026-08-19 sample and its own comment warned the 0.09-wide gap would produce
 #: false positives. The first real extraction run said how many: 30 claims off
-#: one page, 435 pairs, **67 of them clustered wrongly at 0.22** — a group of
+#: one page, 435 pairs, **67 of them clustered wrongly at 0.22**, a group of
 #: seven that put "RAG grounds an LLM's output in retrieved content" with
 #: "increasing top-k can worsen answers", which share vocabulary and nothing
 #: else. Ten clusters over 39 proposals, most of them wrong, is a report nobody
@@ -149,7 +149,7 @@ def cluster_claims(
 
     Quadratic in the number of claims, which is fine at this corpus size: 1,170
     claims is ~680k comparisons of short strings, well under a second, and the
-    alternative — an index — would add a dependency to save time nobody is
+    alternative (an index) would add a dependency to save time nobody is
     waiting on.
     """
     claims = [p for p in proposals if p.type is ProposalType.NEW_CLAIM]

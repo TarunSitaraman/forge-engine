@@ -26,7 +26,7 @@ class Headline:
     graph_checked: int | None
 
     def rows(self) -> list[tuple[str, str, bool]]:
-        """(label, value, is_ok) — ordered by what a reader cares about."""
+        """(label, value, is_ok): ordered by what a reader cares about."""
         out = [
             (
                 "Dead links",

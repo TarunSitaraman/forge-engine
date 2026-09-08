@@ -419,7 +419,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             upstream_repo: https://github.com/you/project
             upstream_commit: 4e9355d6...
 
-        Detection is `git ls-remote` against the recorded commit — no API
+        Detection is `git ls-remote` against the recorded commit; no API
         token, no rate limit, and private repos work through the git
         credentials you already have.
 
@@ -514,7 +514,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         One model call. Retrieval does the work; the model only writes up what
         was retrieved, and every citation is checked against the passages
         actually supplied. If retrieval finds nothing, no call is made and you
-        are told the vault has nothing — the model never falls back on its own
+        are told the vault has nothing, the model never falls back on its own
         knowledge, which would make the answer untraceable.
 
         Exits 1 when the vault cannot answer, or when a citation does not
@@ -579,7 +579,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         """Seed the knowledge graph from vault structure. Zero model calls.
 
         Filenames become concepts and links become MENTIONS edges. The vault
-        already states what its concepts are — a human decided `Binary Search`
+        already states what its concepts are, a human decided `Binary Search`
         deserves one canonical home and created the page. Reading that is
         deterministic; inferring it from prose is what extraction did badly.
 
@@ -630,9 +630,9 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
             written = len(plan.concepts) + len(plan.links)
 
         # Concepts the store holds that this pass did not see: their page was
-        # deleted or renamed. Bootstrap does not remove them — a concept may
+        # deleted or renamed. Bootstrap does not remove them, a concept may
         # carry claims and human decisions, and dropping it silently would take
-        # those with it — so the count is reported instead.
+        # those with it, so the count is reported instead.
         stale = len({c.id for c in store.list_concepts()} - {c.id for c in plan.concepts})
 
         payload = {
@@ -780,7 +780,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         named `rag.md` becomes the concept `rag`, a model reading that page
         calls the same thing `Retrieval-Augmented Generation`, and with no
         alias between them the extractor proposes a *second* concept for a page
-        that already has one — which is the vault's one-canonical-home rule
+        that already has one, which is the vault's one-canonical-home rule
         broken by the tool meant to enforce it.
 
         Nothing is merged retroactively. This decides what the name means from
@@ -891,7 +891,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         Until this existed, no extraction change could be judged: the `0.2.0` ->
         `0.3.0` prompt rewrite was assessed by reading fifty proposals by hand,
         and the reasoning-off experiment had to be run against the *assessment*
-        set instead — which is why its conclusion covered classification and
+        set instead, which is why its conclusion covered classification and
         said nothing about extraction.
 
         The headline metric is **junk rate**, not recall. Over-extraction was
@@ -900,8 +900,8 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         would score a maximally greedy extractor best.
 
         A case whose calls did not all return is **not scored**, and the run is
-        marked untrustworthy. A timeout does not raise — it returns a truncated
-        result — and a case that emitted nothing cannot emit anything
+        marked untrustworthy. A timeout does not raise; it returns a truncated
+        result, and a case that emitted nothing cannot emit anything
         forbidden, so folding it in makes a broken run look clean.
 
         Exits 1 if any case failed, so it composes in a script.
@@ -1003,7 +1003,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         store.initialize()
 
         # The default set lives in the repository, so resolve it against the
-        # vault rather than the working directory — otherwise the command only
+        # vault rather than the working directory, otherwise the command only
         # works when run from the repository root.
         # The label set ships with the engine; only the corpus it names lives
         # in the vault. Resolving it under `vault_path` meant the command could

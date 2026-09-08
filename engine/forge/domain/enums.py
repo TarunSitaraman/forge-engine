@@ -29,7 +29,7 @@ class ProvenanceTier(str, Enum):
 #: Evidential strength. Higher is stronger. Used by the provenance floor rule.
 #:
 #: ``USER_ASSERTION`` is given the same rank as ``EXTRACTED_CLAIM``. Rationale:
-#: a user assertion is a first-hand statement of belief — stronger than a model
+#: a user assertion is a first-hand statement of belief, stronger than a model
 #: inference drawn from it, weaker than a verbatim source fact. Ranking it
 #: below inference would let a model's guess outrank the user; ranking it at the
 #: top would let unsourced belief launder itself into quotable evidence.
@@ -224,7 +224,7 @@ class EntityType(str, Enum):
     #: has its own revision history, so it is an entity rather than a note.
     PROPOSAL = "Proposal"
     #: Phase 4. A workflow run is the durable record of *why* knowledge
-    #: changed — which evidence, which candidates, which model, which
+    #: changed, which evidence, which candidates, which model, which
     #: decision. Without it, an approved change is unexplainable after the
     #: fact, which defeats the point of provenance.
     WORKFLOW = "Workflow"
@@ -236,7 +236,7 @@ class EntityType(str, Enum):
 
 
 # --------------------------------------------------------------------------
-# Phase 2 — ingestion, extraction, and proposals
+# Phase 2, ingestion, extraction, and proposals
 # --------------------------------------------------------------------------
 
 
@@ -306,7 +306,7 @@ class ProposalType(str, Enum):
     NEW_CONCEPT = "new_concept"
     CONCEPT_MATCH = "concept_match"
     NEW_CLAIM = "new_claim"
-    # Phase 4 — knowledge *evolution*. These target knowledge that already
+    # Phase 4, knowledge *evolution*. These target knowledge that already
     # exists, which is what distinguishes them from everything above: the
     # types before this line only ever add.
     CLAIM_EVIDENCE = "claim_evidence"  # corroborating evidence for a live claim
@@ -340,7 +340,7 @@ class ImpactClass(str, Enum):
     Distinct from :class:`AssessmentClass` because they answer different
     questions. An assessment is about one claim; an impact is about what Forge
     should now *do*. The mapping between them is deterministic code, not a
-    second model call — see :mod:`forge.evolution.impact`.
+    second model call, see :mod:`forge.evolution.impact`.
     """
 
     NO_MATERIAL_CHANGE = "NO_MATERIAL_CHANGE"
@@ -362,7 +362,7 @@ class WorkflowStatus(str, Enum):
     WAITING_FOR_REVIEW = "waiting_for_review"
     COMPLETED = "completed"
     FAILED = "failed"
-    #: The configured provider could not serve a semantic step. Resumable —
+    #: The configured provider could not serve a semantic step. Resumable,
     #: never silently downgraded to a weaker model.
     SEMANTIC_ANALYSIS_UNAVAILABLE = "semantic_analysis_unavailable"
 
@@ -373,7 +373,7 @@ class ProposalStatus(str, Enum):
     ``ACTIVATED`` is distinct from ``APPROVED`` on purpose. Approval is a
     human decision; activation is the persistence of canonical knowledge that
     followed from it. Collapsing them would make "approved" ambiguous about
-    whether anything actually exists in the model — and would let a failed
+    whether anything actually exists in the model, and would let a failed
     write masquerade as success.
     """
 
@@ -388,7 +388,7 @@ class SafetyClass(str, Enum):
     """How much trust a proposal's content warrants.
 
     ``DETERMINISTIC_VERIFIED`` is reserved for changes computed by ordinary
-    software *and* verified by re-parsing the result — the Phase 1 frontmatter
+    software *and* verified by re-parsing the result, the Phase 1 frontmatter
     repairs. An LLM-generated proposal can never carry it, no matter how
     confident the model was.
     """

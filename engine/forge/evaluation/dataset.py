@@ -2,7 +2,7 @@
 
 Loads the versioned label set shipped in ``forge/evaluation/data/``. Kept in
 the repository rather than generated, because a labelled set that regenerates
-itself measures nothing — the whole value is that it is fixed while the
+itself measures nothing, the whole value is that it is fixed while the
 retrieval implementation changes underneath it.
 
 The default path is resolved **relative to this module**, not to the vault or
@@ -70,7 +70,7 @@ class EvalDataset:
         """Return labels that no longer point at a real file.
 
         A reorganized corpus must not be able to silently turn this set into
-        unreachable ground truth — which would show up as a mysterious drop in
+        unreachable ground truth, which would show up as a mysterious drop in
         recall rather than as the data problem it is.
         """
         missing: list[str] = []

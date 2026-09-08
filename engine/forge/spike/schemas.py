@@ -32,7 +32,7 @@ class ExtractedConcept(BaseModel):
 
 
 class ConceptExtraction(SpikeSchema):
-    """Task 1 — structured concept extraction."""
+    """Task 1: structured concept extraction."""
 
     concepts: list[ExtractedConcept] = Field(min_length=1, max_length=12)
 
@@ -40,12 +40,12 @@ class ConceptExtraction(SpikeSchema):
 class ExtractedClaim(BaseModel):
     statement: str = Field(description="A single assertion made by the text")
     #: Verbatim supporting text. Requested so the spike can check whether the
-    #: model can ground a claim at all — the precondition for provenance.
+    #: model can ground a claim at all, the precondition for provenance.
     evidence_quote: str = Field(default="", description="Verbatim quote supporting the statement")
 
 
 class ClaimExtraction(SpikeSchema):
-    """Task 2 — simple claim extraction."""
+    """Task 2: simple claim extraction."""
 
     claims: list[ExtractedClaim] = Field(min_length=1, max_length=8)
 
@@ -57,13 +57,13 @@ class ExtractedRelationship(BaseModel):
 
 
 class RelationshipExtraction(SpikeSchema):
-    """Task 3 — relationship extraction."""
+    """Task 3: relationship extraction."""
 
     relationships: list[ExtractedRelationship] = Field(min_length=1, max_length=10)
 
 
 class SmallSynthesis(SpikeSchema):
-    """Task 4 — small synthesis task."""
+    """Task 4: small synthesis task."""
 
     summary: str = Field(min_length=1, description="2-3 sentence synthesis across the provided notes")
     key_points: list[str] = Field(default_factory=list, max_length=5)

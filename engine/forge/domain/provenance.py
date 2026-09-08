@@ -1,4 +1,4 @@
-"""Provenance — recorded structurally, enforced at construction.
+"""Provenance: recorded structurally, enforced at construction.
 
 The **provenance floor rule**:
 
@@ -85,7 +85,7 @@ class Provenance(BaseModel):
     prompt_version: str | None = None
     #: Phase 4. The output schema the model was held to, and the derivation key
     #: the result was cached under. Both are needed to answer "would this be
-    #: recomputed today?" — a prompt or schema change must be visible in the
+    #: recomputed today?", a prompt or schema change must be visible in the
     #: provenance of everything produced under the old one.
     schema_version: str | None = None
     derivation_key: str | None = None
@@ -108,7 +108,7 @@ class Provenance(BaseModel):
         # 2. Model derivation must identify its model; deterministic must not.
         if self.derivation is Derivation.MODEL and not self.model_id:
             raise ProvenanceViolation(
-                "derivation=MODEL requires model_id — an unattributable model "
+                "derivation=MODEL requires model_id, an unattributable model "
                 "output cannot be traced and must not be stored"
             )
         if self.derivation is Derivation.DETERMINISTIC and self.model_id:

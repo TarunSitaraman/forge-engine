@@ -3,13 +3,13 @@
 `Projects/` holds knowledge packs describing repositories that live elsewhere.
 Those repositories change; the packs do not. Nothing in the vault could say
 whether `Projects/quickcover/` still described QuickCover, so the docs aged
-invisibly — the failure mode the whole vault exists to avoid.
+invisibly, the failure mode the whole vault exists to avoid.
 
 **Detection is deterministic and needs no model and no API token.**
 `git ls-remote <url> HEAD` returns the current head commit. Comparing it with
 the commit a pack recorded is a string comparison. That choice matters:
 
-* No GitHub token to store, rotate, or leak — git already holds the user's
+* No GitHub token to store, rotate, or leak, git already holds the user's
   credentials, so private repositories work exactly as public ones do.
 * Not GitHub-specific. Any git remote answers `ls-remote`.
 * No API rate limit worth the name.
@@ -110,7 +110,7 @@ def declared_upstreams(index, vault_path: Path) -> list[tuple[str, str, str | No
     """(path, url, recorded_commit) for every page declaring an upstream.
 
     The corpus index records which frontmatter *keys* a file has but not their
-    values, so candidates are found from the index — cheap, no I/O — and only
+    values, so candidates are found from the index (cheap, no I/O) and only
     those few files are re-read for the values. Storing every frontmatter value
     in the index to save four reads would be the wrong trade.
     """
@@ -145,7 +145,7 @@ def check(
 ) -> list[UpstreamStatus]:
     """Compare each declared upstream against its recorded commit.
 
-    `fetch` is injectable so the whole path is testable without a network —
+    `fetch` is injectable so the whole path is testable without a network,
     the same discipline the LLM providers follow.
     """
     statuses: list[UpstreamStatus] = []

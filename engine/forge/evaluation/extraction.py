@@ -8,7 +8,7 @@ turned out to have silently governed a 5.66-hour run. `docs/research/` records
 both as unmeasurable. This makes them measurable.
 
 **What is scored, and why these things.** Over-extraction was the observed
-failure — a 25-concept sample was roughly 35-40% usable, returning `RAM`,
+failure, a 25-concept sample was roughly 35-40% usable, returning `RAM`,
 `Answer`, `Fluency`, `maxmemory` and `VARCHAR(n)` as concepts. So the headline
 metric is not recall but **junk rate**: how often the extractor emits something
 from a list of strings it has actually produced on this corpus and should not.
@@ -18,7 +18,7 @@ which is precisely the failure mode.
 Claims are scored on **grounding**, which needs no labels at all: a quote is
 either present in its span or it is not, and that check is deterministic. The
 denominator has to include the claims the extractor *dropped* for exactly that
-reason, though — its returned `claims` have already passed `_grounded`, so
+reason, though; its returned `claims` have already passed `_grounded`, so
 scoring only those reports 1.000 for every model ever tested.
 
 **A case whose calls did not all return is not scored.** A timeout does not
@@ -116,7 +116,7 @@ class CaseScore:
     #: means some call did not return, so the case's emitted set is truncated
     #: and scoring it would understate junk and recall alike.
     status: str = "succeeded"
-    #: Failure kinds the extractor reported — `llm_error`, `ungrounded_claim`.
+    #: Failure kinds the extractor reported: `llm_error`, `ungrounded_claim`.
     failures: list[str] = field(default_factory=list)
 
     @property
@@ -159,7 +159,7 @@ class ExtractionReport:
     def complete(self) -> list[CaseScore]:
         """Cases every call returned for. Every rate below is over these only.
 
-        A timed-out case emits nothing, and nothing cannot be junk — so folding
+        A timed-out case emits nothing, and nothing cannot be junk, so folding
         it in makes a broken run look clean. Observed on the first real run,
         2026-08-29: four timeouts in a 12-call run reported `junk=0.00`, which
         was in part the absence of output rather than the absence of junk.
@@ -196,7 +196,7 @@ class ExtractionReport:
 
         The denominator must include the claims the extractor *dropped*. Its
         `claims` list has already survived `_grounded`, so re-checking only
-        those returns 1.000 for any model, however badly it quotes — a metric
+        those returns 1.000 for any model, however badly it quotes, a metric
         that cannot fail is worse than no metric, because it reassures.
         """
         kept = sum(s.claims for s in self.complete)
@@ -251,8 +251,8 @@ def score_case(
 ) -> CaseScore:
     """Score one case's extracted concepts and claims.
 
-    Matching is through `normalize()` — the same comparison the link resolver
-    and identity config use — so `B-tree index` and `B Tree Index` are one
+    Matching is through `normalize()`, the same comparison the link resolver
+    and identity config use, so `B-tree index` and `B Tree Index` are one
     concept rather than a miss plus a false positive.
     """
     emitted = {normalize(c): c for c in concepts if c and c.strip()}
@@ -289,7 +289,7 @@ def _failure_lines(failures: Sequence[dict]) -> list[str]:
     """Deduplicate failures to `kind: message`, keeping the message.
 
     Six spans failing on one rejected model name is one fact, not six, but
-    dropping the message leaves `llm_error` — which names the layer that
+    dropping the message leaves `llm_error`, which names the layer that
     caught the error and nothing about the error.
     """
     seen: dict[str, None] = {}
@@ -309,7 +309,7 @@ def run(
     """Drive the production extractor over the set, one span per case.
 
     Uses `CandidateExtractor` itself rather than re-implementing the prompt
-    path, so what is scored is what ships — the same reason the assessment eval
+    path, so what is scored is what ships, the same reason the assessment eval
     drives the real `EvidenceAssessor`.
     """
     import time

@@ -2,7 +2,7 @@
 
 The extractor sends one span per call, so the model cannot know another span
 already produced the same claim. Asking the prompt to deduplicate was a
-category error; deduplication is deterministic and belongs in code — where it
+category error; deduplication is deterministic and belongs in code, where it
 also applies retroactively to proposals that already exist.
 """
 
@@ -107,7 +107,7 @@ class TestClaimNearDuplicates:
         "worsen generation quality."
     )
     CLOSE_DUPES = (_CLOSE_A, _CLOSE_B)
-    #: Opposites, scoring 0.604 — higher than all but one true duplicate.
+    #: Opposites, scoring 0.604, higher than all but one true duplicate.
     #: Word overlap cannot tell a statement from its converse, and no threshold
     #: fixes that.
     OPPOSITES = (

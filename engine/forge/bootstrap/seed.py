@@ -3,7 +3,7 @@
 **Zero model calls.** The vault already states what its concepts are: a human
 decided `Binary Search` deserves one canonical home and created the file. That
 decision is the exact judgement LLM extraction was struggling to reproduce, and
-it is sitting in the directory listing — measured 2026-08-20, extraction over
+it is sitting in the directory listing, measured 2026-08-20, extraction over
 prose returned `RAM`, `Answer`, `Fluency` and `VARCHAR(n)` as concepts.
 
 Two derivations, both structural:
@@ -11,7 +11,7 @@ Two derivations, both structural:
 * **Filenames -> Concepts.** Provenance is ``USER_ASSERTION`` /
   ``DETERMINISTIC``: the user asserted this concept by creating a page for it,
   and reading the filename involves no inference. ``USER_ASSERTION`` is the one
-  tier permitted to stand without supporting evidence, which is correct here —
+  tier permitted to stand without supporting evidence, which is correct here,
   the evidence *is* the file.
 * **Links -> edges.** Every edge is ``RELATED_TO``. That is not a style
   choice: the concept graph accepts ``{RELATED_TO, PART_OF, DEPENDS_ON,
@@ -22,7 +22,7 @@ Two derivations, both structural:
 
   ``RELATED_TO`` requires an explicit score, so that the edge which would
   otherwise turn the graph into an untyped mesh has to justify itself. These
-  score ``1.0`` — not a computed similarity, but a human-authored link, which
+  score ``1.0``, not a computed similarity, but a human-authored link, which
   is the strongest evidence of relatedness the vault contains. The rationale
   on every edge says so, so a later reader cannot mistake it for a
   measurement.
@@ -66,7 +66,7 @@ EXCLUDED_STEMS: frozenset[str] = frozenset(
     }
 )
 
-#: Numbered section files inside a knowledge pack — `01-overview.md`,
+#: Numbered section files inside a knowledge pack: `01-overview.md`,
 #: `10-roadmap.md`. These are chapters of a project's documentation, not
 #: concepts, and their stems collide across every pack that uses the pattern.
 _NUMBERED_SECTION_RE = re.compile(r"^\d{2}-[a-z0-9-]+$")
@@ -74,8 +74,8 @@ _NUMBERED_SECTION_RE = re.compile(r"^\d{2}-[a-z0-9-]+$")
 #: Status and session artifacts. Point-in-time records, not durable ideas.
 _ARTIFACT_RE = re.compile(r"(SUMMARY|STATUS|PLAN|CHECKLIST|_SESSION_)", re.IGNORECASE)
 
-#: Folders that hold navigation only. `DSA/00_Index` is a set of hub pages —
-#: `Pattern Index`, `Data Structure Index`, `DSA Home` — that route the reader
+#: Folders that hold navigation only. `DSA/00_Index` is a set of hub pages
+#: (`Pattern Index`, `Data Structure Index`, `DSA Home`) that route the reader
 #: to the real pages. Seeding them makes "Data Structure Index" a concept
 #: sitting alongside the data structures it lists, which is the same
 #: table-of-contents mistake extraction made.
@@ -104,7 +104,7 @@ class SeedPlan:
     concepts: list[Concept] = field(default_factory=list)
     links: list[ClaimLink] = field(default_factory=list)
     #: Bare names that map to more than one page and have no recorded decision.
-    #: Left out of the graph entirely — the engine must not pick one.
+    #: Left out of the graph entirely, the engine must not pick one.
     undecided_collisions: dict[str, list[str]] = field(default_factory=dict)
     skipped_pages: list[str] = field(default_factory=list)
     #: Links that did not become edges, counted by why. Reported rather than
@@ -115,7 +115,7 @@ class SeedPlan:
     #: link is a rename away from working.
     skipped_links: dict[str, int] = field(default_factory=dict)
     #: Per concept id: how many pages in the vault link to its page, and a few
-    #: of them by path — counted over **every** page, not only the ones that
+    #: of them by path, counted over **every** page, not only the ones that
     #: became nodes.
     #:
     #: The graph cannot answer "does anything point here?", and mistaking that

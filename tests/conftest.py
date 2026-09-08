@@ -2,16 +2,16 @@
 
 Two vaults are available:
 
-* ``fixture_vault`` — a small synthetic vault that deliberately reproduces the
+* ``fixture_vault``, a small synthetic vault that deliberately reproduces the
   exact defect shapes found in the real corpus (both malformed ``related:``
   forms, stem collisions, URL-encoded links, duplicate content).
-* ``real_vault`` — the Markdown vault the engine was built against. Integration
+* ``real_vault``, the Markdown vault the engine was built against. Integration
   tests run against it so the engine is validated on real material, not only on
   ideal examples. That vault is a **separate, private repository**, so these
   tests skip unless it is available: set ``FORGE_TEST_VAULT`` to its checkout,
   or run from a tree that still contains it. They assert against that specific
   corpus, which is why they take a dedicated variable rather than reusing
-  ``FORGE_VAULT_PATH`` — pointing them at some other vault would fail on
+  ``FORGE_VAULT_PATH``, pointing them at some other vault would fail on
   content, not on a defect.
 
 No test requires a live LLM. Anything that would is marked ``requires_model``
@@ -74,7 +74,7 @@ def store(tmp_path: Path) -> SqliteStore:
 
 #: Where to find the Markdown vault when it is not in this tree. It lives in its
 #: own private repository, so after the engine was split out there is no path
-#: that can be assumed — but the corpus tests are the ones that matter most, and
+#: that can be assumed, but the corpus tests are the ones that matter most, and
 #: leaving them permanently unrunnable would quietly delete that coverage.
 TEST_VAULT_VAR = "FORGE_TEST_VAULT"
 
@@ -138,7 +138,7 @@ def pdf_dir() -> Path:
 
 @pytest.fixture
 def pipeline(settings, store):
-    """Deterministic ingestion pipeline — no LLM."""
+    """Deterministic ingestion pipeline: no LLM."""
     from forge.ingestion import IngestionPipeline
 
     return IngestionPipeline(settings, store)

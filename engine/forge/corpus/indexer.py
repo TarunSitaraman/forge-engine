@@ -2,7 +2,7 @@
 
 Walks the vault, hashes every file, parses structure and metadata, resolves
 links, and detects duplicates. **No LLM is involved at any point.** The same
-input corpus always produces the same index — asserted by
+input corpus always produces the same index, asserted by
 :meth:`CorpusIndex.fingerprint` in the test suite, not merely intended.
 
 The indexer is strictly read-only. It opens files for reading and never writes
@@ -97,7 +97,7 @@ class CorpusIndexer:
 
         Reporting `[[Heap]]` as unresolved after a human has recorded what it
         means is the engine ignoring an answer it was given. Missing or
-        malformed config is not fatal here — link resolution simply falls back
+        malformed config is not fatal here, link resolution simply falls back
         to reporting the ambiguity, which is the pre-existing behaviour.
         """
         try:
@@ -105,7 +105,7 @@ class CorpusIndexer:
 
             # Anchored to the vault, never to the process's working directory.
             # `DEFAULT_CONFIG_PATH` is relative, so calling `load()` bare read
-            # `./config/concept-identity.yaml` — which silently resolves to
+            # `./config/concept-identity.yaml`, which silently resolves to
             # nothing whenever `forge index` runs from anywhere but the vault
             # root, and every decided collision goes back to reporting as
             # ambiguous. That is precisely the answer-being-ignored failure this
@@ -217,7 +217,7 @@ class CorpusIndexer:
 
         Every file in the existing corpus is imported as
         ``TrustTier.USER_AUTHORED``. Downstream, claims drawn from it are
-        ``USER_ASSERTION`` — never ``SOURCE_FACT``. The corpus is hand-written
+        ``USER_ASSERTION``, never ``SOURCE_FACT``. The corpus is hand-written
         and largely uncited: it is authoritative for what the user believes,
         and it is not evidence for what is true. Collapsing that distinction
         would poison the tiering of everything built on top.

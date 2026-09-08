@@ -135,7 +135,7 @@ class TestMovedCases:
 
 
 class TestStability:
-    """`assessment_eval.stability` — the answer to "is this delta real?".
+    """`assessment_eval.stability`: the answer to "is this delta real?".
 
     Added after the fitted set scored 18/21 and 15/21 on consecutive days
     against the same model, prompt and command, with the three differing cases

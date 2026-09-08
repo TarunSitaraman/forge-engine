@@ -5,7 +5,7 @@ questions this harness asks are:
 
 * Did the structured output validate?
 * Did every citation resolve to a span that was actually shown?
-* Did the classification produce the right proposal — or correctly produce
+* Did the classification produce the right proposal, or correctly produce
   none?
 * Did a repeated run hit the cache instead of paying again?
 * How long did it take?
@@ -14,7 +14,7 @@ With the scripted provider (the CI default) the model's answer is fixed, so
 classification accuracy is 1.0 by construction and is *not* evidence about any
 real model. That is stated in the output rather than left for the reader to
 infer. Point the harness at a real provider and the same cases measure
-agreement instead — a genuinely different, and much weaker, claim.
+agreement instead, a genuinely different, and much weaker, claim.
 """
 
 from __future__ import annotations

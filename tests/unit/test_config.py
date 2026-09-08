@@ -102,7 +102,7 @@ def test_raises_rather_than_falling_back_to_the_module(monkeypatch, tmp_path: Pa
 
 
 def test_falls_back_to_the_vault_the_user_is_standing_in(monkeypatch, tmp_path: Path) -> None:
-    """A non-editable install has no vault next to it — site-packages is not one."""
+    """A non-editable install has no vault next to it: site-packages is not one."""
     cwd_vault = tmp_path / "cwd-vault"
     (cwd_vault / ".git").mkdir(parents=True)
 
@@ -333,7 +333,7 @@ def test_a_preset_fills_the_endpoint_and_credential_variable(
 
 
 def test_explicit_values_override_a_preset(fixture_vault: Path, monkeypatch) -> None:
-    """A preset is a default, not a mode — every field stays overridable."""
+    """A preset is a default, not a mode: every field stays overridable."""
     monkeypatch.setenv("FORGE_CLOUD_PRESET", "groq")
     monkeypatch.setenv("FORGE_CLOUD_MODEL", "qwen3-32b")
     monkeypatch.setenv("FORGE_CLOUD_API_KEY_ENV", "MY_OWN_KEY")
@@ -401,7 +401,7 @@ def test_the_shipped_example_settings_file_parses(monkeypatch) -> None:
 
     values = read_env_file()
 
-    assert values, "example file parsed to nothing — every line got commented out?"
+    assert values, "example file parsed to nothing, every line got commented out?"
     # Its active profile is the GPU box; the rest are commented alternatives.
     assert values["FORGE_MODEL_DEFAULT"]
     assert all(k.isupper() for k in values), values
@@ -412,13 +412,13 @@ class TestPresetCeilingsFitTheirFreeTier:
 
     Groq counts reserved output against a per-minute limit, so an 8192 ceiling
     on a free tier capped at 8,000 TPM rejected every request before a single
-    prompt token was added — measured 2026-08-29, a ~400-token prompt reported
+    prompt token was added, measured 2026-08-29, a ~400-token prompt reported
     as 8,595 requested. Cerebras has the same trap through context rather than
     rate, and that one was already reasoned about in the table.
 
     Only the two hosts whose limits have actually been observed are asserted
     here. The others may well have the same problem, but this repo does not put
-    a number on a budget nobody measured — a sweeping assertion over all
+    a number on a budget nobody measured, a sweeping assertion over all
     presets would be inventing free-tier limits for hosts never tested.
     """
 

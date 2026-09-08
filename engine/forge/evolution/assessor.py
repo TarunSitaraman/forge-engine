@@ -1,4 +1,4 @@
-"""Semantic evidence assessment — the one place Forge actually reasons.
+"""Semantic evidence assessment: the one place Forge actually reasons.
 
 Everything else in the evolution workflow is deterministic: narrowing, claim
 retrieval, impact mapping, proposal construction, activation. This module is
@@ -9,7 +9,7 @@ Four rules are enforced here in code, not requested in the prompt:
 
 1. **Grounding.** Every cited span id must be one that was actually shown to
    the model and exists in the store. A citation to anything else means the
-   assessment is rejected — never repaired. Repairing a hallucinated citation
+   assessment is rejected, never repaired. Repairing a hallucinated citation
    would mean fabricating the evidence for a knowledge change.
 2. **Conservatism.** ``CONTRADICTS`` does not exist in the vocabulary. The
    strongest available judgement is ``POTENTIAL_CONFLICT``, which routes to a

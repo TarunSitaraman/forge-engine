@@ -1,6 +1,6 @@
 """Folder -> ConceptKind mapping for filename-derived concepts.
 
-The vault's directory layout already encodes what kind of thing a page is —
+The vault's directory layout already encodes what kind of thing a page is,
 `DSA/01_Patterns/Heap.md` is a pattern, `Technologies/Docs/redis.md` is a
 technology. Reading that is deterministic and needs no model; guessing kinds
 from prose is exactly the job extraction did badly.

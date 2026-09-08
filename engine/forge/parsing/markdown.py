@@ -14,7 +14,7 @@ because getting either wrong silently corrupts the index:
    than discarded.
 
 Implementation note: this uses stdlib ``re`` rather than a Markdown library.
-That is a deliberate choice, not laziness — Forge needs *source locations*
+That is a deliberate choice, not laziness, Forge needs *source locations*
 (line numbers) for every heading and link so spans can be built, plus
 wikilink and tag syntax that no CommonMark parser implements. A full parser
 would have to be post-processed for all of it anyway.
@@ -215,7 +215,7 @@ def parse_markdown(text: str) -> ParsedMarkdown:
 
 
 def _dedupe(items: list[str]) -> list[str]:
-    """Order-preserving dedupe — keeps output deterministic."""
+    """Order-preserving dedupe: keeps output deterministic."""
     seen: set[str] = set()
     out: list[str] = []
     for it in items:

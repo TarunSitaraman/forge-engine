@@ -1,4 +1,4 @@
-"""Workflow runs — the durable record of how knowledge came to change.
+"""Workflow runs: the durable record of how knowledge came to change.
 
 A :class:`WorkflowRun` is not orchestration bookkeeping. It is the answer to
 the question a user will eventually ask about every proposal Forge makes:
@@ -8,7 +8,7 @@ the question a user will eventually ask about every proposal Forge makes:
 Answering that requires knowing which evidence arrived, which existing
 knowledge was considered *and why it was considered*, which model assessed it,
 under which prompt and schema, what it concluded, and what a human then
-decided. All of that lives here, and it outlives the LangGraph checkpoint —
+decided. All of that lives here, and it outlives the LangGraph checkpoint,
 checkpoints are resumption state and may be pruned; this is history.
 
 Deliberately storage-agnostic and framework-agnostic: nothing here imports
@@ -140,7 +140,7 @@ class WorkflowRun(BaseModel):
     status: WorkflowStatus = WorkflowStatus.RUNNING
 
     #: Provider/model the run was *started* with. A resume under a different
-    #: provider is recorded rather than hidden — see `provider_changed`.
+    #: provider is recorded rather than hidden, see `provider_changed`.
     provider_id: str = "none"
     model_id: str = "none"
     prompt_version: str = "none"
@@ -168,7 +168,7 @@ class WorkflowRun(BaseModel):
         """Deterministic identity.
 
         Re-running evolution over unchanged evidence with unchanged code must
-        land on the *same* run, not start a second one — that is what makes
+        land on the *same* run, not start a second one; that is what makes
         repeated execution safe rather than merely tolerable.
         """
         return deterministic_id("workflow", source_id, content_hash, processor_version)

@@ -3,7 +3,7 @@
 
 Writes raw PDF syntax rather than depending on a PDF-authoring library. The
 fixtures are committed, so this script exists to document exactly how they were
-made and to allow regeneration — the tests do not run it.
+made and to allow regeneration, the tests do not run it.
 
 Deliberately minimal and deterministic: byte-identical output on every run, so
 a fixture's content hash is stable and can be asserted.
@@ -148,7 +148,7 @@ def main() -> None:
         )
     )
 
-    # 4. Overlapping document — shares concepts with multipage.pdf, for testing
+    # 4. Overlapping document, shares concepts with multipage.pdf, for testing
     #    concept candidate matching across sources.
     (OUT / "overlapping.pdf").write_bytes(
         _simple_doc(
@@ -170,7 +170,7 @@ def main() -> None:
     # 4b. The Phase 4 evolution pair. Two papers that genuinely disagree about
     #     the same technique, so the evolution workflow has real material:
     #     paper-a establishes a claim, paper-b qualifies it. Kept deliberately
-    #     short — the point is the disagreement, not the volume.
+    #     short, the point is the disagreement, not the volume.
     (OUT / "paper-a-rag-accuracy.pdf").write_bytes(
         _simple_doc(
             [

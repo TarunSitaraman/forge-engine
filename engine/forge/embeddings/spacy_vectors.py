@@ -4,7 +4,7 @@
 spaCy pipeline (`en_core_web_md` by default). Unlike
 :class:`~forge.embeddings.hashing.HashingEmbeddingProvider`, these vectors are
 *learned from a corpus*, so two passages that share no vocabulary can still
-score as similar — which is the entire property the hashing provider lacks and
+score as similar, which is the entire property the hashing provider lacks and
 the reason this exists.
 
 **What this is NOT.** It is not a modern sentence embedding. Mean-pooling
@@ -16,7 +16,7 @@ production provider; see :class:`OllamaEmbeddingProvider`.
 
 **Why it exists.** The same reason the hashing provider does, one rung up. The
 build environment blocks `huggingface.co` and `ollama.com`, so no transformer
-encoder can be obtained — but spaCy's models ship as wheels from GitHub
+encoder can be obtained, but spaCy's models ship as wheels from GitHub
 releases, which is reachable. That makes it possible to answer the question the
 hashing provider could not: *does semantic matching, as opposed to vocabulary
 overlap, retrieve documents lexical search never finds?*

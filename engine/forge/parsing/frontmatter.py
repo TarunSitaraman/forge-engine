@@ -7,7 +7,7 @@ proposals. Applying them is a separate, explicitly-approved human action.
 The audit found frontmatter to be the corpus's largest machine-readability
 defect: 283 ``related:`` fields malformed, of which 68 fail YAML parsing
 outright and 215 parse into nested lists rather than links. Both shapes come
-from the same authoring mistake — writing Obsidian wikilinks into a YAML
+from the same authoring mistake, writing Obsidian wikilinks into a YAML
 value without quoting:
 
     related: [[Pattern Index]], [[Template Index]]   # -> YAML ParserError
@@ -30,7 +30,7 @@ import yaml
 
 _WIKILINK_INNER_RE = re.compile(r"\[\[([^\[\]]+?)\]\]")
 #: A wikilink whose closing ``]]`` was truncated to a single ``]`` at end of
-#: value — e.g. ``related: [[A]], [[B]``. Discovered in 18 corpus files during
+#: value, e.g. ``related: [[A]], [[B]``. Discovered in 18 corpus files during
 #: Phase 1; the Phase 0 audit characterized only the two shapes above it.
 _TRUNCATED_WIKILINK_RE = re.compile(r"\[\[([^\[\]]+?)\](?!\])\s*$")
 _KEY_VALUE_RE = re.compile(r"^(?P<indent>\s*)(?P<key>[A-Za-z_][\w-]*)\s*:\s*(?P<value>.*)$")
@@ -346,7 +346,7 @@ def _propose_wikilink_repairs(raw: str) -> tuple[list[RepairProposal], list[Diag
         #
         # Emitting `related: ["A", "B"]` is valid YAML and was the original
         # repair, but it silently destroys the links. Two consumers read these
-        # fields by text-extracting `[[...]]` from the raw frontmatter —
+        # fields by text-extracting `[[...]]` from the raw frontmatter,
         # `extract_wikilink_values`, which is how `CorpusIndexer` builds the
         # `related` graph, and `parse_markdown`, which counts frontmatter
         # wikilinks. Strip the brackets and both return nothing: measured on

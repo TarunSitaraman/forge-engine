@@ -46,7 +46,7 @@ class TestProtocolConformance:
         )
         store.reset()
         assert store.counts()["sources"] == 0
-        store.reset()  # again — must not raise
+        store.reset()  # again, must not raise
 
 
 class TestSourceLifecycle:

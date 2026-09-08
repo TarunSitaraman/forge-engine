@@ -25,7 +25,7 @@ Rules:
 - If the passages do not answer the question, say exactly:
   NOT IN VAULT
   followed by one sentence on what is missing. Do not answer from your own
-  knowledge, and do not guess — an unanswerable question is a useful result.
+  knowledge, and do not guess, an unanswerable question is a useful result.
 - Do not repeat the question. Do not describe the passages ("the text says").
   State the answer.
 - Prefer the vault's own terminology over synonyms.

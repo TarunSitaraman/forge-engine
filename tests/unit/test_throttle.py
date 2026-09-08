@@ -178,7 +178,7 @@ class TestTheEngineAsksForIt:
     The throttle shipped usable only from `scripts/*_eval.py`, which took a
     `--sleep`. Nothing in the engine's own commands could ask for pacing, so
     `forge ingest --extract` against a free cloud tier issued calls as fast as
-    it could and collected 429s — the one step the whole knowledge layer
+    it could and collected 429s, the one step the whole knowledge layer
     depends on could not be run against the provider the user actually has.
     """
 

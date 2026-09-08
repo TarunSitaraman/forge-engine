@@ -6,7 +6,7 @@
 
 Everything up to and including span persistence is deterministic and works with
 no model installed. Semantic extraction is a strictly optional stage bolted on
-after the deterministic pipeline has already succeeded — so a failure, or the
+after the deterministic pipeline has already succeeded, so a failure, or the
 absence, of an LLM can never cost you the ingest.
 
 Cost control is structural rather than best-effort:
@@ -159,7 +159,7 @@ class IngestionPipeline:
         The adapter registry globs everything it can parse; it has no notion of
         which directories belong to the vault. Without this filter, ingesting
         the vault root also sweeps in `tests/fixtures/`, `engine/`, and
-        `.forge/` — turning the engine's own test data into user knowledge.
+        `.forge/`, turning the engine's own test data into user knowledge.
         """
         excludes = set(self.settings.exclude_dirs)
         out: list[Path] = []
@@ -202,8 +202,8 @@ class IngestionPipeline:
                 report.spans = len(stored_spans)
 
                 # Unchanged content does not imply extracted content. A vault
-                # ingested deterministically first — the normal order, since
-                # extraction is opt-in and expensive — has every source stored
+                # ingested deterministically first, the normal order, since
+                # extraction is opt-in and expensive, has every source stored
                 # with a matching hash and nothing extracted. Short-circuiting
                 # here on that basis made `--extract` a silent no-op, and broke
                 # resumability: an interrupted run, restarted, skipped every
@@ -212,7 +212,7 @@ class IngestionPipeline:
                 #
                 # Re-deriving the document would bump its version and duplicate
                 # spans for no reason, so extraction runs over the stored spans
-                # instead. Repeat runs still cost zero calls — that guarantee
+                # instead. Repeat runs still cost zero calls; that guarantee
                 # comes from the derivation cache inside `_extract`, which is
                 # where it belongs.
                 if opts.extract and self.extractor is not None:
@@ -224,7 +224,7 @@ class IngestionPipeline:
                 return report
             if probe.content_hash == existing.content_hash:
                 # Content unchanged, but this source has no spans *this*
-                # chunker produced — so there is real work to do. See
+                # chunker produced, so there is real work to do. See
                 # `_spans_for_source` for why that is not the same question as
                 # "does this source have spans".
                 log.info("rechunking_for_ingestion", locator=locator)
@@ -385,7 +385,7 @@ class IngestionPipeline:
         # extraction cache was consulted regardless, so a document whose result
         # was already stored could not be re-extracted at all short of editing
         # it or bumping a version. That left no way to recover a bad cached
-        # result — e.g. a PARTIAL written before partials stopped being cached.
+        # result, e.g. a PARTIAL written before partials stopped being cached.
         if not opts.force and (cached := self.store.get_derivation(key.value())) is not None:
             cache.hit()
             log.info("extraction_cache_hit", **key.describe())
@@ -399,7 +399,7 @@ class IngestionPipeline:
         # Only cache outcomes worth reusing.
         #
         # SUCCEEDED only, deliberately. PARTIAL means some calls failed, and on
-        # this hardware that is overwhelmingly a timeout — a transient failure,
+        # this hardware that is overwhelmingly a timeout, a transient failure,
         # not a property of the input. Caching it writes the transient failure
         # into the derivation key permanently: a span whose concept call timed
         # out returns `concepts=0` forever, and re-running reports a cache hit
@@ -435,7 +435,7 @@ class IngestionPipeline:
 
         # Names this source has already proposed, from an earlier run.
         #
-        # Extraction is cached, so a resumed run re-derives nothing — but it
+        # Extraction is cached, so a resumed run re-derives nothing, but it
         # still reaches here, and the matcher has meanwhile learned about the
         # proposals the *first* run made. Without this, a source that proposed
         # `Test Concept` as NEW_CONCEPT comes back and raises a CONCEPT_MATCH
@@ -490,8 +490,8 @@ class IngestionPipeline:
         """Every Markdown path in the vault, scanned once per pipeline instance.
 
         The ambiguity index must be built from the **vault filesystem**, not
-        from previously-ingested sources. A collision like `Heap` — a pattern
-        and a data structure sharing a name — exists in the corpus whether or
+        from previously-ingested sources. A collision like `Heap`, a pattern
+        and a data structure sharing a name, exists in the corpus whether or
         not either file has been ingested, and building the index only from
         stored sources would miss it entirely and report the concept as new.
         """
@@ -549,7 +549,7 @@ class IngestionPipeline:
         return len(self.store.documents_for_source(source_id)) + 1
 
     def _spans_for_source(self, source_id: str) -> list:
-        """Spans this pipeline owns — never another chunker's.
+        """Spans this pipeline owns: never another chunker's.
 
         `forge index` and `forge ingest` both write spans, for different jobs:
         Phase 1 produces heading-delimited spans for retrieval, ingestion
@@ -559,7 +559,7 @@ class IngestionPipeline:
 
         That is not hypothetical. Until 2026-08-19 the unchanged-source
         short-circuit reported and extracted over whatever spans existed, so a
-        vault indexed first — the documented order — extracted over Phase 1's
+        vault indexed first (the documented order) extracted over Phase 1's
         boundaries: 208 spans instead of 98 on `Technologies/Docs`, hence 416
         model calls instead of 196.
 

@@ -1,4 +1,4 @@
-"""Proposal system — the engine's only route to changing what a human owns."""
+"""Proposal system: the engine's only route to changing what a human owns."""
 
 from .apply import ApplyOutcome, ApplyReport, ProposalApplier
 from .grounding_audit import QuoteCheck, audit

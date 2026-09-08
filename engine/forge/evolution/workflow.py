@@ -3,7 +3,7 @@
 **LangGraph is orchestration, not the intelligence itself.** Every node in this
 module is a thin adapter over a service that already existed or is plain Python
 in this package. Nothing here parses, chunks, hashes, searches, traverses,
-validates provenance, or decides safety — those live where they lived before,
+validates provenance, or decides safety; those live where they lived before,
 and this file would be deleted without any of them changing.
 
 What LangGraph is genuinely buying, and why a hand-rolled loop was not enough:
@@ -98,7 +98,7 @@ class WorkflowContext:
     """Everything the nodes need. Deliberately **not** part of graph state.
 
     Services hold database connections and providers, neither of which can be
-    checkpointed. Keeping them here — captured by the node closures — is what
+    checkpointed. Keeping them here (captured by the node closures) is what
     lets the state itself stay small and serializable.
     """
 
@@ -427,7 +427,7 @@ def build_nodes(ctx: WorkflowContext) -> dict[str, Callable[[EvolutionState], di
     def record_revision(state: EvolutionState) -> dict[str, Any]:
         """Collect the revisions the activation produced.
 
-        Activation writes revisions itself — the store does, transactionally,
+        Activation writes revisions itself, the store does, transactionally,
         which is where it belongs. This node gathers their ids into the run so
         `forge workflow inspect` can show exactly what changed.
         """
@@ -505,7 +505,7 @@ def route_after_candidates(state: EvolutionState) -> str:
 
 
 def route_after_claims(state: EvolutionState) -> str:
-    """No claims means there is nothing to assess *against* — and no call to spend."""
+    """No claims means there is nothing to assess *against*: and no call to spend."""
     if _halted(state):
         return "finalize_workflow"
     if not state.get("related_claim_ids"):

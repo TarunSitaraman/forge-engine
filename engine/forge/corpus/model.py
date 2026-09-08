@@ -1,6 +1,6 @@
 """Data structures produced by the corpus indexer.
 
-These are the indexer's *output* records — deliberately separate from the
+These are the indexer's *output* records, deliberately separate from the
 canonical domain entities. The indexer describes what is in the vault; the
 domain model describes what Forge understands. Conflating them would make the
 index a knowledge claim, which it is not.
@@ -42,7 +42,7 @@ class IndexedFile:
     wikilink_count: int = 0
     markdown_link_count: int = 0
     #: Link names recovered from the frontmatter `related:` field by text
-    #: extraction — recoverable even though that field is unparseable as YAML.
+    #: extraction, recoverable even though that field is unparseable as YAML.
     related: tuple[str, ...] = ()
 
     diagnostics: list[Diagnostic] = field(default_factory=list)

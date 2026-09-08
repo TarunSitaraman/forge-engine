@@ -3,7 +3,7 @@
 **No graph database.** The measured graph is small (see
 ``GraphMetrics``), and recursive traversal over an indexed adjacency table is
 milliseconds at this size. The point of this module is not to avoid Neo4j
-forever — it is to *measure* the graph so the decision to adopt one can be
+forever; it is to *measure* the graph so the decision to adopt one can be
 made on evidence rather than anticipation.
 
 Every traversal is **bounded**. There is no unbounded exploration anywhere: a
@@ -173,7 +173,7 @@ class KnowledgeGraph:
     ) -> list[tuple[Concept, int]]:
         """Concepts reachable within ``max_depth``, with their distance.
 
-        Bounded by both depth and a node budget — a densely connected graph
+        Bounded by both depth and a node budget, a densely connected graph
         must not be able to turn this into a full scan.
         """
         max_depth = max(1, min(max_depth, DEFAULT_MAX_DEPTH))
@@ -206,7 +206,7 @@ class KnowledgeGraph:
         """Shortest path between two entities, or ``None`` within the bound.
 
         Breadth-first, so the first path found is shortest. ``None`` means "no
-        path within ``max_depth``" — deliberately not "no path", which this
+        path within ``max_depth``", deliberately not "no path", which this
         bounded search cannot establish.
         """
         if source_id == target_id:

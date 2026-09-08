@@ -1,4 +1,4 @@
-"""Source adapters — acquisition only.
+"""Source adapters: acquisition only.
 
 Adapters turn external material into located text. They do not extract
 concepts, discover relationships, or call an LLM.

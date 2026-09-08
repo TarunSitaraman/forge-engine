@@ -227,7 +227,7 @@ def status(
         iter(settings.llm.models.values()), "?"
     )
     # What is *configured* and what is *serving* can differ when a fallback is
-    # set. Report the one doing the work — a status line naming a provider that
+    # set. Report the one doing the work, a status line naming a provider that
     # is not answering is worse than no status line.
     serving = settings.llm.provider
     try:
@@ -243,7 +243,7 @@ def status(
         # exported for a whole extraction run because nothing displayed it.
         # Ask the provider what it would actually run rather than trusting the
         # role map. This line exists to keep a wrong assumption about the active
-        # model from governing a long run — it did once, and cost 5.66 hours —
+        # model from governing a long run; it did once, and cost 5.66 hours,
         # so a status line that names the wrong model is the exact failure it
         # was added to prevent.
         resolve = getattr(provider, "resolve_model", None)
@@ -575,7 +575,7 @@ def model_test(
     # The spike has always recorded why each attempt failed; until 2026-08-29
     # this command printed only the score. A run reading `0/3 median None` four
     # times over told you nothing about whether the model was rejected, the
-    # request malformed, or the JSON unparseable — and a reachable provider
+    # request malformed, or the JSON unparseable, and a reachable provider
     # scoring 0% is a configuration problem far more often than a model one.
     failures: dict[str, list[str]] = {}
     for t in report.tasks:
@@ -736,7 +736,7 @@ def dash(
     """Open the Forge dashboard: browse the vault, its graph and its problems.
 
     The front door. `forge shell` and `forge tui` open on a prompt; this opens
-    on your vault — what is in it, what is wrong with it, and what to do next.
+    on your vault, what is in it, what is wrong with it, and what to do next.
     Every screen is deterministic: no model is called and nothing is written.
     """
     from .dashboard import run_dashboard
@@ -817,7 +817,7 @@ def assign_help_panels(target: typer.Typer, panels: dict[str, tuple[str, ...]]) 
     The registration list is also sorted to match. Typer draws panels in the
     order it first meets one, which is the order the phase modules happen to
     attach their commands, so without this the map above would describe the
-    grouping but not the sequence — `Measure` came third because `model-test` is
+    grouping but not the sequence: `Measure` came third because `model-test` is
     defined early in this file.
     """
     rank: dict[str, tuple[int, int]] = {}

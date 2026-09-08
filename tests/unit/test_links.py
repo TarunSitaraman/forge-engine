@@ -182,7 +182,7 @@ class TestIdentityDecisionsResolveAmbiguity:
     `DSA/01_Patterns/Heap.md` and `DSA/03_DataStructures/Heap.md` both exist and
     both should, so a bare `[[Heap]]` is genuinely ambiguous and the engine must
     not guess. But `forge identity decide` exists precisely so a human can say
-    what the bare name means — and until 2026-08-27 the link resolver never read
+    what the bare name means, and until 2026-08-27 the link resolver never read
     that answer. On the real corpus this accounted for 180 of 274 unresolved
     link occurrences: Heap 74, Binary Search 66, Trie 40.
     """
@@ -264,7 +264,7 @@ class TestDecidedIdentitiesAreReadFromTheVault:
 
     `DEFAULT_CONFIG_PATH` is a relative path. `CorpusIndexer._decided_targets`
     used to call `IdentityConfig.load()` with no argument, which resolved it
-    against the *process working directory* — so `forge index` run from
+    against the *process working directory*, so `forge index` run from
     anywhere but the vault root read no config, and every collision a human had
     already decided went back to being reported AMBIGUOUS. Every other caller
     passed an explicit vault-relative path; this was the one that did not.

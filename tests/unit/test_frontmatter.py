@@ -69,7 +69,7 @@ class TestNestedLists:
         """The 215-file case: valid YAML, semantically useless.
 
         `related: [[[A]], [[B]]]` yields a list whose every element is itself a
-        singleton list containing a singleton list — the wikilink brackets are
+        singleton list containing a singleton list, the wikilink brackets are
         read as two levels of YAML flow sequence.
         """
         data = yaml.safe_load(NESTED_LIST_FM)
@@ -121,7 +121,7 @@ class TestTruncatedWikilinks:
     """A third defect shape, found in 18 corpus files during Phase 1.
 
     The Phase 0 audit characterized only the parse-error and nested-list forms.
-    Verbatim from DSA/03_DataStructures/AVL Tree.md — note the single closing
+    Verbatim from DSA/03_DataStructures/AVL Tree.md, note the single closing
     bracket on the final link.
     """
 
@@ -191,7 +191,7 @@ class TestRepairPreservesTheLinkGraph:
     """The repair must not destroy the links it is repairing.
 
     `related:` is read in two places by *text extraction* of `[[...]]` from the
-    raw frontmatter — `extract_wikilink_values`, which is how `CorpusIndexer`
+    raw frontmatter: `extract_wikilink_values`, which is how `CorpusIndexer`
     builds the related graph, and `parse_markdown`, which counts frontmatter
     wikilinks. Neither falls back to the parsed YAML.
 

@@ -1,7 +1,7 @@
 """Proposal activation, identity decisions, and relationship gating.
 
 The property under test throughout: **approved evidence becomes persistent,
-traceable knowledge without losing provenance or history — and without
+traceable knowledge without losing provenance or history, and without
 guessing.**
 """
 

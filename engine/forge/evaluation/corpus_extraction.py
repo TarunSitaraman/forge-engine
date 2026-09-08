@@ -17,7 +17,7 @@ and none of them is recall over the whole vocabulary:
 * **Self-recovery.** For one page, does extraction over that page's own text
   recover that page's own concept? This is the only recall-shaped question the
   vault can answer honestly. Asking "how many of the 545 did it find" is
-  meaningless per page — a page about B-trees is not supposed to mention 544
+  meaningless per page, a page about B-trees is not supposed to mention 544
   other concepts, so a miss would not be a miss.
 * **Junk rate.** Share of emitted names that appear on the forbidden list the
   labelled set already carries (`RAM`, `Answer`, `maxmemory`, `VARCHAR(n)` and
@@ -75,14 +75,14 @@ class Vocabulary:
     """The vault's concept names, normalized for comparison.
 
     Built from a `SeedPlan`, so it is exactly the set `forge bootstrap`
-    would write to the graph — including its exclusions. Navigation pages,
+    would write to the graph, including its exclusions. Navigation pages,
     numbered knowledge-pack chapters and status artifacts are already gone,
     which matters here: were `_index` in the vocabulary, an extractor emitting
     it would score as on-vocabulary rather than as the table-of-contents
     mistake it is.
 
     It is smaller than the concept count, and that is not a bug. A decided
-    collision produces two namespaced concepts sharing one bare name — this
+    collision produces two namespaced concepts sharing one bare name; this
     vault has four (`Heap`, `Binary Search`, `Trie`, `weekly-review`), so 545
     concepts give 541 names. The namespace is disambiguation a human recorded
     in `concept-identity.yaml`; the extractor is never asked to produce it and
@@ -276,8 +276,8 @@ def score_page(
 ) -> PageScore:
     """Score one page's emitted concepts against the vault vocabulary.
 
-    Matching is through `normalize()` — the same comparison the link resolver,
-    the identity config and `extraction.score_case` use — so `B-tree index`,
+    Matching is through `normalize()`, the same comparison the link resolver,
+    the identity config and `extraction.score_case` use, so `B-tree index`,
     `B Tree Index` and `b-tree-index` are one concept rather than a miss plus
     two false positives.
 
@@ -322,7 +322,7 @@ def _failure_lines(failures: Sequence[dict]) -> list[str]:
     """Deduplicate failures to `kind: message`, keeping the message.
 
     Twelve spans failing on one rejected model name is one fact, not twelve,
-    and dropping the message leaves `llm_error` — the layer that caught the
+    and dropping the message leaves `llm_error`, the layer that caught the
     error, and nothing about the error.
     """
     seen: dict[str, None] = {}
@@ -345,7 +345,7 @@ def run(
     """Drive the production extractor over real vault pages, one page at a time.
 
     Uses `CandidateExtractor` rather than re-implementing the prompt path, so
-    what is measured is what ships — the same reason `extraction.run` and the
+    what is measured is what ships, the same reason `extraction.run` and the
     assessment eval drive the real objects.
 
     ``spans_for`` maps a page to its spans. It is injected rather than built

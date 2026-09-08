@@ -2,12 +2,12 @@
 
 Gate assertions are named for the gate they close:
 
-* `test_gate_one_...` — from any claim, reach the exact source span in one
+* `test_gate_one_...`, from any claim, reach the exact source span in one
   interaction.
-* `test_gate_two_...` — generated content is distinguishable from source
+* `test_gate_two_...`, generated content is distinguishable from source
   evidence, which for an API means the tier travels with every payload and the
   explorer keys its styling on it.
-* `test_gate_three_...` — the model is comprehensible with no chat interface
+* `test_gate_three_...`, the model is comprehensible with no chat interface
   present.
 
 The rest guard properties that are easy to lose quietly: read-only, zero model

@@ -1,4 +1,4 @@
-"""Cloud provider — portable inference for machines that cannot host a model.
+"""Cloud provider: portable inference for machines that cannot host a model.
 
 **Why this exists.** Forge's default deployment is local-first: Ollama on a box
 with a GPU, no account, no bill. That stays true. But the primary workstation
@@ -66,7 +66,7 @@ class CloudProvider:
 
     Two wire formats are supported because "OpenAI-compatible" is the de-facto
     shape for most hosted and self-hosted gateways, and Anthropic's differs.
-    Both are request/response translation only — no vendor-specific behaviour
+    Both are request/response translation only; no vendor-specific behaviour
     reaches the caller.
     """
 
@@ -82,7 +82,7 @@ class CloudProvider:
         # Sized for a hosted model that thinks by default. On current Anthropic
         # models `max_tokens` caps thinking *plus* response text together, so
         # the old 2048 could be consumed by reasoning and truncate the JSON
-        # mid-object — which Forge would surface as a structured-output failure
+        # mid-object, which Forge would surface as a structured-output failure
         # rather than as the budget problem it actually is.
         max_tokens: int = 16000,
         supports_structured_output: bool = True,
@@ -114,7 +114,7 @@ class CloudProvider:
         self.models = models or {}
         self._client: httpx.Client | None = None
         #: Cached health verdict. The probe is one HTTP GET, and `extract()`
-        #: calls health() once per source — 642 of them on a full vault run.
+        #: calls health() once per source, 642 of them on a full vault run.
         #: Caching also matches the rule that a run never switches provider
         #: mid-flight: the answer must not change under a run's feet.
         self._health_cache: tuple[bool, str] | None = None
@@ -125,8 +125,8 @@ class CloudProvider:
     def api_key(self) -> str | None:
         """The key, resolved fresh at call time. Never cached, never stored.
 
-        Uses the same layered lookup as configuration — process environment
-        first, then the per-machine settings file — so a key kept in that file
+        Uses the same layered lookup as configuration, process environment
+        first, then the per-machine settings file, so a key kept in that file
         is found without ever being copied into :data:`os.environ`.
         """
         key = env_value(self.api_key_env)
@@ -162,8 +162,8 @@ class CloudProvider:
         """Never raises, and never prints the key.
 
         This used to check only that a credential was *present*, which made it
-        report OK against a dead endpoint, a rejected key, or — as happened on
-        2026-08-29 — a model the host had decommissioned. `forge status` said
+        report OK against a dead endpoint, a rejected key, or, as happened on
+        2026-08-29, a model the host had decommissioned. `forge status` said
         OK, `model-test` said reachable, and then every one of twelve calls
         failed. A health check that cannot fail is the same defect as a metric
         that cannot fail.
@@ -171,7 +171,7 @@ class CloudProvider:
         So for OpenAI-compatible hosts it asks `GET /v1/models`, which costs no
         generation and answers both real questions: is the credential accepted,
         and is the configured model actually offered. A host that does not
-        implement the endpoint is reported as unverified rather than failed —
+        implement the endpoint is reported as unverified rather than failed,
         the check is best-effort, and refusing to run against a gateway with no
         model list would be worse than not checking.
         """
@@ -215,7 +215,7 @@ class CloudProvider:
             return False, (
                 f"cloud provider {self.vendor!r} rejected the credential in "
                 f"{self.api_key_env} (HTTP {resp.status_code}). The key is set but not "
-                f"accepted — check it is current and has not been revoked."
+                f"accepted, check it is current and has not been revoked."
             )
         if resp.status_code != 200:
             return True, f"{configured}; model list returned HTTP {resp.status_code}, unverified"
@@ -385,7 +385,7 @@ class CloudProvider:
     # -- wire formats ------------------------------------------------------
 
     def _retry_delay(self, attempt: int, response: httpx.Response | None) -> float:
-        """How long to wait before retrying — never zero for a rate limit.
+        """How long to wait before retrying: never zero for a rate limit.
 
         Retrying a 429 immediately cannot succeed: the limit is per *minute*,
         and the retry budget is spent before the window has moved. Observed
@@ -393,7 +393,7 @@ class CloudProvider:
         milliseconds and every one of them failed identically, turning a
         capability measurement into a rate-limit measurement.
 
-        A host that says how long to wait is believed, within a ceiling — it
+        A host that says how long to wait is believed, within a ceiling; it
         knows its own window and guessing over the top of it just wastes the
         quota. Otherwise the wait doubles per attempt.
         """
@@ -423,12 +423,12 @@ class CloudProvider:
             # `top_p`, and `top_k` return 400 on Opus 4.7 and later, and on
             # Sonnet 5 any non-default value does the same. Forge asks for
             # `temperature=0.0` everywhere for determinism, which is exactly the
-            # non-default value that fails — so sending it would have made
+            # non-default value that fails, so sending it would have made
             # *every* cloud call a 400. It is dropped rather than clamped
             # because 0.0 never guaranteed identical outputs anyway;
             # determinism here comes from the schema and the grounding check,
             # not from a sampling knob. The OpenAI-compatible path below still
-            # sends it — those gateways accept it.
+            # sends it; those gateways accept it.
             payload: dict[str, Any] = {
                 "model": model,
                 "max_tokens": max_tokens,
@@ -452,7 +452,7 @@ class CloudProvider:
         # top-level `system` field, so ordering never mattered there. Served
         # through an OpenAI-compatible gateway the messages are rendered by the
         # model's own chat template, and templates commonly assume a single
-        # leading system turn — several drop a trailing one outright. That would
+        # leading system turn, several drop a trailing one outright. That would
         # silently delete the schema instruction and turn every extraction into
         # a structured-output failure, with a well-formed request and a 200 to
         # show for it. Hoisting keeps both wire formats semantically identical.

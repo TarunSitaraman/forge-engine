@@ -12,7 +12,7 @@ same is a human judgement, and getting it wrong silently rewrites the meaning of
 someone's knowledge base. The matcher's strongest possible output is a proposal.
 
 The corpus makes this concrete. `Heap`, `Binary Search`, and `Trie` each exist
-twice in the vault — once as a pattern, once as an algorithm or data structure —
+twice in the vault, once as a pattern, once as an algorithm or data structure,
 accounting for 180 of its 282 unresolved links. Any matcher that picks one of
 those two homes is wrong half the time and never says so. So a name with more
 than one canonical home in the vault is ``AMBIGUOUS`` by construction, before
@@ -94,7 +94,7 @@ class MatchResult:
 
     @property
     def best(self) -> MatchCandidate | None:
-        """Top candidate — meaningful only for MATCH_CANDIDATE.
+        """Top candidate: meaningful only for MATCH_CANDIDATE.
 
         Returns ``None`` when ambiguous. Callers cannot accidentally treat an
         unresolved collision as a resolved match.
@@ -164,11 +164,11 @@ class ConceptMatcher:
         self.ambiguity_index = ambiguity_index or {}
         #: The user's persisted identity decisions. Consulted *before* the
         #: ambiguity index, so that deciding a collision actually changes what
-        #: the matcher does — otherwise the decision would be decorative.
+        #: the matcher does, otherwise the decision would be decorative.
         self.identity = identity or IdentityService()
         #: ``(name, proposal_id)`` for concepts already *proposed* but not yet
-        #: accepted. In Phase 2 nothing creates a Concept — extraction produces
-        #: proposals — so without this, every source would rediscover the same
+        #: accepted. In Phase 2 nothing creates a Concept, extraction produces
+        #: proposals, so without this, every source would rediscover the same
         #: concept as brand new and the second document could never recognise
         #: the first. Matching against pending proposals is what makes
         #: "existing concepts detected" true before any approval workflow runs.
@@ -204,7 +204,7 @@ class ConceptMatcher:
         normalized = normalize(cleaned)
 
         # 0. An explicit user decision outranks everything, including a vault
-        #    collision — deciding the collision is precisely what it is for.
+        #    collision, deciding the collision is precisely what it is for.
         decision = self.identity.resolve(cleaned)
         if decision.state is IdentityState.RESOLVED_BY_USER and decision.identity is not None:
             chosen = decision.identity
@@ -266,7 +266,7 @@ class ConceptMatcher:
             )
 
         # 3. Already proposed from another source. Not a stored concept yet,
-        #    but definitely not new either — saying "new" would duplicate it.
+        #    but definitely not new either, saying "new" would duplicate it.
         if proposed := self._by_proposed.get(normalized):
             if len(proposed) == 1:
                 name, proposal_id = proposed[0]

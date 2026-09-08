@@ -26,7 +26,7 @@ from forge.sources import AdapterRegistry, MarkdownAdapter, TextBlock
 
 class TestMarkdownAdapter:
     def test_reuses_phase1_parser_behaviour(self, fixture_vault):
-        """Code fences must still be masked — the Phase 1 hazard, via the adapter."""
+        """Code fences must still be masked: the Phase 1 hazard, via the adapter."""
         result = MarkdownAdapter().acquire(fixture_vault / "DSA/01_Patterns/Graph Traversal.md")
         assert result.status is IngestionStatus.INGESTED
         # The fixture contains `grid = [[0, 1], [1, 0]]` inside a code fence.
@@ -265,7 +265,7 @@ class TestExtraction:
         assert all(f["kind"] == "schema_violation" for f in result.failures)
 
     def test_empty_response_is_a_schema_violation(self):
-        """`{}` must not validate — it would mean 'extracted nothing' scores as success."""
+        """`{}` must not validate: it would mean 'extracted nothing' scores as success."""
         result = CandidateExtractor(MockProvider(default_response="{}")).extract(
             [make_span(self.SPAN_TEXT)]
         )
@@ -340,7 +340,7 @@ class TestExtraction:
         """Order is the load-bearing part of the grounding check.
 
         Until 2026-08-19 `_grounded` scored bag-of-words overlap, so any quote
-        built from the span's own words scored 1.0 and was stored as evidence —
+        built from the span's own words scored 1.0 and was stored as evidence,
         including one that inverted the span's meaning. That defeats the rule
         the function exists to enforce, and no test caught it because the only
         negative case used vocabulary foreign to the span, which is the one
@@ -408,7 +408,7 @@ class TestExtraction:
         """Names the mechanism, so a later reader does not retune the wrong knob.
 
         Unwindowed, the same reversal against the same span scores a perfect
-        1.000 — no threshold below 1.0 could have caught it. Windowed it scores
+        1.000; no threshold below 1.0 could have caught it. Windowed it scores
         0.875. The fix is locality, not strictness.
         """
         quote_words = _tokens(self.REVERSED_ASSERT)
@@ -601,7 +601,7 @@ class TestPromptContract:
             assert example in CONCEPT_INSTRUCTION
 
     def test_a_prompt_change_invalidates_cached_extractions(self):
-        """The version is in the derivation key — that is what makes it safe."""
+        """The version is in the derivation key: that is what makes it safe."""
         from forge.ingestion.derivation import extraction_key
 
         base = dict(
@@ -617,7 +617,7 @@ class TestNavigationSpansAreNotExtracted:
 
     Extracting from an index span produces a concept whose only evidence is a
     navigation row, when that concept's canonical home is the document being
-    linked to — the duplication the vault exists to prevent.
+    linked to, the duplication the vault exists to prevent.
 
     The threshold was measured across all 1,532 vault spans, not chosen: prose
     has median link-line ratio 0.079 and p95 0.440, while index files cluster
@@ -674,8 +674,8 @@ class TestReviewingAProposalShowsWhatWasChecked:
 
     It printed the first 110 characters of the span instead of the quote. On
     the first real extraction run every claim drawn from one span therefore
-    showed the same document header — "# RAG (Retrieval-Augmented Generation)
-    *One authoritative reference…" — under two claims that had nothing in
+    showed the same document header: "# RAG (Retrieval-Augmented Generation)
+    *One authoritative reference…", under two claims that had nothing in
     common, and a reviewer could not tell whether either was supported. The
     quote was in the proposal the whole time.
     """
@@ -764,7 +764,7 @@ class TestReviewingAProposalShowsWhatWasChecked:
         return result.output
 
     def test_the_quote_is_printed_as_the_evidence(self, tmp_path):
-        """On its own line, not merely somewhere in the output — the statement
+        """On its own line, not merely somewhere in the output, the statement
         is printed too, and here they read alike."""
         output = self._show(tmp_path)
         quoted = [line for line in output.splitlines() if line.strip().startswith("quote")]
@@ -797,7 +797,7 @@ class TestEvidenceMustBeReadableAsSupport:
 
     The grounding test passes, because that string really is in the span. The
     evidence chain is broken anyway, because diagram syntax asserts nothing a
-    reviewer can check — and the whole point of storing the quote is that a
+    reviewer can check, and the whole point of storing the quote is that a
     human can read it and decide.
     """
 
@@ -842,7 +842,7 @@ class TestEvidenceMustBeReadableAsSupport:
         assert _from_code_block("anything at all", "plain prose, no fences here") is False
 
     def test_the_extractor_drops_it_and_says_why(self):
-        """Dropped and reported, the same shape as an ungrounded quote — never
+        """Dropped and reported, the same shape as an ungrounded quote, never
         silently discarded."""
         from forge.extraction.extractor import CandidateExtractor
         from forge.llm import MockProvider
@@ -881,7 +881,7 @@ class TestLookingUpAConceptByName:
     """`forge concept "RAG"` on a vault whose concept is `rag`.
 
     The exact lookup was case-sensitive, so it found nothing, fell through to a
-    substring search, and announced *"'RAG' names 2 distinct concepts"* —
+    substring search, and announced *"'RAG' names 2 distinct concepts"*,
     listing the template `rag-architecture-review`, which is not named RAG. Two
     defects behind one symptom: a lookup stricter than the link resolver, and a
     message claiming a name collision where there was only a shared prefix.

@@ -1,6 +1,6 @@
 """End-to-end pipeline and CLI behaviour on the fixture vault.
 
-Uses the small synthetic vault so files can be created, edited, and deleted —
+Uses the small synthetic vault so files can be created, edited, and deleted,
 the real corpus is never written to.
 """
 
@@ -76,7 +76,7 @@ class TestPipelineLifecycle:
         assert store.count_revisions() > 0
 
     def test_reset_then_reindex_reproduces_state(self, pipeline):
-        """Derived state is rebuildable — the core architectural promise."""
+        """Derived state is rebuildable: the core architectural promise."""
         pipe, store = pipeline
         first = pipe.run(write_reports=False)
         counts_before = {k: v for k, v in store.counts().items() if k != "revisions"}
@@ -214,8 +214,8 @@ class TestProposalFilterParsing:
     """`proposals list` filters are user input, so a bad one must not traceback.
 
     The enum's names are upper case and its values lower case, so
-    ``--status PENDING`` — which is what `docs/research/extraction-cost.md`
-    §4 told people to type — used to raise a raw ``ValueError`` out of
+    ``--status PENDING``, which is what `docs/research/extraction-cost.md`
+    §4 told people to type, used to raise a raw ``ValueError`` out of
     ``enum`` and print a stack trace over the review workflow.
     """
 
@@ -541,7 +541,7 @@ class TestStatusReportsModelIdentity:
 
         `settings.llm.models` is the ollama role map and carries its defaults
         whatever the provider is, so reading it alone names a model that is not
-        running. Extraction itself was correct — it asks the provider — but a
+        running. Extraction itself was correct (it asks the provider) but a
         status line that confidently names the wrong model is precisely the
         failure this command was added to prevent.
         """
@@ -558,7 +558,7 @@ class TestStatusReportsModelIdentity:
         assert "llama3.1:8b" not in result.stdout
 
     def test_status_agrees_with_what_extraction_would_cache_under(self, settings):
-        """The two must never disagree — the identity is part of the derivation key."""
+        """The two must never disagree: the identity is part of the derivation key."""
         from forge.config import Settings
         from forge.extraction import CandidateExtractor
         from forge.llm import get_provider

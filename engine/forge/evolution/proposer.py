@@ -2,7 +2,7 @@
 
 The hard boundary of Phase 4: **model reasoning never mutates canonical
 knowledge.** An assessment is an opinion with citations. It becomes a change
-only by passing through the existing proposal system — the same one Phases 2
+only by passing through the existing proposal system, the same one Phases 2
 and 3 use, deliberately not a parallel one, so there is exactly one review
 queue and exactly one approval path.
 
@@ -18,7 +18,7 @@ Three proposal types, matching what the evidence actually justifies:
                         The claim is never retracted automatically.
 ======================  ====================================================
 
-Safety classification follows Phase 2's rule — derived from provenance, never
+Safety classification follows Phase 2's rule, derived from provenance, never
 asserted. All three are model-generated, so none can be
 ``DETERMINISTIC_VERIFIED``; conflicts are additionally marked ``AMBIGUOUS``,
 which makes Phase 3's batch-approval guard refuse to bulk-approve them without
@@ -114,7 +114,7 @@ class EvolutionProposer:
 
         Idempotent: proposal identity is derived from the claim, the
         classification, and the evidence, so re-running the same workflow
-        returns the existing proposal — including its decision. A rejected
+        returns the existing proposal, including its decision. A rejected
         proposal is never resurrected as PENDING.
         """
         batch = ProposalBatch()

@@ -5,13 +5,13 @@ Re-indexing an unchanged vault must produce a byte-identical index, which is
 impossible with random ids. So:
 
 * ``Source``   -> derived from vault-relative path (stable across content edits)
-* ``Document`` -> derived from (source_id, content_hash) — a new parse of new
+* ``Document`` -> derived from (source_id, content_hash), a new parse of new
   content is a new document; re-parsing identical content is the same document
 * ``Span``     -> derived from (document_id, ordinal, locator)
 * ``Concept``  -> derived from canonical name
 
 Random, time-ordered ids (:func:`new_id`) are used only for genuinely
-append-only records — revisions and run ids — where no natural key exists.
+append-only records (revisions and run ids) where no natural key exists.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ def new_id() -> str:
 
 
 def content_hash(data: bytes) -> str:
-    """Canonical content hash. sha256 hex — the change-detection key."""
+    """Canonical content hash. sha256 hex: the change-detection key."""
     return hashlib.sha256(data).hexdigest()
 
 

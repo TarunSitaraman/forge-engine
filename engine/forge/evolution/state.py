@@ -4,13 +4,13 @@ Two constraints shape everything here.
 
 **It must serialize.** The state is checkpointed after every node so the run can
 survive a process exit. That rules out storing services, connections, or domain
-objects — anything that cannot round-trip through the checkpointer is a bug
+objects, anything that cannot round-trip through the checkpointer is a bug
 waiting for the first resume.
 
 **It must not carry the corpus.** State holds *identifiers*, and the nodes
 resolve them against the store when they need the content. A workflow that
 embedded span text and claim objects would checkpoint megabytes per step,
-and — worse — would go stale: a resumed run would act on a snapshot of
+and (worse) would go stale: a resumed run would act on a snapshot of
 knowledge rather than on knowledge as it now is.
 
 The one exception is small, already-computed records (candidates and
@@ -52,7 +52,7 @@ class EvolutionState(TypedDict, total=False):
     evidence_hash: str
 
     # -- narrowing ---------------------------------------------------------
-    #: CandidateRecord dicts — concept id, selector, and why it was chosen.
+    #: CandidateRecord dicts, concept id, selector, and why it was chosen.
     candidates: Annotated[list[dict[str, Any]], _replace]
     affected_concept_ids: Annotated[list[str], _replace]
     related_claim_ids: Annotated[list[str], _replace]

@@ -3,7 +3,7 @@
 
 The Phase 3 brief forbids introducing a graph database without measured
 justification. The real graph is currently tiny, which is a weak argument on
-its own — "it is fast because it is small" says nothing about whether SQLite
+its own; "it is fast because it is small" says nothing about whether SQLite
 will still do at ten or a hundred times the size.
 
 So this script builds a *synthetic* graph an order of magnitude larger than
@@ -114,7 +114,7 @@ def main() -> int:
     related = graph.get_related_concepts(ids[0], max_depth=3)
     print(
         f"neighbourhood (depth 3): {(time.perf_counter() - started) * 1000:6.1f} ms "
-        f"({len(related)} concepts — capped by the node budget, as designed)"
+        f"({len(related)} concepts, capped by the node budget, as designed)"
     )
 
     print(f"\nmetrics: {graph.metrics().to_dict()}")

@@ -1,4 +1,4 @@
-"""Relationship activation — evidence-gated, deliberately stingy.
+"""Relationship activation: evidence-gated, deliberately stingy.
 
 The failure mode this module exists to prevent is **relationship spam**: a
 graph where every concept is `RELATED_TO` every other concept, which carries
@@ -129,7 +129,7 @@ class RelationshipActivator:
 
         Deterministic: concept names (and their aliases) are matched against
         span text by substring, and pairs are emitted in sorted order. No LLM
-        is involved — this is co-occurrence counting, which is arithmetic.
+        is involved; this is co-occurrence counting, which is arithmetic.
         """
         concepts = list(self.store.list_concepts())
         if len(concepts) < 2:
@@ -251,7 +251,7 @@ class RelationshipActivator:
     def _build(self, candidate: RelationshipCandidate, model_id: str | None) -> ClaimLink:
         """Construct the edge with provenance matching how it was derived."""
         # Co-occurrence counting is arithmetic, so these edges are
-        # deterministic — which is also what the domain layer requires, since
+        # deterministic, which is also what the domain layer requires, since
         # RELATED_TO is in DETERMINISTIC_LINK_TYPES.
         deterministic = candidate.type is LinkType.RELATED_TO and model_id is None
         provenance = Provenance(

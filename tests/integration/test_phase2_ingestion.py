@@ -125,7 +125,7 @@ class TestChangeDetection:
         """Re-extracting unchanged content is free.
 
         The guarantee is **zero model calls**, and it is delivered by the
-        derivation cache — not by the unchanged-source short-circuit, which
+        derivation cache, not by the unchanged-source short-circuit, which
         cannot tell "already extracted" from "never extracted" and must not
         try. The reported status is therefore the cached outcome (SUCCEEDED),
         not SKIPPED_CACHED: extraction did resolve, it just cost nothing.
@@ -149,7 +149,7 @@ class TestChangeDetection:
     ):
         """Regression: `--extract` was a silent no-op on an already-ingested vault.
 
-        Deterministic ingestion first, extraction later, is the normal order —
+        Deterministic ingestion first, extraction later, is the normal order,
         extraction is opt-in and costs hours. The unchanged-source
         short-circuit fired on the content hash alone, so the later
         `--extract` run skipped every source and made zero calls while
@@ -231,7 +231,7 @@ class TestExtractionIntegration:
     def test_ingestion_succeeds_without_a_model(self, pipeline, pdf_dir):
         """Exit criterion 8: deterministic ingestion survives having no LLM.
 
-        The extraction status is SKIPPED_NO_PROVIDER rather than SUCCEEDED —
+        The extraction status is SKIPPED_NO_PROVIDER rather than SUCCEEDED,
         reporting "succeeded" when no model ran would overstate what happened.
         """
         report = pipeline.ingest_path(pdf_dir / "simple.pdf", IngestOptions(extract=True))
@@ -542,8 +542,8 @@ class TestChunkerProvenanceOnUnchangedSources:
     Phase 1 indexing produces heading-delimited spans (`chunk_strategy`
     "heading") for retrieval; ingestion produces structurally grouped,
     sentence-split ones. Until 2026-08-19 the unchanged-source short-circuit
-    checked only the content hash, so a vault indexed before it was ingested —
-    the documented order — kept Phase 1's spans and extracted over them.
+    checked only the content hash, so a vault indexed before it was ingested
+    (the documented order) kept Phase 1's spans and extracted over them.
 
     Measured on Technologies/Docs: 208 spans instead of 98, hence 416 model
     calls instead of 196, over boundaries the extraction prompt never targeted.
@@ -613,7 +613,7 @@ class TestPartialExtractionIsNotCached:
     """A transient call failure must not become a permanent cached result.
 
     Observed 2026-08-20: three consecutive timeouts on one span's concept call
-    produced `concepts=0`, status PARTIAL — which was then cached. Re-running
+    produced `concepts=0`, status PARTIAL, which was then cached. Re-running
     reported a cache hit and never retried, so a 15-minute network stall became
     a permanently concept-free document.
     """
@@ -691,7 +691,7 @@ class TestForceRedoesExtraction:
     """`--force` has to reach the extraction cache, not stop at re-parsing.
 
     Without this there is no way to re-extract a document whose result is
-    already cached — which matters for recovering a result stored under an old
+    already cached, which matters for recovering a result stored under an old
     rule, such as a PARTIAL written before partials stopped being cached.
     """
 
@@ -742,7 +742,7 @@ class TestCredentialRejectionAbortsTheRun:
     Observed 2026-08-22: a bad GROQ_API_KEY produced ~190 doomed HTTP calls
     across 19 sources, reported `llm_calls: 0`, printed `[ok]` on every source,
     and buried the real cause under a screen of identical errors. A 401 is not
-    a bad span — retrying cannot help and every remaining call fails the same
+    a bad span, retrying cannot help and every remaining call fails the same
     way, while burning a rate-limited quota.
     """
 

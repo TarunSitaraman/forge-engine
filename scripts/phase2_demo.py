@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 2 demonstration — all five required demos, end to end.
+"""Phase 2 demonstration: all five required demos, end to end.
 
     python3 scripts/phase2_demo.py
 
@@ -8,8 +8,8 @@ Demos 1, 2 and 5 need no model at all and exercise exactly what the CLI does.
 Demos 3 and 4 require semantic extraction. **No local model is reachable in
 this environment** (the sandbox network policy blocks ollama.com), so they run
 against a *scripted* provider that returns fixed, realistic responses through
-the real `LLMProvider` interface. Every other component — pipeline, grounding
-check, matcher, proposal service, storage — is the production path, unchanged.
+the real `LLMProvider` interface. Every other component, pipeline, grounding
+check, matcher, proposal service, storage, is the production path, unchanged.
 
 On a machine with Ollama the identical path runs with:
 
@@ -46,7 +46,7 @@ def scripted_provider() -> MockProvider:
     """A provider that answers as a competent local model would.
 
     Responses vary by the text they are shown, so the two PDFs produce
-    overlapping-but-different concepts — which is what Demo 3 needs to be a
+    overlapping-but-different concepts, which is what Demo 3 needs to be a
     real test rather than a tautology.
     """
 
@@ -147,7 +147,7 @@ def main() -> int:
     options = IngestOptions(extract=True, propose=True, max_spans=6)
 
     # ---------------------------------------------------------------- 1
-    banner("DEMO 1 — ingest a PDF (no paid API)")
+    banner("DEMO 1, ingest a PDF (no paid API)")
     report = pipeline.ingest_path(FIXTURES / "multipage.pdf", options)
     source = report.sources[0]
     print(f"Source registered   : {source.source_id}")
@@ -156,10 +156,10 @@ def main() -> int:
     print(f"{source.concepts_proposed} concepts proposed")
     print(f"{source.claims_proposed} claims proposed")
     print(f"{source.proposals_created} proposals created")
-    print(f"LLM calls           : {source.llm_calls}  (local/scripted — no paid API)")
+    print(f"LLM calls           : {source.llm_calls}  (local/scripted; no paid API)")
 
     # ---------------------------------------------------------------- 2
-    banner("DEMO 2 — ingest the same PDF again")
+    banner("DEMO 2, ingest the same PDF again")
     before = store.counts()
     again = pipeline.ingest_path(FIXTURES / "multipage.pdf", options)
     after = store.counts()
@@ -170,7 +170,7 @@ def main() -> int:
     print(f"Duplicate spans          : {after['spans'] - before['spans']}")
 
     # ---------------------------------------------------------------- 3
-    banner("DEMO 3 — a second, overlapping PDF")
+    banner("DEMO 3, a second, overlapping PDF")
     overlap = pipeline.ingest_path(FIXTURES / "overlapping.pdf", options)
     second = overlap.sources[0]
     print(f"{second.spans} spans, {second.concepts_proposed} concepts, {second.claims_proposed} claims")
@@ -201,7 +201,7 @@ def main() -> int:
         print(f"     -> quote: {proposal.operation.details['evidence_quote'][:70]!r}")
 
     # ---------------------------------------------------------------- 4
-    banner("DEMO 4 — an ambiguous concept ('Heap')")
+    banner("DEMO 4, an ambiguous concept ('Heap')")
     ambiguous = [
         p
         for p in service.list(limit=200)
@@ -220,7 +220,7 @@ def main() -> int:
         print(f"Proposal generated: {proposal.id[:12]} (status {proposal.status.value})")
 
     # ---------------------------------------------------------------- 5
-    banner("DEMO 5 — metadata repair proposals: list and approve")
+    banner("DEMO 5, metadata repair proposals: list and approve")
     index = CorpusIndexer(settings).build_index()
     created, skipped = service.create_many(build_repair_proposals(index.files))
     print(f"Repair proposals: {created} created, {skipped} already known")
@@ -230,7 +230,7 @@ def main() -> int:
 
     pending = service.list(status=ProposalStatus.PENDING, type=ProposalType.METADATA_REPAIR, limit=1)
     target = pending[0]
-    print(f"\nApproving {target.id[:12]} — {target.operation.target}")
+    print(f"\nApproving {target.id[:12]}, {target.operation.target}")
     print(f"  - {target.operation.before}")
     print(f"  + {target.operation.after}")
 

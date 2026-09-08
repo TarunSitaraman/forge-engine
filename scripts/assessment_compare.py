@@ -5,7 +5,7 @@
     python3 scripts/assessment_eval.py --provider cloud --model B --json > b.json
     python3 scripts/assessment_compare.py a.json b.json
 
-Written for one question: when a model is swapped, *which cases moved* — not
+Written for one question: when a model is swapped, *which cases moved*, not
 whether the headline went up. Two runs can score identically and disagree on a
 third of the set (measured: the corroboration check, 13/18 both ways, fixing
 one case and breaking another). A headline delta cannot show that and a pair of
@@ -27,7 +27,7 @@ from pathlib import Path
 def load(path: Path) -> dict:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if "results" not in payload:
-        raise SystemExit(f"{path}: no per-case results — re-run with --json")
+        raise SystemExit(f"{path}: no per-case results, re-run with --json")
     if payload.get("scripted"):
         raise SystemExit(
             f"{path}: scripted run. Classification is 1.0 by construction there, "
@@ -59,7 +59,7 @@ def score(results: list[dict]) -> tuple[int, int]:
 
 
 def delta(new: float, old: float) -> str:
-    """Signed delta, or blank when nothing moved — a column of +0.00 hides the row that did.
+    """Signed delta, or blank when nothing moved: a column of +0.00 hides the row that did.
 
     Always two decimals. Formatting by whether the value looks integral printed
     a rate that rose 0.94 -> 1.00 as "+0", which reads as no change.

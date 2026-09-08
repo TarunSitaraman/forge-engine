@@ -15,7 +15,7 @@ reports the state, and callers surface it rather than pretending the semantic
 signal was consulted.
 
 No Qdrant. Vectors live in SQLite, which at this corpus size is not a
-compromise — brute-force cosine over a few thousand vectors is milliseconds.
+compromise, brute-force cosine over a few thousand vectors is milliseconds.
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ class EmbeddingProvider(Protocol):
 
 
 class NullEmbeddingProvider:
-    """The always-absent provider — the default.
+    """The always-absent provider: the default.
 
     Exists so callers never branch on ``provider is None``: they ask
     ``available`` and get a consistent answer either way.

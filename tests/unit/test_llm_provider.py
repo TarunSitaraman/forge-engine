@@ -1,7 +1,7 @@
 """LLM provider abstraction.
 
 Everything here runs offline. The Ollama adapter is exercised without a server
-by checking the failure path it must produce when nothing is listening — which
+by checking the failure path it must produce when nothing is listening, which
 is the state most developers will first encounter.
 """
 
@@ -87,7 +87,7 @@ class TestStructuredOutput:
         assert p.structured(req(), Answer).name == "x"
 
     def test_prose_wrapped_json_is_recovered(self):
-        p = MockProvider(default_response='Here you go: {"name": "y"} — hope that helps')
+        p = MockProvider(default_response='Here you go: {"name": "y"}, hope that helps')
         assert p.structured(req(), Answer).name == "y"
 
     def test_malformed_output_raises_typed_error(self):

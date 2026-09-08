@@ -61,14 +61,14 @@ from .validation import ValidationError, validate_claim, validate_claim_link, va
 from .workflow import AssessmentRecord, CandidateRecord, NodeExecution, WorkflowRun
 
 __all__ = [
-    # Phase 9 — research intelligence
+    # Phase 9, research intelligence
     "GapKind",
     "KnowledgeGap",
     "Question",
     "QuestionStatus",
     "Synthesis",
     "SynthesisScope",
-    # Phase 4 — evolution
+    # Phase 4, evolution
     "AssessmentClass",
     "AssessmentRecord",
     "CandidateRecord",

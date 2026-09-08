@@ -1,4 +1,4 @@
-"""Identity service — bridges user decisions to the matcher.
+"""Identity service: bridges user decisions to the matcher.
 
 Two jobs:
 
@@ -97,7 +97,7 @@ class IdentityService:
 
         if not resolution.resolved:
             # The user knows about this collision and has deliberately left it
-            # undecided. Still ambiguous — but now *knowingly* so.
+            # undecided. Still ambiguous, but now *knowingly* so.
             return IdentityResolution(
                 name=cleaned,
                 state=IdentityState.AMBIGUOUS,
@@ -139,7 +139,7 @@ class IdentityService:
         """Record each vault collision in the config **without deciding it**.
 
         Returns ``(added, skipped)``. Existing entries are preserved unless
-        ``overwrite`` is set — a user's decision must survive re-scaffolding,
+        ``overwrite`` is set, a user's decision must survive re-scaffolding,
         or the feature would silently undo their work every time the vault
         gained a file.
         """
@@ -202,7 +202,7 @@ def _identity_for_path(path: str) -> ConceptIdentity:
 
     The namespace is *suggested* from the containing folder, which is where
     the corpus already encodes the distinction (`01_Patterns/Heap.md` vs
-    `03_DataStructures/Heap.md`). The user is free to rename it — Forge does
+    `03_DataStructures/Heap.md`). The user is free to rename it, Forge does
     not invent their preferred vocabulary, it proposes the one their own
     folder structure already implies.
     """

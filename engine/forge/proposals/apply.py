@@ -14,7 +14,7 @@ Guarantees, all enforced here rather than documented and hoped for:
    are applicable, and only when approved.
 5. **Unrelated files are never touched.** Each proposal names one file, one
    line, and the current content of that line must still match what the
-   proposal recorded — otherwise the file changed underneath us and the
+   proposal recorded, otherwise the file changed underneath us and the
    application is refused.
 """
 

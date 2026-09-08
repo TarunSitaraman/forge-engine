@@ -126,7 +126,7 @@ def compute_stats(index: CorpusIndex, *, top_n: int = 15) -> CorpusStats:
 
 
 def _filename_style(path: str) -> str:
-    """Classify filename convention — the corpus uses two conflicting systems."""
+    """Classify filename convention: the corpus uses two conflicting systems."""
     import re
 
     name = path.rsplit("/", 1)[-1]

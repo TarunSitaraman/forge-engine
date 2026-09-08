@@ -6,7 +6,7 @@ extra steps:
 * **It stops itself.** The workflow pauses at ``await_human_review`` and
   persists, rather than proceeding on its own judgement.
 * **It resumes rather than restarts.** A resumed run continues from the
-  checkpoint and does not re-pay for semantic work already done — asserted by
+  checkpoint and does not re-pay for semantic work already done, asserted by
   counting model calls, not by inspection.
 * **It routes.** Different evidence takes different paths through the graph,
   and the cheap paths never reach the model.

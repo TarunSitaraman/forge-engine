@@ -44,7 +44,7 @@ class ExtractedClaim(StrictSchema):
     """A single assertion the text makes."""
 
     statement: str = Field(min_length=8, max_length=600)
-    #: Verbatim supporting text. Required — a claim Forge cannot ground is a
+    #: Verbatim supporting text. Required, a claim Forge cannot ground is a
     #: claim Forge must not store.
     evidence_quote: str = Field(min_length=1, max_length=800)
     concept: str = Field(default="", max_length=120)

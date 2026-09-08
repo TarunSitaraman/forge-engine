@@ -7,7 +7,7 @@ checked against a hand-computed value, not against whatever the implementation
 currently returns.
 
 The embedding tests assert the *degradation* behaviour as hard as the happy
-path — a missing model must produce an explicit, reported absence, never a
+path, a missing model must produce an explicit, reported absence, never a
 silent fallback that looks like a result.
 """
 
@@ -225,7 +225,7 @@ class TestEvalDataset:
         """Ground truth that has rotted looks like a recall drop. Catch it here.
 
         The labels name paths in the Markdown vault, so this can only run where
-        that corpus is checked out. ``real_vault`` skips when it is not — in the
+        that corpus is checked out. ``real_vault`` skips when it is not, in the
         standalone engine repository there is no corpus to verify against, and a
         check with nothing to check is not a failure.
         """
@@ -565,7 +565,7 @@ class TestFusionUsesTheBestSpanPerDocument:
     descending score. `dict` keeps the last pair, so each document collapsed to
     its worst span while `semantic` and `lexical` used its best. Measured
     2026-08-28 on real embeddings: semantic beat lexical on every metric, yet
-    hybrid scored below both — which a convex combination cannot do, and is the
+    hybrid scored below both, which a convex combination cannot do, and is the
     tell that its inputs were not what they claimed to be.
     """
 

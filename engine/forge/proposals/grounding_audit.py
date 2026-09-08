@@ -31,7 +31,7 @@ class QuoteCheck:
     grounded: bool
     overlap: float
     note: str = ""
-    #: Grounded, and quoting a fenced block — so present in the span and still
+    #: Grounded, and quoting a fenced block, so present in the span and still
     #: not something a reviewer can read as support. Kept separate from
     #: `grounded` rather than folded into it: they fail for different reasons
     #: and the note has to say which.

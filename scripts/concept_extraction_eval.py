@@ -74,7 +74,7 @@ def forbidden_strings(path: Path | None = None) -> list[str]:
 
     Sharing it is the point: `extraction-eval`'s junk rate and this one's then
     mean the same thing and can be quoted side by side. These 25 strings are
-    not hypothetical bad output — every one was observed coming out of this
+    not hypothetical bad output, every one was observed coming out of this
     corpus in the August 2026 samples.
     """
     dataset = ExtractionDataset.load(path or ROOT / DEFAULT_EXTRACTION_SET)
@@ -250,7 +250,7 @@ def main() -> int:
         )
 
     # Without this, structlog falls back to its default PrintLogger, which
-    # writes to stdout — straight into the file `--json` is redirected to,
+    # writes to stdout, straight into the file `--json` is redirected to,
     # making the report unparseable.
     configure_logging()
 
@@ -320,7 +320,7 @@ def main() -> int:
 
     # Text is attached only to the sampled pages, and only now: the grounding
     # re-check needs it, and reading 545 files to score 40 is waste. It is the
-    # whole page rather than the span the model saw, deliberately — a quote
+    # whole page rather than the span the model saw, deliberately, a quote
     # that grounds in a span grounds in the page, and quotes the extractor
     # already dropped are counted through `dropped_claims`, which is where the
     # rate can actually move. Leaving `text` empty scored grounding 0.000 on
@@ -356,7 +356,7 @@ def main() -> int:
         """Per-page progress on **stderr**.
 
         stdout is the report, and under `--json` it is a redirect that is only
-        written once every page has run — so a working run and a hung one look
+        written once every page has run, so a working run and a hung one look
         identical for the twenty minutes a rate-limited provider spends in
         backoff. stderr stays on the terminal through the redirect.
         """
@@ -398,7 +398,7 @@ def main() -> int:
     # Compared per page against the probes *that page* was given. The first
     # version compared each page's kept claims to its dropped ones, which
     # flagged all 76 pages holding a span with no viable probe and reported
-    # "1536 emitted, 1536 dropped, 76 survived" — three numbers that cannot all
+    # "1536 emitted, 1536 dropped, 76 survived"; three numbers that cannot all
     # be true. A survivor is a page the extractor dropped fewer claims for than
     # it was probed with.
     probes = int(current.get("probes", 0))
@@ -465,7 +465,7 @@ def main() -> int:
 
         if not report.trustworthy:
             print(
-                f"\n  UNTRUSTWORTHY — {len(report.failed)} of {len(report.scores)} page(s) "
+                f"\n  UNTRUSTWORTHY, {len(report.failed)} of {len(report.scores)} page(s) "
                 "did not complete.\n"
                 f"  Every rate above is over the {len(report.complete)} that did, and none of\n"
                 "  them is a property of this model until the run is clean. A page that\n"
@@ -479,7 +479,7 @@ def main() -> int:
             shapes = {line for s in report.failed for line in s.failures}
             if len(report.failed) == len(report.scores) and len(shapes) <= 1:
                 print(
-                    "\n  Every page failed identically — that is the provider or the\n"
+                    "\n  Every page failed identically; that is the provider or the\n"
                     "  configuration, not the model's extraction quality. Check\n"
                     "  `forge model-test` and the model name your endpoint accepts.",
                     file=sys.stderr,

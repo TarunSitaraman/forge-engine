@@ -10,7 +10,7 @@ a command is worse than no shell.
 Three consequences worth knowing:
 
 * Every command gains a slash form for free, including ones added later.
-* Anything you can pass on the command line works here — `/graph path A B`,
+* Anything you can pass on the command line works here: `/graph path A B`,
   `/diagnostics links --limit 100`, `/index --json`.
 * Bare text with no leading slash is routed to `ask`, which is the common case
   and the reason to sit in a shell rather than retyping `forge` each time.
@@ -49,15 +49,15 @@ BUILTIN_QUIT = ("quit", "exit", "q")
 BUILTIN_CLEAR = ("clear", "cls")
 REFUSED = ("shell",)
 
-#: Full-screen applications. Not refused here — launching one from this
-#: line-oriented shell works, and returns to the prompt on exit — but refused by
+#: Full-screen applications. Not refused here, launching one from this
+#: line-oriented shell works, and returns to the prompt on exit, but refused by
 #: `forge tui`, which passes these in `refused` because it is one itself:
 #: starting a second Textual app on the same terminal, from a worker thread with
 #: stdout already redirected, leaves two applications fighting over the screen
 #: and no way back to either.
 FULLSCREEN = ("tui", "dash")
 
-#: Readline history, kept beside the settings file rather than in the vault —
+#: Readline history, kept beside the settings file rather than in the vault,
 #: the vault is content, and a shell history is machine state.
 HISTORY_LIMIT = 1000
 
@@ -101,7 +101,7 @@ def parse(
     """Turn one line of input into an :class:`Action`.
 
     `known` is the set of real command names. It is only used to give a better
-    message for an unknown slash command — dispatch itself is left to the CLI,
+    message for an unknown slash command, dispatch itself is left to the CLI,
     which already reports usage errors properly and does it in one place.
 
     `refused` is what this caller cannot run. It is a parameter because the
@@ -151,7 +151,7 @@ def command_names(app: typer.Typer) -> list[str]:
 
 
 #: What a bare `/` offers before anything is typed. Ordered by how often a
-#: session actually reaches for them, not alphabetically — a quick bar sorted
+#: session actually reaches for them, not alphabetically, a quick bar sorted
 #: A-Z puts `activate` first, which nobody wants and nobody needs.
 FAVOURITES = (
     "ask",
@@ -193,7 +193,7 @@ def suggestions(
     A bare `/` gets the favourites, because an alphabetical list of everything
     is a worse answer to "what can I do" than a short list of what is actually
     used. Once something is typed, prefix matches come first and substring
-    matches follow — typing `eval` should find `retrieval-eval`, which a
+    matches follow, typing `eval` should find `retrieval-eval`, which a
     prefix-only match would hide.
     """
     available = visible_names(names)
@@ -232,7 +232,7 @@ BANNER = (
 BANNER_COLOURS = ("38;5;39", "38;5;38", "38;5;44", "38;5;43", "38;5;37", "38;5;30")
 
 #: Per-row delay for the reveal. Six rows plus the panel is under a fifth of a
-#: second in total — enough to read as motion, short enough that nobody waits.
+#: second in total, enough to read as motion, short enough that nobody waits.
 FRAME_SECONDS = 0.028
 
 #: Commands that print nothing until they finish, so a spinner cannot collide
@@ -464,7 +464,7 @@ def _save_history(path: str) -> None:  # pragma: no cover - atexit
 
 
 #: The prompt. `\001`/`\002` mark the non-printing bytes so readline computes
-#: the visible width correctly — without them, editing a line longer than the
+#: the visible width correctly, without them, editing a line longer than the
 #: terminal wraps into the prompt and the cursor lands in the wrong column.
 PROMPT = "\001\033[1;36m\002forge\001\033[0m\002 › "
 

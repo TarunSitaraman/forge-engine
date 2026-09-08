@@ -1,7 +1,7 @@
 """Tests for the full-screen TUI.
 
 Textual is an optional extra, so everything that needs it skips when it is
-absent — the core install must not be made to depend on a terminal UI by the
+absent, the core install must not be made to depend on a terminal UI by the
 back door of a failing test.
 
 What is tested is the part with logic: output capture, markup safety, the stats
@@ -37,7 +37,7 @@ def settings(tmp_path):
 
 class TestLineWriter:
     def test_lines_are_emitted_whole(self):
-        """`print` arrives in fragments — the text and its newline are separate
+        """`print` arrives in fragments: the text and its newline are separate
         writes. Buffering to the newline is what stops the transcript showing a
         word at a time."""
         got: list[str] = []
@@ -93,7 +93,7 @@ class TestRunCommand:
 class TestMarkupSafety:
     def test_brackets_in_output_are_escaped(self):
         """Command output is data. `tags: ['dsa/pattern']` is a real line from
-        `forge inspect`, and unescaped it would be read as a style tag — the tag
+        `forge inspect`, and unescaped it would be read as a style tag, the tag
         vanishes and takes the text with it."""
         assert _escape("tags : ['dsa/pattern']") == r"tags : \['dsa/pattern']"
 

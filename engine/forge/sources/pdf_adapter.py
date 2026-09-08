@@ -7,7 +7,7 @@ AGPL/commercial licensing question (see technology-decisions §6). It is
 Apache/BSD-licensed and ships prebuilt wheels, so PDF support needs no system
 packages.
 
-**What this adapter promises, and what it does not.** Page numbers are exact —
+**What this adapter promises, and what it does not.** Page numbers are exact,
 they come from the document structure. Character offsets are exact within the
 text this parser extracted. *Headings are a heuristic*: PDF has no heading
 concept, so they are inferred from font size relative to the page's body text.
@@ -129,7 +129,7 @@ class PdfAdapter:
             text=text,
             # Hash the *extracted text*, not the raw bytes. Two PDFs with
             # identical content but different producer metadata or timestamps
-            # must not read as different sources — and re-saving a PDF changes
+            # must not read as different sources, and re-saving a PDF changes
             # its bytes constantly.
             content_hash=text_hash(text),
             blocks=blocks,
@@ -224,7 +224,7 @@ class PdfAdapter:
                 stripped = line_text.strip()
                 if not stripped:
                     # Skipped lines are not appended to `parts`, so the line
-                    # cursor must NOT advance — line numbers index into the
+                    # cursor must NOT advance, line numbers index into the
                     # assembled text, and drifting them would make every
                     # downstream citation point at the wrong line.
                     continue
@@ -285,7 +285,7 @@ class PdfAdapter:
 
 
 def _body_font_size(pages: list[tuple[str, list[tuple[str, float]]]]) -> float:
-    """Median font size across the document — the baseline headings exceed."""
+    """Median font size across the document: the baseline headings exceed."""
     sizes = [size for _, lines in pages for text, size in lines if text.strip() and size > 0]
     return statistics.median(sizes) if sizes else 0.0
 

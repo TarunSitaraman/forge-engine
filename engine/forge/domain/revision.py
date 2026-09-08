@@ -1,11 +1,11 @@
-"""Revision tracking — append-only history of derived state.
+"""Revision tracking: append-only history of derived state.
 
 Two things this is *not*:
 
 * It is not Git. Git tracks the Markdown corpus. This tracks the engine's
   derived model, which Git never sees.
 * It is not an audit log bolted on afterwards. It exists from the first write,
-  because history cannot be reconstructed retroactively — a system that starts
+  because history cannot be reconstructed retroactively, a system that starts
   logging revisions in Phase 9 has no history for Phases 1-8.
 
 Storage-agnostic by construction: a Revision is a plain record of
@@ -39,7 +39,7 @@ class Revision(BaseModel):
     before: dict[str, Any] | None = None
     after: dict[str, Any] | None = None
 
-    #: What caused this change — usually a source_id or claim_id. This is what
+    #: What caused this change, usually a source_id or claim_id. This is what
     #: makes "why did my understanding change?" answerable.
     cause: str | None = None
     workflow_run_id: str | None = None

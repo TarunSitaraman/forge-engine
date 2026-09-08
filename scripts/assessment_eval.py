@@ -11,7 +11,7 @@ provider changes between modes, which is the point: the pipeline being measured
 is the one that ships.
 
 **Read the caveat in the output.** With the scripted provider, classification
-accuracy is 1.0 by construction — the script answers with the expected label.
+accuracy is 1.0 by construction, the script answers with the expected label.
 What that mode genuinely measures is the pipeline: schema validation, the
 grounding check against real span ids, the classification-to-proposal mapping,
 and cache effectiveness. Only a real provider measures classification quality.
@@ -298,7 +298,7 @@ def main() -> int:
         )
 
     # Without this, structlog has never been configured and falls back to its
-    # default PrintLogger, which writes to **stdout** — straight into the file
+    # default PrintLogger, which writes to **stdout**, straight into the file
     # `--json` redirects, making the report unparseable. configure_logging
     # routes through stdlib logging, which this engine points at stderr.
     configure_logging()
@@ -366,7 +366,7 @@ def main() -> int:
 
             stdout is the report. Under ``--json`` that is redirected to a file
             which is only written once every case has run, so a working run and
-            a hung one look identical for several minutes — and on a
+            a hung one look identical for several minutes, and on a
             rate-limited host, where the provider sits in backoff, that is
             exactly when you want to see it moving. stderr stays on the
             terminal through the redirect.
@@ -462,7 +462,7 @@ def main() -> int:
             result.classification_correct = record.classification is case.expected_classification
             # Grounded means every cited span resolves in the store *and* was one
             # of the spans shown. The assessor rejects anything else, so a record
-            # existing at all implies grounding — asserted rather than assumed.
+            # existing at all implies grounding, asserted rather than assumed.
             result.grounded = all(
                 store.get_span(span_id) is not None for span_id in record.evidence_span_ids
             ) and set(record.evidence_span_ids) <= {evidence_span.id}

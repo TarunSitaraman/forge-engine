@@ -2,13 +2,13 @@
 
 Three layers, tested separately for the reason they are separated.
 
-* **The snapshot** — what counts as a problem, what to suggest to a vault in
+* **The snapshot**, what counts as a problem, what to suggest to a vault in
   each state, and which numbers are real. No terminal involved.
-* **The rendering** — pure functions from those numbers to markup. This is
+* **The rendering**, pure functions from those numbers to markup. This is
   where the explorer's real bug lived: it compared a derivation against
   `"MODEL"` when the value serializes lowercase, so every model-derived edge
   rendered as if a human had asserted it. That comparison is pinned here.
-* **The application** — driven headless through Textual's pilot, because
+* **The application**, driven headless through Textual's pilot, because
   bindings and lazy tab loading are behaviour, not state.
 
 The last test is the point of the whole feature: browsing the entire dashboard
@@ -68,8 +68,8 @@ def live_vault(tmp_path: Path) -> Settings:
 
     Driven through the CLI rather than by writing rows into the store, so what
     the dashboard reads is what `forge index` and `forge bootstrap` actually
-    produce. The fixture vault carries the defects on purpose — broken links,
-    an ambiguous one, unparseable frontmatter, a duplicate file — so the issue
+    produce. The fixture vault carries the defects on purpose, broken links,
+    an ambiguous one, unparseable frontmatter, a duplicate file, so the issue
     views have something real to show.
     """
     vault = tmp_path / "vault"
@@ -124,7 +124,7 @@ class TestSnapshot:
         """The parser rates a missing frontmatter block INFO deliberately.
 
         Plenty of good notes have none. Counting them would put a three-figure
-        number of invented problems on a healthy vault — the real one has 263
+        number of invented problems on a healthy vault, the real one has 263
         such files and zero actual defects.
         """
         snapshot = build_snapshot(live_vault)
@@ -240,7 +240,7 @@ class TestBrowsing:
 
     def test_an_empty_search_box_is_not_an_error(self, live_vault):
         """`queries.search_spans` raises on an empty query, which is right for an
-        API — a caller sent something malformed. Here it is a box nobody has
+        API, a caller sent something malformed. Here it is a box nobody has
         typed in yet, and a dialog saying so would be absurd."""
         assert browse_search(live_vault, "") == []
         assert browse_search(live_vault, "   ") == []
@@ -305,7 +305,7 @@ class TestRendering:
 
     def test_a_vault_path_with_brackets_survives_rendering(self, tmp_path):
         """A folder named `[archive]` is legal, and an unescaped bracket is
-        swallowed as a style tag — taking the rest of the line with it."""
+        swallowed as a style tag, taking the rest of the line with it."""
         snapshot = VaultSnapshot(name="[archive]", path="/home/x/[archive]")
         text = render_overview(snapshot)
         assert r"\[archive]" in text
@@ -327,7 +327,7 @@ class TestRendering:
     ):
         """The explorer shipped `derivation === "MODEL"` against a value that
         serializes lowercase, so every generated edge rendered as if a human had
-        asserted it — the exact distinction the provenance model exists for.
+        asserted it, the exact distinction the provenance model exists for.
         Casing is pinned here so it cannot come back.
         """
         detail = ConceptDetail(
@@ -577,7 +577,7 @@ class TestApplication:
         This guards the behaviour, not a mechanism. The bindings are declared
         without `priority` to say the focused widget comes first, but measured
         on Textual 8.2.8 a focused Input wins either way, so the test passes
-        under both — it is here to catch the version where that changes.
+        under both; it is here to catch the version where that changes.
         """
 
         async def body(app, pilot):
@@ -603,7 +603,7 @@ class TestApplication:
 
     def test_leaving_the_search_tab_frees_the_number_keys(self, live_vault):
         """The trap this fixes: switching tabs hides the focused widget, and
-        Textual hands focus to the next one in the DOM — which was the search
+        Textual hands focus to the next one in the DOM, which was the search
         box. Visiting Search once left every number key going into that box,
         with no visible way out.
         """
@@ -611,7 +611,7 @@ class TestApplication:
         async def body(app, pilot):
             from textual.widgets import ContentSwitcher
 
-            await pilot.press("3")  # search — the box takes focus, deliberately
+            await pilot.press("3")  # search, the box takes focus, deliberately
             await pilot.pause()
             await pilot.press("escape")
             await pilot.pause()
@@ -738,7 +738,7 @@ class TestApplication:
     def test_browsing_the_whole_dashboard_makes_no_model_calls(self, live_vault):
         """The product claim, asserted rather than described.
 
-        Every tab, a filter and a search — the entire surface — on a vault with
+        Every tab, a filter and a search (the entire surface) on a vault with
         no API key configured and no network available.
         """
 

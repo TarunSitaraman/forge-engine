@@ -9,7 +9,7 @@ Deliberately **not** implemented in Phase 1: Contradiction, Synthesis,
 Question, KnowledgeGap.
 
 These are pure domain models. They know nothing about SQLite, Neo4j, Qdrant,
-or Ollama — persistence lives behind the protocols in :mod:`forge.storage`.
+or Ollama, persistence lives behind the protocols in :mod:`forge.storage`.
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ class Entity(BaseModel):
 
 
 # --------------------------------------------------------------------------
-# Source / Document / Span — the evidence chain
+# Source / Document / Span, the evidence chain
 # --------------------------------------------------------------------------
 
 
@@ -104,7 +104,7 @@ class Document(Entity):
 
 
 class Span(Entity):
-    """A located region of a Document — the atom of provenance.
+    """A located region of a Document: the atom of provenance.
 
     Without spans, "traceable to evidence" degrades to document-level
     attribution, which is not traceability.
@@ -136,7 +136,7 @@ class Span(Entity):
     # -- Phase 2 additions, all optional -----------------------------------
 
     #: 1-based page number for paginated sources. ``None`` for Markdown, which
-    #: has no pages — recorded as absent rather than faked as page 1.
+    #: has no pages, recorded as absent rather than faked as page 1.
     page: int | None = None
     #: ``(first_page, last_page)`` when a span crosses a page boundary.
     page_span: tuple[int, int] | None = None
@@ -180,7 +180,7 @@ class Span(Entity):
 
 
 # --------------------------------------------------------------------------
-# Concept / Claim — the understanding layer
+# Concept / Claim, the understanding layer
 # --------------------------------------------------------------------------
 
 
@@ -202,7 +202,7 @@ class Concept(Entity):
     #: Set from the user's identity decision; ``None`` when unambiguous.
     namespace: str | None = None
     #: Proposal that created this concept. Phase 3: no canonical entity may be
-    #: an unexplained orphan — every one traces back to the decision that
+    #: an unexplained orphan, every one traces back to the decision that
     #: created it, and from there to the source spans that justified it.
     origin_proposal_id: str | None = None
     #: Spans that evidenced this concept's creation.
@@ -216,7 +216,7 @@ class Concept(Entity):
 
         The namespace participates so that `pattern/Heap` and
         `data-structure/Heap` are genuinely different concepts rather than one
-        overwriting the other — which is the whole point of resolving the
+        overwriting the other, which is the whole point of resolving the
         collision instead of picking a winner.
         """
         key = canonical_name.strip().casefold()
@@ -228,7 +228,7 @@ class Concept(Entity):
 
 
 class Claim(Entity):
-    """An assertable statement — the unit of understanding.
+    """An assertable statement: the unit of understanding.
 
     Invariant enforced by :func:`forge.domain.validation.validate_claim`:
     a claim whose tier requires evidence must have at least one EvidenceLink.

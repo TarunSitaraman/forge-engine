@@ -325,11 +325,11 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
 
         Two ways to fail. A quote that is **not in its span** was never
         evidence. A quote that is in its span but comes from a **fenced code
-        block** is grounded and still unreadable as support — a Mermaid arrow
+        block** is grounded and still unreadable as support, a Mermaid arrow
         or a line of Python asserts nothing a reviewer can check.
 
         Exits 1 if any stored quote fails. Those were admitted under an older,
-        looser rule and would be dropped by extraction today — reject them
+        looser rule and would be dropped by extraction today, reject them
         rather than approving them.
         """
         settings = settings_factory(vault)
@@ -411,12 +411,12 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
                 why = []
                 if ungrounded:
                     why.append(
-                        f"{ungrounded} quote(s) are not in the span they cite — "
+                        f"{ungrounded} quote(s) are not in the span they cite, "
                         "admitted under the pre-2026-08-19 bag-of-words rule"
                     )
                 if from_code:
                     why.append(
-                        f"{from_code} quote(s) are fenced code — admitted before "
+                        f"{from_code} quote(s) are fenced code, admitted before "
                         "extraction checked for that"
                     )
                 typer.echo("\n" + "\n".join(why))
@@ -444,9 +444,9 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         """What would `forge ingest --extract` cost here? Zero model calls.
 
         Extraction is the only expensive thing this engine does. Every input to
-        its cost is already deterministic and already stored — which spans the
+        its cost is already deterministic and already stored, which spans the
         chunker produced, which the extractor would select, and whether the
-        derivation cache already holds a result — so the size of a run is
+        derivation cache already holds a result, so the size of a run is
         computable before committing hours to it.
 
         Cached sources cost nothing on a re-run, which is what makes extraction
@@ -461,7 +461,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         store.initialize()
         try:
             # The plan must be keyed on the same model identity the run would
-            # use, so the provider is constructed — but never called, and its
+            # use, so the provider is constructed, but never called, and its
             # health is never probed. A plan is free even with the box off.
             try:
                 extractor = CandidateExtractor(get_provider(settings), max_spans=max_spans)
@@ -528,7 +528,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         """Report proposals that say the same thing in different words.
 
         Zero model calls. The extractor sends one span per call, so it cannot
-        know another span already produced the same fact — deduplication is not
+        know another span already produced the same fact, deduplication is not
         something a prompt rule can fix, and being deterministic it applies
         retroactively to an already-extracted corpus for free.
 
@@ -881,7 +881,7 @@ def _print_source(source: Any) -> None:
         # "Unchanged" describes the *source*, not the run. Extraction still
         # runs over an unchanged source that was never extracted, so claiming
         # "no work done" while 2 model calls per span are in flight is simply
-        # false — and it hid a 5.7-hour run's real behaviour on 2026-08-19.
+        # false, and it hid a 5.7-hour run's real behaviour on 2026-08-19.
         did_extract = source.proposals_created or source.concepts_proposed or source.claims_proposed
         if did_extract:
             typer.echo(f"    source unchanged ({source.spans} spans reused)")

@@ -2,7 +2,7 @@
 
 The property under test throughout: **new evidence can change what Forge knows,
 but only through a grounded assessment, a reviewable proposal, and a human
-decision — and never by overwriting anything.**
+decision, and never by overwriting anything.**
 
 Three things are asserted repeatedly rather than once, because they are the
 guarantees a future change is most likely to erode quietly:
@@ -392,7 +392,7 @@ class TestClaimRetrieval:
         assert replacement.id in retrieved
 
     def test_disputed_claims_are_still_examined(self, knowledge):
-        """Disputed is not terminal — later evidence may support or sharpen it."""
+        """Disputed is not terminal: later evidence may support or sharpen it."""
         store, concept, claim = knowledge["store"], knowledge["concept"], knowledge["claim"]
         store.put_claim(
             claim.model_copy(update={"status": ClaimStatus.DISPUTED}),
@@ -731,7 +731,7 @@ class TestImpact:
             assert isinstance(impact_of(classification), ImpactClass)
 
     def test_no_confidence_score_is_invented(self):
-        """Categorical outcomes only — a model's self-report is not a measurement."""
+        """Categorical outcomes only: a model's self-report is not a measurement."""
         fields = set(AssessmentRecord.model_fields)
         assert not {f for f in fields if "confidence" in f or "score" in f}
 
@@ -1143,7 +1143,7 @@ class TestCorroboration:
         assert batch.corroboration.demoted == 0
 
     def test_refines_is_checked_too(self, knowledge):
-        """REFINES asserts a relationship just as SUPPORTS does — it edits the
+        """REFINES asserts a relationship just as SUPPORTS does; it edits the
         stored claim, which is if anything the more consequential write."""
         batch = assessor_for(
             knowledge["store"],

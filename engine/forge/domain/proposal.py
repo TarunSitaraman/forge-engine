@@ -1,4 +1,4 @@
-"""Proposals — recorded intentions to change something, pending human decision.
+"""Proposals: recorded intentions to change something, pending human decision.
 
 This is the mechanism that makes ADR-001's segregated write-back real. Forge
 may *propose* any change it likes; it may not enact one. A proposal carries
@@ -54,7 +54,7 @@ class ProposedOperation(BaseModel):
 
     #: Verb, e.g. "replace_frontmatter_line", "create_concept", "link_concept".
     action: str
-    #: What the operation would apply to — a vault path, concept id, etc.
+    #: What the operation would apply to, a vault path, concept id, etc.
     target: str
     before: str | None = None
     after: str | None = None
@@ -94,7 +94,7 @@ class Proposal(BaseModel):
 
     #: Canonical entity this proposal produced, once activated. This is the
     #: link that answers "which proposal created this concept?" from either
-    #: direction — the entity records its origin proposal, and the proposal
+    #: direction, the entity records its origin proposal, and the proposal
     #: records what it created.
     activated_entity_type: EntityType | None = None
     activated_entity_id: str | None = None
@@ -105,7 +105,7 @@ class Proposal(BaseModel):
         """Deterministic identity.
 
         Re-running ingestion or diagnostics must not create a second copy of a
-        proposal the user already rejected — so identity is derived from what
+        proposal the user already rejected, so identity is derived from what
         the proposal *is*, not when it was generated.
         """
         return deterministic_id("proposal", proposal_type.value, target, fingerprint)
@@ -138,7 +138,7 @@ class Proposal(BaseModel):
 
         # An activated proposal must name what it created. Without this, the
         # status would assert that canonical knowledge exists while leaving no
-        # way to find it — which is exactly the "successfully activated but
+        # way to find it, which is exactly the "successfully activated but
         # nothing persisted" failure this phase must make impossible.
         if self.status is ProposalStatus.ACTIVATED and not self.activated_entity_id:
             raise ValueError(
@@ -242,4 +242,4 @@ class Proposal(BaseModel):
         )
 
     def summary(self) -> str:
-        return f"[{self.status.value}] {self.type.value} {self.operation.target} — {self.reason}"
+        return f"[{self.status.value}] {self.type.value} {self.operation.target}, {self.reason}"
