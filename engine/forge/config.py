@@ -124,6 +124,14 @@ CLOUD_PRESETS: dict[str, dict[str, object]] = {
         "base_url": "https://api.groq.com/openai",
         "api_key_env": "GROQ_API_KEY",
         "max_tokens": 4096,
+        # The free tier's tokens-per-minute allowance, measured 2026-08-29 and
+        # confirmed 2026-09-09. Recorded so callers that make many calls can
+        # pace themselves from it rather than guessing: at a 4096 ceiling this
+        # is barely two calls a minute, and a run paced at three a minute falls
+        # further behind every minute until it 429s permanently. That is not
+        # hypothetical; it is what a 40-page eval did on 2026-09-09, one page
+        # in.
+        "tokens_per_minute": 8000,
     },
     "openrouter": {
         "base_url": "https://openrouter.ai/api",

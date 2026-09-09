@@ -205,6 +205,28 @@ def scripted_provider(current: dict) -> MockProvider:
     return MockProvider(responder=respond)
 
 
+def _pacing_floor(settings) -> float | None:
+    """Seconds between calls this provider's per-minute token budget allows.
+
+    ``None`` when no budget is recorded, which is every provider whose limit
+    nobody has measured. Guessing a floor for an untested host would be the
+    same mistake in the other direction.
+
+    The prompt is charged too, so a call reserves `max_tokens` plus a span's
+    worth of text. 1,200 is the rounded-up observed size of the spans this eval
+    sends; erring high costs wall clock, erring low costs the whole run.
+    """
+    from forge.config import CLOUD_PRESETS
+
+    preset = CLOUD_PRESETS.get(os.environ.get("FORGE_CLOUD_PRESET", ""), {})
+    budget = preset.get("tokens_per_minute")
+    cloud = getattr(settings.llm, "cloud", None)
+    if not budget or cloud is None:
+        return None
+    # The resolved ceiling, so a FORGE_CLOUD_MAX_TOKENS override counts.
+    return 60.0 * (cloud.max_tokens + 1200) / float(budget)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--provider", default="scripted", choices=("scripted", "ollama", "cloud"))
@@ -387,6 +409,35 @@ def main() -> int:
     calls = len(sample) * args.max_spans * 2
     print(f"budget     : up to {calls} model call(s)", file=sys.stderr)
     if args.provider != "scripted":
+        # The floor is checked before the estimate. Printing a reassuring
+        # "160 minutes of wall clock" and then refusing the same pacing two
+        # lines later is how a reader learns to skim past both.
+        #
+        # Computed from the preset's recorded budget rather than guessed. A
+        # host that counts *reserved* output against a tokens-per-minute
+        # allowance permits budget/(max_tokens + prompt) calls a minute however
+        # they are spaced. Pace faster than that and the deficit accumulates:
+        # the first page succeeds on whatever was left in the bucket, and every
+        # page after it 429s through all of its retries.
+        #
+        # A 40-page run at `--sleep 20` did exactly that on 2026-09-09, against
+        # a budget `CLOUD_PRESETS` had documented as roughly two calls a minute
+        # since August. The measurement was right and the advice built on it
+        # was not, which is why the arithmetic lives here now instead of in
+        # prose somebody has to do sums against.
+        floor = _pacing_floor(settings)
+        if floor and args.sleep < floor:
+            print(
+                f"pacing     : --sleep {args.sleep:g} is below the "
+                f"{floor:.0f}s this provider's token budget allows.\n"
+                f"             The first page would succeed and the rest would "
+                f"429. Use --sleep {floor:.0f} or higher,\n"
+                f"             or lower FORGE_CLOUD_MAX_TOKENS, which buys "
+                f"calls back at the risk of truncating\n"
+                f"             a reasoning model's JSON.",
+                file=sys.stderr,
+            )
+            return 2
         if args.sleep:
             minutes = calls * args.sleep / 60
             print(
@@ -395,19 +446,9 @@ def main() -> int:
                 file=sys.stderr,
             )
         else:
-            # Measured, not guessed. A hosted free tier limits tokens per
-            # minute, not requests: with max_tokens reserved against an 8,000
-            # TPM budget the ceiling is about two calls a minute however the
-            # requests are spaced, and an unpaced run spends its budget in the
-            # first few seconds and then 429s for the rest of the run. Each
-            # failed page is recorded as incomplete rather than crashing the
-            # run, so the result is a report full of holes that took an hour
-            # to produce.
             print(
                 "pacing     : NONE (--sleep 0). On a rate-limited key this "
-                "will 429 within seconds.\n"
-                "             Free hosted tiers limit tokens per minute, not "
-                "requests: try --sleep 20.",
+                "will 429 within seconds.",
                 file=sys.stderr,
             )
 

@@ -446,3 +446,71 @@ class TestItRefusesTheWrongCorpus:
         assert "vault      :" in result.stderr
         assert "vocabulary :" in result.stderr
         assert "budget     :" in result.stderr
+
+
+class TestItRefusesPacingItsBudgetCannotAfford:
+    """A run paced faster than the provider's token budget fails after page one.
+
+    Groq counts *reserved* output against a tokens-per-minute allowance, so a
+    4096 ceiling against 8,000 TPM buys about 1.5 calls a minute once the prompt
+    is charged. A 40-page run at `--sleep 20` on 2026-09-09 completed its first
+    page on whatever was left in the bucket and then 429'd through every retry
+    on every page after it, for as long as it was left running.
+
+    The budget was documented in `CLOUD_PRESETS` since August. What was missing
+    was anything that did the division, so the floor is computed here now.
+    """
+
+    def _floor(self, max_tokens, tpm=8000):
+        import os
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+        import concept_extraction_eval as eval_script
+
+        settings = type("S", (), {"llm": type("L", (), {"cloud": type("C", (), {
+            "max_tokens": max_tokens})()})()})()
+        old = os.environ.get("FORGE_CLOUD_PRESET")
+        os.environ["FORGE_CLOUD_PRESET"] = "groq"
+        try:
+            return eval_script._pacing_floor(settings)
+        finally:
+            if old is None:
+                os.environ.pop("FORGE_CLOUD_PRESET", None)
+            else:
+                os.environ["FORGE_CLOUD_PRESET"] = old
+
+    def test_the_floor_is_above_the_pacing_that_failed(self):
+        assert self._floor(4096) > 20, "the run that 429'd must not be allowed"
+        assert 35 < self._floor(4096) < 45
+
+    def test_a_smaller_reservation_buys_calls_back(self):
+        """Halving the ceiling roughly halves the wait, which is the lever."""
+        assert self._floor(1024) < self._floor(4096) / 2 + 1
+
+    def test_no_floor_is_claimed_for_a_provider_nobody_measured(self):
+        import os
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+        import concept_extraction_eval as eval_script
+
+        settings = type("S", (), {"llm": type("L", (), {"cloud": type("C", (), {
+            "max_tokens": 4096})()})()})()
+        old = os.environ.get("FORGE_CLOUD_PRESET")
+        os.environ["FORGE_CLOUD_PRESET"] = "openrouter"
+        try:
+            assert eval_script._pacing_floor(settings) is None
+        finally:
+            if old is None:
+                os.environ.pop("FORGE_CLOUD_PRESET", None)
+            else:
+                os.environ["FORGE_CLOUD_PRESET"] = old
+
+    def test_groq_records_the_budget_the_floor_is_computed_from(self):
+        from forge.config import CLOUD_PRESETS
+
+        assert CLOUD_PRESETS["groq"]["tokens_per_minute"] == 8000
+        assert CLOUD_PRESETS["groq"]["max_tokens"] == 4096

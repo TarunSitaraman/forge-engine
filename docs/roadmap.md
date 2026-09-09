@@ -341,8 +341,8 @@ with a real model**, and populate the graph at corpus scale.
 
           python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
           .venv/bin/python scripts/concept_extraction_eval.py \
-              --vault ~/forge --provider cloud --limit 40 --sleep 20 --json \
-              > phase5-concept-eval.json
+              --vault ~/forge --provider cloud --limit 15 --max-spans 2 \
+              --sleep 40 --json > phase5-concept-eval.json
 
       Both flags in that command are there because the shorter version failed.
       `--vault` because vault resolution looks upward from the working
@@ -355,17 +355,25 @@ with a real model**, and populate the graph at corpus scale.
       interpreter running it needs the package's dependencies; a bare `python3`
       that is not the one `forge` runs on fails on `structlog`.
 
-      **`--sleep` is not optional, and this line said so only after somebody
-      tried the command.** It defaults to 0, and the version printed here
-      until 2026-09-08 omitted it. A free hosted tier limits tokens per minute
-      rather than requests: with `max_tokens` reserved against an 8,000 TPM
-      budget the ceiling is about two calls a minute however they are spaced,
-      so an unpaced run spends its budget in the first few seconds and 429s
-      for the rest. Each failed page is recorded incomplete rather than
-      crashing, so the result would have been a report full of holes that took
-      an hour to produce. The script now prints its call budget and expected
-      wall clock before starting, and warns when cloud is paired with no
-      pacing. At `--sleep 20` the 240 calls are about 80 minutes.
+      **The pacing is computed now, because twice it was got wrong by hand.**
+      `--sleep` defaults to 0 and the command printed here until 2026-09-08
+      omitted it; the version printed until 2026-09-09 said `--sleep 20`, and
+      that failed too. Groq counts *reserved* output against its 8,000
+      tokens-per-minute budget, so a 4096 ceiling plus a span's prompt buys
+      about 1.5 calls a minute. 20 seconds is three a minute: the deficit
+      accumulates and the run 429s permanently after its first page. Observed
+      2026-09-09, against a budget `CLOUD_PRESETS` had documented since
+      August. The measurement was right and the advice built on it was not.
+
+      `CLOUD_PRESETS["groq"]` now records `tokens_per_minute`, the script does
+      the division, and a `--sleep` below the floor is refused with the number
+      rather than attempted. `FORGE_CLOUD_MAX_TOKENS` is the other lever:
+      halving the reservation halves the wait, at the risk of truncating a
+      reasoning model's JSON.
+
+      The sample above is 15 pages at 2 spans, which is 60 calls and about 40
+      minutes rather than 240 and 160. The sample is seeded, so a larger run
+      later is its own measurement rather than a superset of this one.
 
       The harness was re-run offline against the vault on 2026-09-08, after a
       week of extractor changes: 544 concept pages, seeded sample, and every
