@@ -371,3 +371,78 @@ def test_the_scripted_provider_pairs_a_real_quote_with_an_ungrounded_one():
     assert len(claims) == 2
     assert _grounded(claims[0]["evidence_quote"], span_text)
     assert not _grounded(claims[1]["evidence_quote"], span_text)
+
+
+class TestItRefusesTheWrongCorpus:
+    """The eval must not score the engine's own documentation and call it a vault.
+
+    Vault resolution looks upward from the working directory, so running the
+    script from inside a forge-engine checkout resolves the repository itself.
+    `forge bootstrap` then derives a couple of dozen concepts from `docs/`, and
+    the run reports a self-recovery rate over architecture notes in exactly the
+    format it uses for the 545-page vault. Nothing in the output said which
+    corpus it measured, and the number is the kind somebody quotes weeks later.
+
+    The same defect existed in `forge index` until 2026-09-01, when vault
+    resolution stopped preferring the installed module's location.
+    """
+
+    def _run(self, cwd, args):
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        script = Path(__file__).resolve().parents[2] / "scripts" / "concept_extraction_eval.py"
+        return subprocess.run(
+            [sys.executable, str(script), *args],
+            capture_output=True,
+            text=True,
+            cwd=str(cwd),
+        )
+
+    def test_an_engine_checkout_is_refused_by_name(self, tmp_path):
+        checkout = tmp_path / "forge-engine"
+        (checkout / "engine" / "forge").mkdir(parents=True)
+        (checkout / "engine" / "forge" / "__init__.py").write_text("", encoding="utf-8")
+        (checkout / ".git").mkdir()
+        (checkout / "docs").mkdir()
+        (checkout / "docs" / "architecture.md").write_text("# Architecture\n\nProse.\n", "utf-8")
+
+        result = self._run(tmp_path, ["--vault", str(checkout), "--limit", "2"])
+
+        assert result.returncode == 2
+        assert "engine's own checkout" in result.stderr
+        assert "self-recovery" not in result.stdout, "it must not report a score"
+
+    def test_a_real_vault_is_not_refused(self, tmp_path):
+        vault = tmp_path / "notes"
+        (vault / ".git").mkdir(parents=True)
+        for name in ("alpha", "beta"):
+            (vault / f"{name}.md").write_text(
+                f"# {name.title()}\n\n"
+                f"{name.title()} is a way of doing things that people use often "
+                f"and it needs enough words to clear the extractor's own floor "
+                f"for a span to be worth sending anywhere at all.\n",
+                encoding="utf-8",
+            )
+
+        result = self._run(tmp_path, ["--vault", str(vault), "--limit", "2"])
+
+        assert result.returncode == 0, result.stderr[-500:]
+        assert "engine's own checkout" not in result.stderr
+
+    def test_the_corpus_is_named_before_the_run_not_after(self, tmp_path):
+        """An 80-minute paced run must not hide which vault it is scoring."""
+        vault = tmp_path / "notes"
+        (vault / ".git").mkdir(parents=True)
+        (vault / "alpha.md").write_text(
+            "# Alpha\n\nAlpha is a way of doing things that people use often and "
+            "it needs enough words to clear the extractor's own floor.\n",
+            encoding="utf-8",
+        )
+
+        result = self._run(tmp_path, ["--vault", str(vault), "--limit", "1"])
+
+        assert "vault      :" in result.stderr
+        assert "vocabulary :" in result.stderr
+        assert "budget     :" in result.stderr

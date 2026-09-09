@@ -339,7 +339,21 @@ with a real model**, and populate the graph at corpus scale.
       would be arithmetic rather than a finding. One command when the key is
       next available:
 
-          python3 scripts/concept_extraction_eval.py --provider cloud --limit 40 --sleep 20
+          python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+          .venv/bin/python scripts/concept_extraction_eval.py \
+              --vault ~/forge --provider cloud --limit 40 --sleep 20 --json \
+              > phase5-concept-eval.json
+
+      Both flags in that command are there because the shorter version failed.
+      `--vault` because vault resolution looks upward from the working
+      directory: run this from inside the engine checkout and it resolves the
+      *repository*, derives 23 concepts from `docs/`, and reports a
+      self-recovery rate over architecture notes in exactly the format it uses
+      for the vault. That case is refused by name now, and the vault and its
+      concept count print before the run rather than in the report at the end
+      of it. The venv because the script imports the engine from source, so the
+      interpreter running it needs the package's dependencies; a bare `python3`
+      that is not the one `forge` runs on fails on `structlog`.
 
       **`--sleep` is not optional, and this line said so only after somebody
       tried the command.** It defaults to 0, and the version printed here

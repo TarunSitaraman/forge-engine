@@ -1,12 +1,26 @@
 #!/usr/bin/env python3
 """Score concept extraction against the vault's own 545 page names.
 
-    python3 scripts/concept_extraction_eval.py                        # scripted (offline)
-    python3 scripts/concept_extraction_eval.py --provider cloud --limit 40 --sleep 20
-    python3 scripts/concept_extraction_eval.py --provider ollama --model qwen3:8b
+    python3 scripts/concept_extraction_eval.py --vault ~/notes
+    python3 scripts/concept_extraction_eval.py --vault ~/notes --provider cloud --limit 40 --sleep 20
+    python3 scripts/concept_extraction_eval.py --vault ~/notes --provider ollama --model qwen3:8b
 
-`--sleep` is not optional on a rate-limited hosted key, and the run prints its
-call budget and expected wall clock before it starts.
+**Two things that will waste a run.** `--vault` is shown in every line above
+because vault resolution looks upward from the working directory: run this from
+inside a forge-engine checkout and it resolves the repository, not your notes.
+That case is now refused by name, but any other wrong tree is not. And
+`--sleep` is not optional on a rate-limited hosted key. The run prints the
+vault, its concept count, the call budget and the expected wall clock before it
+starts, so all of that is visible in the first three lines rather than in the
+report eighty minutes later.
+
+**It needs the package's dependencies importable**, because it imports the
+engine from source rather than from an install. If `python3` here is not the
+interpreter `forge` runs on, the first import fails on `structlog`. A venv in
+the checkout is the reliable way:
+
+    python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+    .venv/bin/python scripts/concept_extraction_eval.py --vault ~/notes
 
 **The reference set nobody wrote for this purpose.** `forge bootstrap` derives
 545 concepts from the vault's directory listing with zero model calls: a human
@@ -275,6 +289,28 @@ def main() -> int:
         )
         return 2
 
+    # Refuse the engine's own checkout. Vault resolution looks upward from the
+    # working directory, so running this from inside forge-engine resolves the
+    # repository itself: `forge bootstrap` then derives a couple of dozen
+    # concepts from `docs/`, and the run reports a self-recovery rate over the
+    # engine's architecture notes in exactly the format it uses for the vault.
+    # Nothing in the output says which corpus it measured.
+    #
+    # This is the same defect `forge index` had until 2026-09-01, when vault
+    # resolution stopped preferring the installed module's location: it indexed
+    # the engine's docs from anywhere and printed success. A script that
+    # reintroduces it is worse, because its output is a number somebody will
+    # quote three weeks later.
+    if (settings.vault_path / "engine" / "forge" / "__init__.py").is_file():
+        print(f"{settings.vault_path} is the engine's own checkout, not a vault.", file=sys.stderr)
+        print(
+            "This would score extraction against the engine's documentation and "
+            "report it in the same shape as a real run.\n"
+            "Pass --vault, or set FORGE_VAULT_PATH, to point at the notes.",
+            file=sys.stderr,
+        )
+        return 2
+
     indexer = CorpusIndexer(settings)
     index = indexer.build_index()
     by_path = {f.path: f for f in index.files}
@@ -335,6 +371,15 @@ def main() -> int:
         ))
         for page in sample
     ]
+
+    # Which corpus, and how big, before the run rather than in the report at
+    # the end of it. A wrong tree is cheap to notice now and expensive to
+    # notice after eighty minutes of paced model calls.
+    print(f"vault      : {settings.vault_path}", file=sys.stderr)
+    print(
+        f"vocabulary : {len(vocabulary)} concept page(s) from `forge bootstrap`",
+        file=sys.stderr,
+    )
 
     # What this run will cost, before it starts, in the same spirit as
     # `forge extract-plan`. One page is up to --max-spans concept calls plus
