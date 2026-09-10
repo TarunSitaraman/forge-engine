@@ -584,6 +584,10 @@ def main() -> int:
         "pages_excluded_as_thin": thin,
         "min_call_interval_seconds": args.sleep,
         "throttle_waited_seconds": round(getattr(provider, "slept_seconds", 0.0), 1),
+        "self_recovery_by_name_shape": {
+            shape: {"recovered": hit, "scored": n}
+            for shape, (hit, n) in report.self_recovery_by_shape().items()
+        },
         "concept_pages": len(plan.concepts),
         "scripted": args.provider == "scripted",
     }
@@ -613,6 +617,17 @@ def main() -> int:
             f"  self-recovery   {report.self_recovery:.3f}   "
             "pages whose own concept came back out of their own text"
         )
+        # Never the aggregate alone. Three quarters of the vault's page names
+        # encode a document type, a pattern-and-problem pair or a file slug,
+        # and no extractor should emit those from prose, so the aggregate is
+        # mostly a measure of filename-convention reproduction. Printed
+        # immediately underneath so the two cannot be separated by a reader in
+        # a hurry.
+        by_shape = report.self_recovery_by_shape()
+        if len(by_shape) > 1:
+            for shape, (hit, n) in sorted(by_shape.items(), key=lambda kv: -kv[1][1]):
+                note = "  <- the only shape that is a concept" if shape == "plain concept" else ""
+                print(f"      {hit}/{n} {hit / n:.3f}  {shape}{note}")
         print(
             f"  junk rate       {report.junk_rate:.3f}   "
             f"emitted names on the observed-junk list ({len(forbidden)} strings)"

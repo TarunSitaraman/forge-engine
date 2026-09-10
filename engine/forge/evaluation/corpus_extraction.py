@@ -38,12 +38,51 @@ folding it in makes a broken run look clean.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 from ..extraction.extractor import _grounded
 from ..parsing.links import normalize
+
+#: What shape of string the reference set is asking an extractor to emit, in the
+#: order tried. Only the last is a concept in the sense extraction means.
+#:
+#: **This partition exists because the aggregate was misleading.** The reference
+#: set is the vault's own page names, and a first real run against it on
+#: 2026-09-10 scored 2 of 14. Reading the misses explained why: eleven of the
+#: twelve were names like `BFS Interview Guide`, `DFS - Path Sum` or
+#: `promotion-case-builder`. Those encode a document type, a pattern-and-problem
+#: pair, or a file slug. No extractor should emit them from a page's prose, and
+#: a page titled `BFS Interview Guide` is *about* BFS.
+#:
+#: Measured over the whole vault: 25.4% of the 544 names are plain concepts,
+#: 28.3% are compound pairs, 23.9% are kebab-case slugs and 21.5% carry a
+#: document-type suffix. A single self-recovery number over that population is
+#: three-quarters a measure of filename-convention reproduction, which is the
+#: same defect as `isolated_concept` counting graph degree and calling it
+#: reachability: a number measuring something other than its label.
+#:
+#: Nothing here changes what counts as recovery. The strict number is still
+#: computed and reported. This only lets a reader see which population it came
+#: from, which the aggregate alone cannot say.
+NAME_SHAPES: tuple[tuple[str, str], ...] = (
+    ("document-type suffix", r"\b(?:Interview Guide|Representative Problems|Cheat Sheet"
+                             r"|Template|Schema|Index|Home|Tracker|Roadmap|Glossary"
+                             r"|Summary|Plan|Status)$"),
+    ("compound pair", r"^.+ - .+$"),
+    ("kebab-case slug", r"^[a-z0-9]+(?:-[a-z0-9]+)+$"),
+    ("screaming case", r"^[A-Z0-9_]+$"),
+)
+
+
+def name_shape(canonical_name: str) -> str:
+    """Which of `NAME_SHAPES` this page name is, or ``"plain concept"``."""
+    for label, pattern in NAME_SHAPES:
+        if re.search(pattern, canonical_name):
+            return label
+    return "plain concept"
 
 
 @dataclass(frozen=True)
@@ -190,6 +229,18 @@ class CorpusExtractionReport:
         """Share of pages whose own concept extraction found in their own text."""
         scored = self.complete
         return sum(s.recovered for s in scored) / len(scored) if scored else 0.0
+
+    def self_recovery_by_shape(self) -> dict[str, tuple[int, int]]:
+        """(recovered, scored) per name shape, so the aggregate can be read.
+
+        A shape with no scored pages is absent rather than reported as 0/0.
+        """
+        out: dict[str, list[int]] = {}
+        for score in self.complete:
+            bucket = out.setdefault(name_shape(score.canonical_name), [0, 0])
+            bucket[0] += bool(score.recovered)
+            bucket[1] += 1
+        return {shape: (hit, n) for shape, (hit, n) in out.items()}
 
     @property
     def emitted_total(self) -> int:

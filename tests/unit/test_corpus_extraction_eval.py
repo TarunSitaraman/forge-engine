@@ -589,3 +589,70 @@ class TestARunCanBeResumed:
 
         budget = [ln for ln in widened.stderr.splitlines() if ln.startswith("budget")][0]
         assert "12 model call" in budget, budget
+
+
+class TestTheAggregateIsNotQuotableAlone:
+    """Self-recovery over raw page names is mostly a filename-convention score.
+
+    The first real run against this corpus, 2026-09-10, scored 2 of 14. Eleven
+    of the twelve misses were names like `BFS Interview Guide`, `DFS - Path Sum`
+    and `promotion-case-builder`: a document type, a pattern-and-problem pair,
+    and a file slug. No extractor should emit those from a page's prose, and a
+    page titled `BFS Interview Guide` is about BFS.
+
+    Measured over the vault: 25.4% of 544 names are plain concepts. A single
+    number over that population is three-quarters a measure of something the
+    metric does not claim to measure, which is the `isolated_concept` mistake
+    again. The strict number is unchanged; it is now reported with the
+    population it came from.
+    """
+
+    def test_every_shape_the_vault_actually_uses_is_recognised(self):
+        from forge.evaluation.corpus_extraction import name_shape
+
+        assert name_shape("BFS Interview Guide") == "document-type suffix"
+        assert name_shape("Number Theory Cheat Sheet") == "document-type suffix"
+        assert name_shape("Pattern Template") == "document-type suffix"
+        assert name_shape("DFS - Path Sum") == "compound pair"
+        assert name_shape("promotion-case-builder") == "kebab-case slug"
+        assert name_shape("CERT_PREP") == "screaming case"
+
+    def test_a_real_concept_is_not_mistaken_for_a_convention(self):
+        """The partition must not quietly move plain concepts out of scope."""
+        from forge.evaluation.corpus_extraction import name_shape
+
+        for concept in ("AVL Tree", "Counting Sort", "Backtracking", "Sweep Line",
+                        "Depth First Search", "Amortized Analysis", "Array"):
+            assert name_shape(concept) == "plain concept", concept
+
+    def test_the_breakdown_separates_populations(self):
+        from forge.evaluation.corpus_extraction import (
+            CorpusExtractionReport,
+            PageScore,
+        )
+
+        report = CorpusExtractionReport(model_id="m", prompt_version="p", scores=[
+            PageScore(path="a.md", canonical_name="Counting Sort", recovered_as="Counting Sort"),
+            PageScore(path="b.md", canonical_name="AVL Tree", recovered_as=None),
+            PageScore(path="c.md", canonical_name="BFS Interview Guide", recovered_as=None),
+            PageScore(path="d.md", canonical_name="DFS - Path Sum", recovered_as=None),
+        ])
+
+        assert report.self_recovery == 0.25, "the strict aggregate is unchanged"
+        by_shape = report.self_recovery_by_shape()
+        assert by_shape["plain concept"] == (1, 2)
+        assert by_shape["document-type suffix"] == (0, 1)
+        assert by_shape["compound pair"] == (0, 1)
+
+    def test_a_failed_page_is_in_no_bucket(self):
+        """The rule the rest of this module already follows."""
+        from forge.evaluation.corpus_extraction import (
+            CorpusExtractionReport,
+            PageScore,
+        )
+
+        report = CorpusExtractionReport(model_id="m", prompt_version="p", scores=[
+            PageScore(path="a.md", canonical_name="Array", status="failed", error="429"),
+        ])
+
+        assert report.self_recovery_by_shape() == {}
