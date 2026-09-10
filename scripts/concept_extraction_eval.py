@@ -59,7 +59,7 @@ import os
 import random
 import sys
 import time
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "engine"))
@@ -69,6 +69,7 @@ from forge.config import Settings
 from forge.corpus.indexer import CorpusIndexer
 from forge.evaluation.corpus_extraction import (
     CorpusExtractionReport,
+    PageScore,
     VaultPage,
     Vocabulary,
     run,
@@ -268,6 +269,20 @@ def main() -> int:
             "that took longer than SECONDS does not sleep at all."
         ),
     )
+    parser.add_argument(
+        "--cache",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "Keep completed pages here and skip them next time. A hosted free "
+            "tier has a daily token allowance as well as a per-minute one, so "
+            "a run large enough to be worth quoting may not fit in one "
+            "sitting: without this, nine hours of paced calls can end with "
+            "nothing on disk. Only pages whose calls all returned are cached; "
+            "a page that failed is retried."
+        ),
+    )
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument("--detail", action="store_true", help="Per-page emitted concepts.")
     args = parser.parse_args()
@@ -394,6 +409,24 @@ def main() -> int:
         for page in sample
     ]
 
+    # Pages already scored by an earlier run of the same sample.
+    done: dict[str, dict] = {}
+    if args.cache and args.cache.is_file():
+        done = {
+            path: score
+            for path, score in json.loads(args.cache.read_text(encoding="utf-8")).items()
+        }
+        skipping = [page for page in sample if page.path in done]
+        if skipping:
+            print(
+                f"resuming   : {len(skipping)} page(s) already scored in "
+                f"{args.cache}, {len(sample) - len(skipping)} to run",
+                file=sys.stderr,
+            )
+        sample = [page for page in sample if page.path not in done]
+        if not sample:
+            print("resuming   : nothing left to run", file=sys.stderr)
+
     # Which corpus, and how big, before the run rather than in the report at
     # the end of it. A wrong tree is cheap to notice now and expensive to
     # notice after eighty minutes of paced model calls.
@@ -508,6 +541,17 @@ def main() -> int:
         forbidden=forbidden,
         on_page=announce,
     )
+    if args.cache:
+        # Written before anything else can fail, so an interrupted session
+        # still leaves its completed pages behind.
+        done.update({s.path: asdict(s) for s in report.complete})
+        args.cache.write_text(json.dumps(done, indent=2, sort_keys=True), encoding="utf-8")
+        # Restored ahead of this run's, so the report reads in sample order.
+        restored = [PageScore(**score) for path, score in sorted(done.items())
+                    if path not in {s.path for s in report.scores}]
+        report.scores = restored + report.scores
+        report.sampled = len(report.scores)
+
     report.population = len(eligible)
     report.seed = args.seed
     report.duration_seconds = time.perf_counter() - started

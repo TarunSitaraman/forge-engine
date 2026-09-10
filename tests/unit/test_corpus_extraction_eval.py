@@ -514,3 +514,78 @@ class TestItRefusesPacingItsBudgetCannotAfford:
 
         assert CLOUD_PRESETS["groq"]["tokens_per_minute"] == 8000
         assert CLOUD_PRESETS["groq"]["max_tokens"] == 4096
+
+
+class TestARunCanBeResumed:
+    """Nine hours of paced calls left nothing on disk, so completed work persists.
+
+    A hosted free tier limits a longer window than a minute, on evidence from
+    2026-09-09: a correctly paced run still 429'd after about ten calls and
+    stayed refused for hours. A sample big enough to be worth quoting may
+    therefore not fit in one sitting, and pacing cannot fix that. Resuming can.
+    """
+
+    def _run(self, cwd, args):
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        script = Path(__file__).resolve().parents[2] / "scripts" / "concept_extraction_eval.py"
+        return subprocess.run(
+            [sys.executable, str(script), *args],
+            capture_output=True,
+            text=True,
+            cwd=str(cwd),
+        )
+
+    def _vault(self, tmp_path, pages=3):
+        vault = tmp_path / "notes"
+        (vault / ".git").mkdir(parents=True)
+        for n in range(pages):
+            (vault / f"topic{n}.md").write_text(
+                f"# Topic{n}\n\nTopic{n} is a way of doing things that people "
+                f"use often and it needs enough words to clear the extractor's "
+                f"own floor for a span to be worth sending anywhere at all.\n",
+                encoding="utf-8",
+            )
+        return vault
+
+    def test_completed_pages_are_not_run_again(self, tmp_path):
+        import json
+
+        vault = self._vault(tmp_path)
+        cache = tmp_path / "cache.json"
+
+        first = self._run(tmp_path, ["--vault", str(vault), "--limit", "2", "--cache", str(cache)])
+        assert first.returncode == 0, first.stderr[-400:]
+        assert len(json.loads(cache.read_text())) == 2
+
+        second = self._run(tmp_path, ["--vault", str(vault), "--limit", "2", "--cache", str(cache)])
+        assert "2 page(s) already scored" in second.stderr
+        assert "nothing left to run" in second.stderr
+
+    def test_the_report_still_covers_every_page_across_sittings(self, tmp_path):
+        vault = self._vault(tmp_path, pages=4)
+        cache = tmp_path / "cache.json"
+
+        self._run(tmp_path, ["--vault", str(vault), "--limit", "2", "--cache", str(cache)])
+        widened = self._run(
+            tmp_path, ["--vault", str(vault), "--limit", "4", "--cache", str(cache), "--json"]
+        )
+
+        import json as jsonlib
+
+        payload = jsonlib.loads(widened.stdout)
+        assert payload["sampled"] == 4, "cached pages must count toward the report"
+        assert "2 to run" in widened.stderr, "only the new pages cost calls"
+
+    def test_the_budget_describes_what_is_left_not_the_whole_sample(self, tmp_path):
+        """Otherwise a resumed run announces a cost it is not going to pay."""
+        vault = self._vault(tmp_path, pages=4)
+        cache = tmp_path / "cache.json"
+
+        self._run(tmp_path, ["--vault", str(vault), "--limit", "2", "--cache", str(cache)])
+        widened = self._run(tmp_path, ["--vault", str(vault), "--limit", "4", "--cache", str(cache)])
+
+        budget = [ln for ln in widened.stderr.splitlines() if ln.startswith("budget")][0]
+        assert "12 model call" in budget, budget

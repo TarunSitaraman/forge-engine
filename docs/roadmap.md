@@ -342,7 +342,11 @@ with a real model**, and populate the graph at corpus scale.
           python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
           .venv/bin/python scripts/concept_extraction_eval.py \
               --vault ~/forge --provider cloud --limit 15 --max-spans 2 \
-              --sleep 40 --json > phase5-concept-eval.json
+              --sleep 40 --cache phase5-eval-cache.json \
+              --json > phase5-concept-eval.json
+
+      Re-run that command until it says nothing is left. Each sitting
+      picks up where the last one stopped.
 
       Both flags in that command are there because the shorter version failed.
       `--vault` because vault resolution looks upward from the working
@@ -374,6 +378,19 @@ with a real model**, and populate the graph at corpus scale.
       The sample above is 15 pages at 2 spans, which is 60 calls and about 40
       minutes rather than 240 and 160. The sample is seeded, so a larger run
       later is its own measurement rather than a superset of this one.
+
+      **Correct pacing is not sufficient, and `--cache` is why.** A run paced
+      at the computed 40 s/call still 429'd after about ten calls on
+      2026-09-09, recovered for a single call twenty minutes later, and was
+      then refused for hours; a laptop asleep in the middle of it added DNS
+      failures on top. Per-minute pacing cannot explain that, so the tier
+      evidently limits a longer window too. That limit has not been measured
+      and no number for it is guessed anywhere in this repository. The
+      consequence taken instead is that a run this size must survive being
+      stopped: `--cache` writes each completed page and skips it next time, so
+      the measurement accumulates across sittings rather than needing one
+      uninterrupted stretch of a resource nobody controls. Nine hours of paced
+      calls produced nothing on disk before it existed.
 
       The harness was re-run offline against the vault on 2026-09-08, after a
       week of extractor changes: 544 concept pages, seeded sample, and every

@@ -124,13 +124,22 @@ CLOUD_PRESETS: dict[str, dict[str, object]] = {
         "base_url": "https://api.groq.com/openai",
         "api_key_env": "GROQ_API_KEY",
         "max_tokens": 4096,
-        # The free tier's tokens-per-minute allowance, measured 2026-08-29 and
-        # confirmed 2026-09-09. Recorded so callers that make many calls can
-        # pace themselves from it rather than guessing: at a 4096 ceiling this
-        # is barely two calls a minute, and a run paced at three a minute falls
-        # further behind every minute until it 429s permanently. That is not
-        # hypothetical; it is what a 40-page eval did on 2026-09-09, one page
-        # in.
+        # The free tier's tokens-per-minute allowance, measured 2026-08-29.
+        # Recorded so callers that make many calls can pace themselves from it
+        # rather than guessing: at a 4096 ceiling this is barely two calls a
+        # minute, and a run paced at three a minute falls further behind every
+        # minute until it 429s permanently. That is what a 40-page eval did on
+        # 2026-09-09, one page in.
+        #
+        # **It is a floor on the pacing, not a guarantee the run will finish.**
+        # A run paced correctly at 40 s/call still 429'd after about ten calls
+        # on 2026-09-09, recovered for one call twenty minutes later, and was
+        # then refused for hours. Per-minute pacing cannot explain that, so the
+        # tier evidently also limits a longer window. Whatever that limit is
+        # has not been measured, and a number is not guessed here: the honest
+        # consequence is that a long run must be resumable rather than paced
+        # into submission, which is why `concept_extraction_eval.py --cache`
+        # exists.
         "tokens_per_minute": 8000,
     },
     "openrouter": {
