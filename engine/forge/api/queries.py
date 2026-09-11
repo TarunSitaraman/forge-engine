@@ -24,6 +24,7 @@ from typing import Any
 
 from ..domain import EntityType, GapKind, QuestionStatus
 from ..graph import KnowledgeGraph
+from ..retrieval import fts_query
 from ..storage import SqliteStore
 from .models import (
     BeliefResponse,
@@ -382,13 +383,26 @@ def list_recent_revisions(store: SqliteStore, *, limit: int = 50) -> list[Revisi
     return [_revision_item(r) for r in store.recent_revisions(limit=limit)]
 
 
-def search_spans(store: SqliteStore, q: str, *, limit: int = 20) -> list[SearchHit]:
-    """Lexical span search. Deterministic: no model, no embeddings."""
+def search_spans(
+    store: SqliteStore, q: str, *, limit: int = 20, prefix_last: bool = False
+) -> list[SearchHit]:
+    """Lexical span search. Deterministic: no model, no embeddings.
+
+    ``q`` is what a person typed, not an FTS5 expression: it is translated by
+    :func:`forge.retrieval.fts_query` before it reaches the store. Passing it
+    through raw is what made ``off-by-one`` and ``O(n)`` raise
+    ``sqlite3.OperationalError`` at every caller of this function, which is
+    all three read surfaces. The store still speaks FTS5; this layer is where
+    human text stops.
+
+    ``prefix_last`` is for search-as-you-type callers. See ``fts_query``.
+    """
     if not q.strip():
         raise BadRequest("a search needs a non-empty query")
     limit, _ = _bounds(limit, 0)
+    expression = fts_query(q, prefix_last=prefix_last)
     hits: list[SearchHit] = []
-    for span, score in store.search_spans(q, limit=limit):
+    for span, score in store.search_spans(expression, limit=limit):
         document = store.get_document(span.document_id)
         source = store.get_source(document.source_id) if document else None
         hits.append(

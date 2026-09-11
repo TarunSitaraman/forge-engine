@@ -450,7 +450,11 @@ def browse_search(settings: Settings, query: str, *, limit: int = 50) -> list[Se
     if not query.strip():
         return []
     with open_store(settings) as store:
-        return queries.search_spans(store, query, limit=limit)
+        # prefix_last: the dashboard runs this on a debounce while the user is
+        # still typing, so the word in progress has to match the words it
+        # could become. Without it every keystroke but the last reports that
+        # the vault contains nothing.
+        return queries.search_spans(store, query, limit=limit, prefix_last=True)
 
 
 def browse_gaps(settings: Settings, *, limit: int = 100) -> GapResponse:

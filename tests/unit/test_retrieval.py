@@ -19,7 +19,7 @@ from forge.domain import (
     deterministic_provenance,
 )
 from forge.retrieval import SearchQuery, SearchService
-from forge.retrieval.search import _fts_query
+from forge.retrieval.search import fts_query
 
 
 class FakeEmbeddings:
@@ -146,7 +146,43 @@ class TestLexicalSearch:
         SearchService(store).search(SearchQuery(text=query))  # must not raise
 
     def test_embedded_quotes_are_doubled(self):
-        assert _fts_query('quote"inside') == '"quote""inside"'
+        assert fts_query('quote"inside') == '"quote""inside"'
+
+
+class TestSearchAsYouType:
+    """`prefix_last`, which exists because FTS5 matches whole tokens.
+
+    Without it a search box reports that the vault contains nothing for every
+    keystroke of a word except the last one, which reads as a broken search
+    even though each query returns in milliseconds.
+    """
+
+    def test_a_word_in_progress_matches_the_words_it_could_become(self):
+        assert fts_query("retriev", prefix_last=True) == '"retriev"*'
+
+    def test_a_trailing_space_means_that_word_is_finished(self):
+        assert fts_query("retrieval ", prefix_last=True) == '"retrieval"'
+
+    def test_only_the_last_token_is_a_prefix(self):
+        assert fts_query("hash ma", prefix_last=True) == '"hash" OR "ma"*'
+
+    def test_off_by_default(self):
+        assert fts_query("retriev") == '"retriev"'
+
+    def test_a_partial_word_finds_what_the_whole_word_finds(self, populated):
+        """The behaviour the flag is for, through the service."""
+        store, *_ = populated
+        whole = SearchService(store).search(SearchQuery(text="retrieval"))
+        assert whole, "fixture has nothing to match"
+        partial = store.search_spans(fts_query("retriev", prefix_last=True))
+        assert {span.id for span, _ in partial} >= {h.span.id for h in whole}
+
+    @pytest.mark.parametrize("query", ["!!!", "...", "(", '"'])
+    def test_input_with_no_words_in_it_matches_nothing_and_does_not_raise(
+        self, populated, query
+    ):
+        store, *_ = populated
+        assert store.search_spans(fts_query(query, prefix_last=True)) == []
 
 
 class TestFilters:
