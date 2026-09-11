@@ -147,7 +147,7 @@ class SearchService:
             return []
 
         # Over-fetch before filtering, so filters do not silently starve results.
-        raw = self.store.search_spans(_fts_query(query.text), limit=max(query.limit * 5, 50))
+        raw = self.store.search_spans(fts_query(query.text), limit=max(query.limit * 5, 50))
 
         hits: list[SearchHit] = []
         for span, rank in raw:
@@ -350,7 +350,7 @@ class SearchService:
         return len(vectors)
 
 
-def _fts_query(text: str) -> str:
+def fts_query(text: str, *, prefix_last: bool = False) -> str:
     """Turn user text into a safe FTS5 MATCH expression.
 
     FTS5 treats several characters as operators, so each token is wrapped in
@@ -358,9 +358,26 @@ def _fts_query(text: str) -> str:
     otherwise a query like ``quote"inside`` terminates the string early and
     SQLite raises a syntax error the user has no way to diagnose. This is the
     same shape as SQL injection, in a query language most callers never see.
+
+    Public, rather than private to this module, because every surface that
+    accepts typed text needs it. It was private while :class:`SearchService`
+    was the only caller, and the dashboard, the HTTP API and the MCP server
+    reached the store down a second path that passed the text through
+    untranslated. On a vault of DSA notes that meant ``off-by-one`` raised
+    *no such column: by*, and ``O(n)`` and ``don't`` raised syntax errors,
+    out of a search box.
+
+    ``prefix_last`` matches the final token as a prefix, for callers that
+    search while the user is still typing. FTS5 matches whole tokens, so
+    without it ``attentio`` finds nothing where ``attention`` finds thirty
+    three: a box reporting "nothing matches" for every keystroke but the last
+    reads as broken, however fast each query underneath it returns. A trailing
+    space means the word is finished, so the prefix is not applied.
     """
     tokens = [t for t in (w.strip() for w in text.split()) if t]
     if not tokens:
         return '""'
-    escaped = [t.replace('"', '""') for t in tokens]
-    return " OR ".join(f'"{t}"' for t in escaped)
+    quoted = [f'"{t.replace(chr(34), chr(34) * 2)}"' for t in tokens]
+    if prefix_last and not text[-1].isspace():
+        quoted[-1] += "*"
+    return " OR ".join(quoted)

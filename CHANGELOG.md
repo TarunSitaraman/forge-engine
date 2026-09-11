@@ -7,6 +7,31 @@ that this is pre-1.0: the CLI's output format and the derived store's schema
 may change between minor versions. The store is rebuildable from the vault,
 so a schema change costs a re-index and never your notes.
 
+## Unreleased
+
+### Fixed
+
+- **Typing a hyphen, a bracket or an apostrophe into the dashboard's search
+  box raised `sqlite3.OperationalError`.** `off-by-one` came back as *no such
+  column: by*, and `O(n)`, `don't` and `c++` as FTS5 syntax errors. FTS5's
+  `MATCH` takes a query language, not a search string, and
+  `api.queries.search_spans` passed typed text into it untranslated, so every
+  caller of that function was affected: `forge dash`, the HTTP API and the MCP
+  server. `SearchService` had been translating its queries since Phase 2 and
+  had a test proving hostile input is safe; the second path around it did not.
+  The translator is now `forge.retrieval.fts_query`, public, called in
+  `queries.search_spans`, so human text stops at that layer and the store
+  still speaks FTS5.
+- **Search found nothing until the last letter of a word landed.** FTS5
+  matches whole tokens, so `attentio` returned nothing where `attention`
+  returned 33 hits: on a 674-file vault the box reported "nothing in the vault
+  matches" for eight of the nine keystrokes in a word. The dashboard searches
+  on a 250 ms debounce while you type, so it now asks `fts_query` to match the
+  final token as a prefix, and results narrow as the word is typed (50 hits at
+  `atte`, 41 at `atten`, 33 at `attention`). A trailing space means the word is
+  finished and turns the prefix off. This looked like a performance problem and
+  was reported as one; every query underneath it returns in under 11 ms.
+
 ## 0.2.0 (2026-09-08)
 
 ### Added

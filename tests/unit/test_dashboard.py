@@ -250,6 +250,27 @@ class TestBrowsing:
         assert hits, "lexical search found nothing in an indexed vault"
         assert all(hit.text for hit in hits)
 
+    def test_a_word_being_typed_finds_hits_before_its_last_letter(self, live_vault):
+        """The box searches on a debounce while you type, so a partial word
+        has to match. It used to match nothing: FTS5 matches whole tokens, so
+        every keystroke but the last reported that the vault contained
+        nothing, which reads as a broken search rather than as a narrow one."""
+        whole = {hit.span_id for hit in browse_search(live_vault, "traversal")}
+        assert whole
+        for partial in ("trav", "traver", "traversa"):
+            found = {hit.span_id for hit in browse_search(live_vault, partial)}
+            assert whole <= found, f"{partial!r} lost hits that {'traversal'!r} finds"
+
+    @pytest.mark.parametrize(
+        "query", ["off-by-one", "O(n)", "don't", "c++", 'a"b', "AND", "NOT x", "(x"]
+    )
+    def test_punctuation_in_the_box_is_not_a_crash(self, live_vault, query):
+        """Every one of these raised `sqlite3.OperationalError` out of the
+        search worker: the dashboard reached the store down a path that passed
+        typed text into FTS5 as an expression. On a vault of DSA notes
+        `off-by-one` and `O(n)` are things a person actually types."""
+        browse_search(live_vault, query)  # must not raise
+
 
 # -- rendering -------------------------------------------------------------
 
