@@ -261,6 +261,19 @@ class TestBrowsing:
             found = {hit.span_id for hit in browse_search(live_vault, partial)}
             assert whole <= found, f"{partial!r} lost hits that {'traversal'!r} finds"
 
+    def test_two_words_still_mean_both_words(self, live_vault):
+        """Translating typed text must not change what the query means.
+
+        FTS5's own default for space-separated terms is AND. The translation
+        this path now does has to ask for AND explicitly, or every multi-word
+        search silently widens into an OR: on the reference vault `what is rag`
+        went from 25 spans to 2,225 the first time this was wired up with OR.
+        """
+        both = {h.span_id for h in browse_search(live_vault, "graph traversal")}
+        either = {h.span_id for h in browse_search(live_vault, "traversal")}
+        assert both, "fixture has no span holding both words"
+        assert both < either, "an AND search must be stricter than one of its terms"
+
     @pytest.mark.parametrize(
         "query", ["off-by-one", "O(n)", "don't", "c++", 'a"b', "AND", "NOT x", "(x"]
     )

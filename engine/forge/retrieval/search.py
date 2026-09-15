@@ -350,7 +350,9 @@ class SearchService:
         return len(vectors)
 
 
-def fts_query(text: str, *, prefix_last: bool = False) -> str:
+def fts_query(
+    text: str, *, prefix_last: bool = False, match_all: bool = False
+) -> str:
     """Turn user text into a safe FTS5 MATCH expression.
 
     FTS5 treats several characters as operators, so each token is wrapped in
@@ -370,14 +372,26 @@ def fts_query(text: str, *, prefix_last: bool = False) -> str:
     ``prefix_last`` matches the final token as a prefix, for callers that
     search while the user is still typing. FTS5 matches whole tokens, so
     without it ``attentio`` finds nothing where ``attention`` finds thirty
-    three: a box reporting "nothing matches" for every keystroke but the last
-    reads as broken, however fast each query underneath it returns. A trailing
-    space means the word is finished, so the prefix is not applied.
+    six: a box reporting "nothing matches" for every keystroke but the last
+    reads as broken, however fast each query underneath it returns.
+
+    The prefix is applied only when the text ends on a letter or digit,
+    which is the only state that means "mid-word". Testing for a trailing
+    space instead is not the same thing and is actively wrong: FTS5 discards
+    the punctuation inside a quoted phrase, so ``c++`` tokenises to ``c`` and
+    ``"c++"*`` is the glob ``c*``, which matched 6,228 of this vault's 7,562
+    spans. A query that returns 82% of the corpus is indistinguishable from a
+    broken one.
+
+    ``match_all`` joins the tokens with AND rather than OR. Callers that
+    replace FTS5's own implicit AND need it, or a two-word search silently
+    widens: ``what is rag`` went from 25 spans to 2,225 when this function
+    was first put on the span-search path with OR.
     """
     tokens = [t for t in (w.strip() for w in text.split()) if t]
     if not tokens:
         return '""'
     quoted = [f'"{t.replace(chr(34), chr(34) * 2)}"' for t in tokens]
-    if prefix_last and not text[-1].isspace():
+    if prefix_last and text[-1].isalnum():
         quoted[-1] += "*"
-    return " OR ".join(quoted)
+    return (" AND " if match_all else " OR ").join(quoted)

@@ -45,6 +45,11 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 REQUIRED = "textual"
 
+#: Rows the search tab asks for. The status line has to say when it is hit,
+#: because a capped count reads as a total: `atte` matches 89 spans in the
+#: reference vault and the table can only show 50 of them.
+SEARCH_LIMIT = 50
+
 INSTALL_HINT = (
     "forge dash needs the optional TUI extra.\n"
     "  pip install 'forge-kb[tui]'\n"
@@ -793,7 +798,7 @@ def build_dashboard(settings: Settings, snapshot: VaultSnapshot):
 
         @work(thread=True, exclusive=True, group="search")
         def _search_worker(self, query: str) -> None:
-            hits = browse_search(settings, query)
+            hits = browse_search(settings, query, limit=SEARCH_LIMIT)
             self.call_from_thread(self._show_search, hits, query)
 
         def _show_search(self, hits: list[Any], query: str) -> None:
@@ -807,11 +812,23 @@ def build_dashboard(settings: Settings, snapshot: VaultSnapshot):
                     escape(fit(hit.text, 90)),
                     key=hit.span_id,
                 )
-            self.query_one("#search-status", Static).update(
-                f"[{DIM}]{len(hits):,} span(s) matching {escape(repr(query))}[/]"
-                if hits
-                else f"[{WARN}]nothing in the vault matches {escape(repr(query))}[/]"
-            )
+            if not hits:
+                status = f"[{WARN}]nothing in the vault matches {escape(repr(query))}[/]"
+            elif len(hits) >= SEARCH_LIMIT:
+                # Not "50 span(s) matching": that is the row cap, and printing
+                # it as a total tells the reader the vault holds 50 when it may
+                # hold thousands. The concept and issue panes say "showing X of
+                # Y" for the same reason; here the true total is not known
+                # without a second query, so say which number this is.
+                status = (
+                    f"[{DIM}]showing the first {len(hits):,} matches for "
+                    f"{escape(repr(query))}, there are more[/]"
+                )
+            else:
+                status = (
+                    f"[{DIM}]{len(hits):,} span(s) matching {escape(repr(query))}[/]"
+                )
+            self.query_one("#search-status", Static).update(status)
             self.query_one("#search-detail", Static).update("")
 
         # -- issues and gaps -----------------------------------------------
