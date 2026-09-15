@@ -396,11 +396,17 @@ def search_spans(
     human text stops.
 
     ``prefix_last`` is for search-as-you-type callers. See ``fts_query``.
+
+    ``match_all`` is not optional here: FTS5's own default for
+    space-separated terms is AND, so translating without it would quietly
+    turn every multi-word search on these surfaces into an OR and widen the
+    results several-fold. Translation is meant to stop the crashes, not to
+    change what a query means.
     """
     if not q.strip():
         raise BadRequest("a search needs a non-empty query")
     limit, _ = _bounds(limit, 0)
-    expression = fts_query(q, prefix_last=prefix_last)
+    expression = fts_query(q, prefix_last=prefix_last, match_all=True)
     hits: list[SearchHit] = []
     for span, score in store.search_spans(expression, limit=limit):
         document = store.get_document(span.document_id)

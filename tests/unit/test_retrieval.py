@@ -169,6 +169,44 @@ class TestSearchAsYouType:
     def test_off_by_default(self):
         assert fts_query("retriev") == '"retriev"'
 
+    @pytest.mark.parametrize("query", ["c++", "O(n)", "a.", "x-"])
+    def test_text_ending_in_punctuation_is_not_a_prefix(self, query):
+        """The bug this guard exists for.
+
+        FTS5 drops punctuation inside a quoted phrase, so `"c++"*` is the glob
+        `c*`. Appending the star to anything that does not end mid-word turns a
+        narrow query into one that matches most of the corpus, which is as
+        useless as the crash it replaced.
+        """
+        assert not fts_query(query, prefix_last=True).endswith("*")
+
+    def test_a_punctuation_ending_query_still_matches_its_own_word(self, populated):
+        store, *_ = populated
+        assert store.search_spans(fts_query("retrieval!", prefix_last=True))
+
+
+class TestMatchAll:
+    """`match_all`, which exists because FTS5's own default is AND.
+
+    A caller that replaces raw text with a translation has to choose a joiner,
+    and choosing OR silently widens every multi-word search on that surface.
+    """
+
+    def test_tokens_are_ored_by_default(self):
+        assert fts_query("hash map") == '"hash" OR "map"'
+
+    def test_match_all_ands_them(self):
+        assert fts_query("hash map", match_all=True) == '"hash" AND "map"'
+
+    def test_and_narrows_where_or_widens(self, populated):
+        store, *_ = populated
+        wide = store.search_spans(fts_query("retrieval heap"), limit=500)
+        narrow = store.search_spans(fts_query("retrieval heap", match_all=True), limit=500)
+        assert len(narrow) < len(wide), "AND must be stricter than OR on this fixture"
+
+    def test_prefix_and_match_all_compose(self):
+        assert fts_query("hash ma", prefix_last=True, match_all=True) == '"hash" AND "ma"*'
+
     def test_a_partial_word_finds_what_the_whole_word_finds(self, populated):
         """The behaviour the flag is for, through the service."""
         store, *_ = populated

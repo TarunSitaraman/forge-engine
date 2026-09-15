@@ -24,13 +24,33 @@ so a schema change costs a re-index and never your notes.
   still speaks FTS5.
 - **Search found nothing until the last letter of a word landed.** FTS5
   matches whole tokens, so `attentio` returned nothing where `attention`
-  returned 33 hits: on a 674-file vault the box reported "nothing in the vault
+  returned 36 spans: on a 674-file vault the box reported "nothing in the vault
   matches" for eight of the nine keystrokes in a word. The dashboard searches
   on a 250 ms debounce while you type, so it now asks `fts_query` to match the
-  final token as a prefix, and results narrow as the word is typed (50 hits at
-  `atte`, 41 at `atten`, 33 at `attention`). A trailing space means the word is
-  finished and turns the prefix off. This looked like a performance problem and
-  was reported as one; every query underneath it returns in under 11 ms.
+  final token as a prefix, and the result set narrows as the word is typed: 89
+  spans at `atte`, 44 at `atten`, 36 at `attention`. The prefix is applied only
+  when the text ends on a letter or digit, which is the only state that means
+  mid-word: FTS5 discards punctuation inside a quoted phrase, so `"c++"*` is
+  the glob `c*` and matched 6,228 of the vault's 7,562 spans. A query that
+  returns 82% of the corpus is no more useful than the crash it replaced. This
+  looked like a performance problem and was reported as one; every query
+  underneath it returns in under 11 ms.
+
+### Changed
+
+- **`forge.retrieval.fts_query` is public, and takes `match_all`.** It was
+  private to `retrieval/search.py`. `api.queries.search_spans` passes
+  `match_all=True` because FTS5's own default for space-separated terms is
+  AND: translating without it would have turned every multi-word search on the
+  dashboard, the HTTP API and the MCP server into an OR, widening `what is rag`
+  from 25 spans to 2,225. The translation exists to stop the crashes, not to
+  change what a query means. `SearchService` keeps the OR it has always used,
+  where hits are ranked rather than listed.
+- **The dashboard's search status line no longer prints a row cap as a
+  total.** It asks for 50 rows, so "50 span(s) matching" was wrong whenever
+  more than 50 matched, and prefix search makes that routine: `atte` matches 89.
+  It now says it is showing the first 50 and that there are more, which is what
+  the concept and issue panes already do.
 
 ## 0.2.0 (2026-09-08)
 
