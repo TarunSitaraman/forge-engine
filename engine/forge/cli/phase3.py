@@ -522,7 +522,7 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         """
         from ..answering import Answerer
         from ..llm import require_provider
-        from ..llm.base import LLMError, ProviderUnavailable
+        from ..llm.base import ProviderUnavailable
         from ..retrieval import SearchService
 
         settings = settings_factory(vault)
@@ -541,10 +541,24 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         # implements: retrieval still runs and still reports its passages.
         provider = None
         try:
-            provider = require_provider(settings)
+            # role="extraction", not require_provider's "analysis" default:
+            # `Answerer.ask` sends a CompletionRequest whose model_role
+            # defaults to "extraction", so gating on "analysis" would check a
+            # model this command never uses. That fails both ways: an empty
+            # FORGE_MODEL_ANALYSIS refuses a question a healthy extraction
+            # model could answer, and an empty extraction model passes the
+            # gate and dies inside complete().
+            provider = require_provider(settings, role="extraction")
         except ProviderUnavailable as exc:
             typer.echo(f"no model available: {exc}", err=True)
-        except LLMError as exc:
+        except Exception as exc:
+            # Deliberately broad, and it was broad before this fix. Narrowing
+            # it to LLMError re-opened the traceback this change exists to
+            # close: OllamaProvider builds an httpx.Client in __init__, so a
+            # malformed FORGE_OLLAMA_URL raises httpx.InvalidURL, which is not
+            # an LLMError and would escape both here and the LLMError net in
+            # main(). Losing the model is recoverable for this command, so
+            # every way of losing it degrades rather than crashes.
             typer.echo(f"provider error: {type(exc).__name__}: {exc}", err=True)
 
         answer = Answerer(

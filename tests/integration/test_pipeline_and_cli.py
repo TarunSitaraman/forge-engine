@@ -155,6 +155,12 @@ class TestCli:
             # with nothing listening on it. That would have made the test
             # depend on the developer's machine not running Ollama.
             "FORGE_OLLAMA_URL": "http://127.0.0.1:1",
+            # CliRunner layers env over os.environ and Settings.load also
+            # merges the settings file, so a developer machine with a
+            # fallback configured would hand `ask` a healthy provider and
+            # fail this test. Neutralised explicitly: the point is that the
+            # configured model is unreachable, not that none is configured.
+            "FORGE_LLM_FALLBACK": "",
         }
         result = runner.invoke(app, ["ask", "what is a hash map"], env=env)
 
