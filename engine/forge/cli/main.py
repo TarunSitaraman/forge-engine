@@ -30,7 +30,7 @@ from ..config import ConfigError, Settings, env_file_path
 from ..corpus import IndexPipeline, analyze_conventions, compute_stats, load_store
 from ..corpus.diagnostics import frontmatter_report, link_report
 from ..corpus.indexer import CorpusIndexer
-from ..llm import CALLS, ProviderUnavailable, get_provider
+from ..llm import CALLS, LLMError, ProviderUnavailable, get_provider
 from ..logging import bind_run, configure_logging, new_run_id
 from ..spike import render_markdown, run_spike
 
@@ -851,6 +851,21 @@ def main() -> None:  # pragma: no cover
         app()
     except KeyboardInterrupt:
         sys.exit(130)
+    except LLMError as exc:
+        # A provider that is configured but not reachable is an ordinary
+        # operating condition, not a bug: no `ollama serve`, no API key, a
+        # network that is down. It should read as a sentence, not as a stack
+        # trace with the sentence buried in it.
+        #
+        # This is the boundary net, deliberately separate from the per-command
+        # handling. Commands that can carry on without a model should catch
+        # `ProviderUnavailable` themselves and degrade (see `forge ask`, which
+        # still reports its retrieval). This exists so that a command which
+        # does not, or one added later that forgets to, still exits with a
+        # readable message. Nothing else is caught here: an unexpected
+        # exception is a defect and its traceback is the useful output.
+        err(f"{exc}", err=True)
+        sys.exit(2)
 
 
 if __name__ == "__main__":  # pragma: no cover
