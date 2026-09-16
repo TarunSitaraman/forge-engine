@@ -521,20 +521,30 @@ def register(app: typer.Typer, settings_factory: Any) -> None:
         resolve, so it composes in a script.
         """
         from ..answering import Answerer
-        from ..llm import get_provider
-        from ..llm.base import ProviderUnavailable
+        from ..llm import require_provider
+        from ..llm.base import LLMError, ProviderUnavailable
         from ..retrieval import SearchService
 
         settings = settings_factory(vault)
         store = SqliteStore(settings.db_path)
         store.initialize()
 
+        # `require_provider`, not `get_provider`: the latter only *constructs*
+        # the provider, and constructing an OllamaProvider against a dead
+        # daemon succeeds. The connection failure then surfaced from
+        # `provider.complete()` deep inside `Answerer.ask`, escaped this
+        # command entirely, and printed a sixty-line traceback whose last two
+        # lines were the correct, helpful message. The guard was already here;
+        # it was on the line that could not fail. `require_provider` health
+        # checks, so an unreachable model is caught here and `provider` stays
+        # None, which routes into the no-model path `Answerer.ask` already
+        # implements: retrieval still runs and still reports its passages.
         provider = None
         try:
-            provider = get_provider(settings)
+            provider = require_provider(settings)
         except ProviderUnavailable as exc:
             typer.echo(f"no model available: {exc}", err=True)
-        except Exception as exc:
+        except LLMError as exc:
             typer.echo(f"provider error: {type(exc).__name__}: {exc}", err=True)
 
         answer = Answerer(

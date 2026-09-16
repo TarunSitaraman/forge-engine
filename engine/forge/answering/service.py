@@ -194,7 +194,10 @@ class Answerer:
         if self.provider is None:
             return Answer(
                 question=question,
-                text="No model configured; retrieval succeeded but no answer was generated.",
+                # "available", not "configured": this path is now reached both
+                # when no model is configured and when a configured one cannot
+                # be reached, and the caller prints the specific reason.
+                text="No model available; retrieval succeeded but no answer was generated.",
                 passages=hits,
                 answered=False,
             )

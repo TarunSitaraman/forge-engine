@@ -130,6 +130,43 @@ class TestCli:
         assert second["changes"]["unchanged"] == second["files_indexed"]
         assert second["persisted"]["sources"] == 0
 
+    def test_ask_with_an_unreachable_model_reads_as_a_sentence(self, settings):
+        """An unreachable provider must not reach the user as a traceback.
+
+        The regression: `ask` guarded `get_provider`, which only *constructs*
+        the provider. Constructing an OllamaProvider against a dead daemon
+        succeeds, so the guard could not fire; the connection error surfaced
+        from `provider.complete()` inside `Answerer.ask` and printed sixty
+        lines of traceback whose last two lines were the message the guard
+        would have printed. Every unit test passed throughout, because they
+        construct providers rather than run the command.
+
+        Asserting "no traceback" is the whole point, so it is asserted
+        directly rather than via a substring of the happy path.
+        """
+        runner.invoke(app, ["index"], env=self._env(settings))
+        env = {
+            **self._env(settings),
+            "FORGE_LLM_PROVIDER": "ollama",
+            # A port nothing is listening on, so health() fails to connect.
+            # FORGE_OLLAMA_URL is the spelling config.py reads; the first
+            # draft of this test used FORGE_OLLAMA_BASE_URL, which is not
+            # read, and passed anyway by falling back to the default port
+            # with nothing listening on it. That would have made the test
+            # depend on the developer's machine not running Ollama.
+            "FORGE_OLLAMA_URL": "http://127.0.0.1:1",
+        }
+        result = runner.invoke(app, ["ask", "what is a hash map"], env=env)
+
+        assert result.exception is None or isinstance(result.exception, SystemExit)
+        combined = result.stdout + result.stderr
+        assert "Traceback" not in combined
+        # The reason goes to stderr so stdout stays pipeable.
+        assert "cannot reach Ollama" in result.stderr
+        # Retrieval still ran: losing the model must not lose the passages.
+        assert "no answer was generated" in result.stdout
+        assert result.exit_code == 1
+
     def test_status_runs_without_a_model(self, settings):
         result = runner.invoke(app, ["status", "--json"], env=self._env(settings))
         assert result.exit_code == 0
