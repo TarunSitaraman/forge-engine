@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import statistics
 import sys
 import time
@@ -46,7 +47,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "engine"))
 
 from forge.config import Settings  # noqa: E402
 from forge.extraction import CandidateExtractor  # noqa: E402
-from forge.extraction.extractor import MIN_SPAN_CHARS  # noqa: E402
 from forge.extraction.prompts import CONCEPT_INSTRUCTION  # noqa: E402
 from forge.llm import get_provider  # noqa: E402
 from forge.llm.mock import MockProvider  # noqa: E402
@@ -105,6 +105,7 @@ def main() -> int:
     ap.add_argument("--spans", type=int, default=10, help="Spans to time. Each is 2 calls.")
     ap.add_argument("--vault", type=Path, default=None)
     ap.add_argument("--log-level", default="WARNING", help="Engine log level.")
+    ap.add_argument("--seed", type=int, default=0, help="Sampling seed, for a repeatable set.")
     args = ap.parse_args()
 
     # The output is a table; interleaved structlog lines make it unreadable.
@@ -119,18 +120,25 @@ def main() -> int:
     # retracted ~236 h estimate. Walking sources -> documents -> spans is what
     # `forge ingest` wrote, so this counts the same population a real run
     # would send.
-    spans = []
+    candidates = []
     for source in store.list_sources():
         for document in store.documents_for_source(source.id):
-            for span in store.spans_for_document(document.id):
-                if len(span.text.strip()) >= MIN_SPAN_CHARS:
-                    spans.append(span)
-                    if len(spans) >= args.spans:
-                        break
-            if len(spans) >= args.spans:
-                break
-        if len(spans) >= args.spans:
-            break
+            candidates.extend(store.spans_for_document(document.id))
+
+    # MIN_SPAN_CHARS is not the whole filter: `CandidateExtractor._select`
+    # also drops navigation spans. Timing a span the extractor would skip
+    # records a near-zero duration and zero calls, which dilutes the mean,
+    # breaks the calls-per-span ratio, and drags min(per_span) under the 0.1 s
+    # guard so the spread sentence is silently suppressed. Ask the extractor
+    # itself which spans it wants rather than approximating its rules here.
+    probe = CandidateExtractor(None, max_spans=len(candidates) or 1)
+    eligible = list(probe._select(candidates))
+
+    # Sample deterministically rather than taking the first N in store order.
+    # A quotable rate must not depend on which document happens to sort first,
+    # or drift when the vault is re-ingested in a different order.
+    rng = random.Random(args.seed)
+    spans = rng.sample(eligible, min(args.spans, len(eligible))) if eligible else []
     if not spans:
         print("no spans in the store: run `forge index` (and `forge ingest`) first", file=sys.stderr)
         return 2
@@ -152,8 +160,17 @@ def main() -> int:
     for i, span in enumerate(spans, 1):
         current_span["text"] = span.text
         started = time.perf_counter()
+        # Throttle wait is not model latency. `get_provider` returns a
+        # ThrottledProvider whenever FORGE_LLM_MIN_INTERVAL is set, and its
+        # sleeps land inside this timed region. Without the subtraction, a run
+        # paced at 40 s would publish a real 10 s/call as 40 s/call and then
+        # print it into the extract-plan command, which is precisely the
+        # fabricated rate this script exists to stop. assessment_eval.py and
+        # concept_extraction_eval.py subtract it for the same reason.
+        slept_before = getattr(provider, "slept_seconds", 0.0)
         result = extractor.extract([span])
-        elapsed = time.perf_counter() - started
+        waited = getattr(provider, "slept_seconds", 0.0) - slept_before
+        elapsed = time.perf_counter() - started - waited
         per_span.append(elapsed)
         calls += result.llm_calls
         print(
@@ -172,7 +189,7 @@ def main() -> int:
     print(f"model         : {extractor.model_id()}")
     print(f"spans         : {len(per_span)}")
     print(f"calls         : {calls}  ({calls / len(per_span):.1f} per span)")
-    print(f"total         : {total:.1f}s")
+    print(f"total         : {total:.1f}s (model time; throttle waits excluded)")
     print(f"per call      : {per_call:.1f}s")
     print(f"per span      : {statistics.mean(per_span):.1f}s mean, "
           f"{min(per_span):.1f}s min, {max(per_span):.1f}s max")
