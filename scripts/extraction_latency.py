@@ -33,19 +33,23 @@ report a rate near zero, which is correct and useless for planning: only a
 real provider produces a number worth putting in a plan.
 
 **Quote the rate with the population, not only the provider and the model.**
-This script samples whatever spans the vault holds, and on 2026-09-16 that
-included `.aider.chat.history.md` and an `Archive/_index.md` stub. It reported
-1.7 s/call over them while the concept eval, same provider and same model that
-day, measured ~20 s/call over real page content: an 11x gap with matching
-units and matching denominators, caused only by what was in the spans. Output
-is what costs, so a sample of short junk pages is not a sample of the corpus.
+An earlier version of this script published 1.7 s/call that was not an
+extraction rate at all. `forge index` and `forge ingest` write into the same
+store with different chunkers, and the span walk had no `chunk_strategy`
+filter, so it timed index spans: on the reference vault, 7,601 of them
+averaging 342 chars against 5 ingestion spans averaging 1,861. Extraction
+consumes the latter. The filter is now applied, and a store holding no
+ingestion spans is refused rather than measured.
 
-The seeded sample and `_select` filter below remove navigation spans; they do
-**not** remove junk that a vault genuinely contains. Either clean the corpus
-first, or point `--vault` at the scope you actually intend to extract and say
-which scope the number came from. `extraction-cost.md` §2d records this as the
-third time that document has published a wrong rate, and the first time the
-instrument built to prevent it was the one that produced it.
+A first attempt to explain that gap blamed junk pages in the vault. Junk is
+real and worth removing, but it was not the cause, and cleaning the corpus
+would not have fixed a missing filter. The correction is recorded in
+`extraction-cost.md` §2d, which publishes **no** hosted per-call rate:
+`concept_extraction_eval.py` builds heading spans too, so its figure is not a
+replacement.
+
+So: run `forge ingest` over the scope you mean to extract, quote the
+span-length line this script prints, and name the scope.
 """
 
 from __future__ import annotations
@@ -140,9 +144,11 @@ def main() -> int:
     #
     # An earlier version of this walk carried a comment asserting it collected
     # ingestion spans and had no filter to make that so. It reported 1.7 s/call
-    # over 342-char index spans while the real extraction population is several
-    # times larger, and the resulting whole-vault projection was wrong by
-    # roughly 11x. `ingestion/plan.py` and `ingestion/pipeline.py` have always
+    # over 342-char index spans, and every projection built on that figure was
+    # withdrawn. No correction factor is quoted here: the populations differ by
+    # ~5.4x in characters, latency does not track length linearly, and the only
+    # honest number is the one a fixed run produces.
+    # `ingestion/plan.py` and `ingestion/pipeline.py` have always
     # filtered on this field; this script simply did not, which is the same
     # "the guard existed, not on the path that needed it" shape recorded
     # elsewhere in this repository.
@@ -179,7 +185,14 @@ def main() -> int:
     rng = random.Random(args.seed)
     spans = rng.sample(eligible, min(args.spans, len(eligible))) if eligible else []
     if not spans:
-        print("no spans in the store: run `forge index` (and `forge ingest`) first", file=sys.stderr)
+        # Reachable only when ingestion spans exist but `_select` rejected
+        # every one, since the walk above already refuses an empty store.
+        print(
+            "ingestion spans exist but the extractor would skip all of them: "
+            "they are navigation, or below MIN_SPAN_CHARS.\nIngest a scope "
+            "with more prose in it, or raise --spans.",
+            file=sys.stderr,
+        )
         return 2
 
     provider = _provider(args.provider, settings)

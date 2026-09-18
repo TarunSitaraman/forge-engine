@@ -43,6 +43,15 @@ measures is the harness: span construction from real vault files, schema
 validation, the grounding check against real span text, normalization, and the
 scoring itself. Only a real provider measures extraction quality.
 
+**Which spans this scores.** `spans_for()` builds spans with
+`indexer.to_document_and_spans`, the **index** chunker, not the ingestion one
+a real `forge ingest --extract` run consumes. That is deliberate: this eval
+scores a page against its own name and needs page-shaped input. But it means
+both its quality figures and any latency read off it describe index spans, and
+neither transfers to an ingestion run without saying so.
+`docs/research/extraction-cost.md` §2d records a latency figure taken from this
+script being published as an extraction rate, wrongly.
+
 **Cost.** One page is up to `--max-spans` concept calls plus the same number of
 claim calls. Default `--limit 40` and `--max-spans 3` is roughly 240 calls.
 
