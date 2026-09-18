@@ -136,10 +136,15 @@ CLOUD_PRESETS: dict[str, dict[str, object]] = {
         # on 2026-09-09, recovered for one call twenty minutes later, and was
         # then refused for hours. Per-minute pacing cannot explain that, so the
         # tier evidently also limits a longer window. Whatever that limit is
-        # has not been measured, and a number is not guessed here: the honest
-        # consequence is that a long run must be resumable rather than paced
-        # into submission, which is why `concept_extraction_eval.py --cache`
-        # exists.
+        # has since been probed three times (2026-09-09, -16, -17), reaching
+        # roughly 10, 30 and 60 calls before a sustained 429. Those do not
+        # bound a threshold and no number is guessed from them, but one thing
+        # they do establish: the 60-call run was paced at 40 s/call, above the
+        # floor computed from `tokens_per_minute` below, so **pacing does not
+        # buy past this limit**. The honest consequence is unchanged and now
+        # evidenced: a long run must be resumable rather than paced into
+        # submission, which is why `concept_extraction_eval.py --cache` exists.
+        # See `docs/research/extraction-cost.md` §2d.
         "tokens_per_minute": 8000,
     },
     "openrouter": {
