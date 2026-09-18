@@ -63,6 +63,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "engine"))
 from forge.config import Settings  # noqa: E402
 from forge.extraction import CandidateExtractor  # noqa: E402
 from forge.extraction.prompts import CONCEPT_INSTRUCTION  # noqa: E402
+from forge.ingestion.chunking import CHUNK_STRATEGY  # noqa: E402
 from forge.llm import get_provider  # noqa: E402
 from forge.llm.mock import MockProvider  # noqa: E402
 from forge.logging import configure_logging  # noqa: E402
@@ -130,15 +131,38 @@ def main() -> int:
     store = SqliteStore(settings.db_path)
     store.initialize()
 
-    # Ingestion spans, not index spans. Extraction runs inside the ingestion
-    # pipeline, and confusing the two is the 4x overcount that produced the
-    # retracted ~236 h estimate. Walking sources -> documents -> spans is what
-    # `forge ingest` wrote, so this counts the same population a real run
-    # would send.
+    # Ingestion spans, not index spans, and the filter is what makes that true.
+    # `forge index` and `forge ingest` write into the SAME store with different
+    # chunkers, so walking sources -> documents -> spans returns both. On a
+    # vault that has been indexed and barely ingested it returns almost only
+    # index spans: measured 2026-09-18, 7,601 `heading` spans averaging 342
+    # chars against 5 `structural/0.2.0` averaging 1,861.
+    #
+    # An earlier version of this walk carried a comment asserting it collected
+    # ingestion spans and had no filter to make that so. It reported 1.7 s/call
+    # over 342-char index spans while the real extraction population is several
+    # times larger, and the resulting whole-vault projection was wrong by
+    # roughly 11x. `ingestion/plan.py` and `ingestion/pipeline.py` have always
+    # filtered on this field; this script simply did not, which is the same
+    # "the guard existed, not on the path that needed it" shape recorded
+    # elsewhere in this repository.
     candidates = []
     for source in store.list_sources():
         for document in store.documents_for_source(source.id):
-            candidates.extend(store.spans_for_document(document.id))
+            candidates.extend(
+                sp
+                for sp in store.spans_for_document(document.id)
+                if sp.chunk_strategy == CHUNK_STRATEGY
+            )
+
+    if not candidates:
+        print(
+            "no ingestion spans in the store: this times what `forge ingest` "
+            "wrote, not what `forge index` wrote.\nRun `forge ingest <path>` "
+            "over the scope you intend to extract, then re-run.",
+            file=sys.stderr,
+        )
+        return 2
 
     # MIN_SPAN_CHARS is not the whole filter: `CandidateExtractor._select`
     # also drops navigation spans. Timing a span the extractor would skip

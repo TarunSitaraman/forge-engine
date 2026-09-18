@@ -2,7 +2,7 @@
 """Score concept extraction against the vault's own 545 page names.
 
     python3 scripts/concept_extraction_eval.py --vault ~/notes
-    python3 scripts/concept_extraction_eval.py --vault ~/notes --provider cloud --limit 40 --sleep 20
+    python3 scripts/concept_extraction_eval.py --vault ~/notes --provider cloud --limit 40 --sleep 40 --cache run.json
     python3 scripts/concept_extraction_eval.py --vault ~/notes --provider ollama --model qwen3:8b
 
 **Two things that will waste a run.** `--vault` is shown in every line above
@@ -44,11 +44,18 @@ validation, the grounding check against real span text, normalization, and the
 scoring itself. Only a real provider measures extraction quality.
 
 **Cost.** One page is up to `--max-spans` concept calls plus the same number of
-claim calls. Default `--limit 40` and `--max-spans 3` is roughly 240 calls,
-which is what a rate-limited hosted key will tolerate in one sitting, and at
-`--sleep 20` that is about 80 minutes. Raise
-`--limit` when you have the budget; the sample is seeded, so a larger run is a
-superset of nothing and must be compared as its own measurement.
+claim calls. Default `--limit 40` and `--max-spans 3` is roughly 240 calls.
+
+**That is more than a free hosted tier will do in one sitting**, and this line
+used to claim the opposite. Three runs against Groq's free tier reached
+roughly 10, 30 and 60 calls before a sustained 429; the 60-call run was paced
+at 40 s/call, above what `_pacing_floor` computes, so pacing does not buy past
+it. **Pass `--cache` on any hosted run**: it banks completed pages and retries
+only the failures, and without it a run that dies at call 61 leaves nothing on
+disk. See `docs/research/extraction-cost.md` §2d.
+
+Raise `--limit` when you have the budget; the sample is seeded, so a larger run
+is a superset of nothing and must be compared as its own measurement.
 """
 
 from __future__ import annotations
