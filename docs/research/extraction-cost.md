@@ -4,14 +4,21 @@
 subsets are worth spending that on, and how to run it without babysitting.*
 
 **Headline: the call count is settled, 3,372 calls for the whole vault, 196
-for `Technologies/Docs/`. The per-call latency is not. The 63 s/call borrowed
-from the Phase 4 assessment eval understates real extraction by roughly 3.6×
-(§2. This was stated as 7× until 2026-08-19; see the correction there). The
-leading suspect was that Qwen3 reasons before every answer because nothing
-tells it not to. That has now been tested, and turning reasoning off buys 2.5×
-at the cost of a false-positive conflict, so it is rejected (§2).
-Extraction is resumable at document granularity, so it does not need to finish
-in one sitting.**
+for `Technologies/Docs/`. The per-call latency depends on where you run it, and
+every published figure in this document has been wrong at least once.
+Locally, the 63 s/call borrowed from the Phase 4 assessment eval understates
+real extraction by roughly 3.6× (§2. This was stated as 7× until 2026-08-19;
+see the correction there). The leading suspect was that Qwen3 reasons before
+every answer because nothing tells it not to. That has now been tested, and
+turning reasoning off buys 2.5× at the cost of a false-positive conflict, so it
+is rejected (§2).**
+
+**On a hosted provider (§2d, 2026-09-17), latency stops mattering: Groq's
+`gpt-oss-120b` runs extraction at ~20 s/call, but the free tier's token window
+closes after roughly 60 calls and stays closed for hours, which is bounded here
+from two independent runs and is not something pacing can fix. Extraction is
+resumable at document granularity, so it does not need to finish in one
+sitting: on a free tier it cannot.**
 
 ---
 
@@ -446,6 +453,96 @@ The comparison this enables is *relative*, prompt A against prompt B, model X
 against model Y, on the same set: which is exactly what was missing when the
 `0.3.0` rewrite and the `+nothink` experiment had to be recorded as
 unjudgeable.
+
+## 2d. Hosted provider, measured (2026-09-16/17): and the rate that was wrong twice
+
+*Run against Groq's free tier, `openai/gpt-oss-120b`, from a vault of 671
+files. Two instruments, two numbers, and the gap between them is the finding.*
+
+**Headline: on a hosted provider the binding constraint is not latency, it is
+the free tier's token window, which closes after roughly 60 calls and stays
+closed for hours. Latency itself is 20-40x better than the local figures above
+and is no longer worth planning around.**
+
+### The window, bounded twice
+
+`scripts/concept_extraction_eval.py --limit 40 --max-spans 3` was run twice,
+once unpaced and once at `--sleep 40`. Both died at the same place.
+
+| Run | Pacing | Pages completed | Where it stopped |
+|---|---|---:|---|
+| 2026-09-16 | none | 5 of 40 | 429 at ~30 calls, then hours of refusal |
+| 2026-09-17 | `--sleep 40` | 10 of 40 | 429 at ~60 calls, then hours of refusal |
+
+The second run **paced correctly**: `_pacing_floor` computes 39.7 s/call from
+`60 x (max_tokens + 1200) / tokens_per_minute`, and 40 cleared it. It made no
+difference to where the run ended.
+
+So the longer window this file has called unmeasured since 2026-09-09 is now
+bounded from two independent runs: **on the order of 60 calls, after which the
+tier refuses for hours.** Per-minute pacing cannot defeat it, because it is not
+a per-minute limit. `--sleep` buys nothing past that point and only makes the
+approach to it slower.
+
+**The consequence for planning is the one this file already drew, now with a
+number behind it: a hosted free tier cannot produce a 240-call evaluation in
+one sitting, and `--cache` is not a convenience but the only way such a run
+finishes at all.** The 2026-09-17 run banked its 10 completed pages and the
+30 failures are retried on resume.
+
+### Two latency numbers, 11x apart, and why
+
+`scripts/extraction_latency.py --provider cloud --spans 10` reported **1.7
+s/call, 3.5 s/span**, spread 2.3x, no 429. The concept eval on the same
+provider, the same model and the same day reported **~20 s/call, ~40 s/span**
+across five pages of clean 200s before any 429 appeared.
+
+Both numbers are real. The difference is **what was in the spans**, and the
+latency script chose badly:
+
+* It samples ingestion spans across the whole vault. That vault contained
+  `.aider.chat.history.md` (1,073 chars) and `Archive/_index.md` (607 chars),
+  which are junk the corpus should not have held. Small input, small output,
+  fast call.
+* The concept eval sends ~1,200 chars of real page content and asks a
+  reasoning model for up to 15 concepts and 10 claims. More output, and output
+  is what costs.
+
+**This is the third time this document has recorded the same error, and the
+first time it was committed by the instrument built to prevent it.** §1 was a
+per-span figure divided by a per-call one. §2 applied an assessment rate to
+extraction. Here the denominators matched and the units matched; what differed
+was the *population*, and nothing in the script or its output said so.
+
+The rule that follows is narrower than "measure it" and is the one worth
+carrying: **quote a rate with the population it was measured over, not only
+the provider and the model.** Ten spans sampled from a corpus containing junk
+is not ten spans of the corpus.
+
+`extraction_latency.py` now samples with a seed and asks the extractor's own
+`_select` which spans it would send, which removes navigation spans but does
+**not** fix this: a seeded sample of a corpus containing junk still draws junk.
+The fix is to clean the corpus, or to name the scope (`--vault
+Technologies/Docs`) and say so when quoting.
+
+### What to plan with, for a hosted provider
+
+Neither latency number should be used alone. For `gpt-oss-120b` on Groq,
+over real page content, **~20 s/call** is the figure with the right
+population behind it. But it is not the constraint:
+
+| Scope | Calls | At 20 s/call | Sittings on the free tier |
+|---|---:|---:|---:|
+| `Technologies/Docs/` | 196 | ~65 min | ~4 |
+| Whole vault (1,809 ingestion spans) | 3,618 | ~20 h | ~60 |
+
+The right-hand column is the one that decides anything. A paid tier collapses
+it to one; the free tier does not make a whole-vault run slow, it makes it
+impossible to finish without weeks of resumption.
+
+**The ~2 hour whole-vault projection briefly derived from the 1.7 s/call
+figure was wrong on both counts** and is withdrawn: the rate was measured over
+the wrong population, and wall clock was never the binding constraint anyway.
 
 ---
 
