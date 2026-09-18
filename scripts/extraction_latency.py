@@ -31,6 +31,21 @@ concepts are any good; `extraction_eval.py` and `concept_extraction_eval.py`
 do that. Running it with the scripted provider measures the harness and will
 report a rate near zero, which is correct and useless for planning: only a
 real provider produces a number worth putting in a plan.
+
+**Quote the rate with the population, not only the provider and the model.**
+This script samples whatever spans the vault holds, and on 2026-09-16 that
+included `.aider.chat.history.md` and an `Archive/_index.md` stub. It reported
+1.7 s/call over them while the concept eval, same provider and same model that
+day, measured ~20 s/call over real page content: an 11x gap with matching
+units and matching denominators, caused only by what was in the spans. Output
+is what costs, so a sample of short junk pages is not a sample of the corpus.
+
+The seeded sample and `_select` filter below remove navigation spans; they do
+**not** remove junk that a vault genuinely contains. Either clean the corpus
+first, or point `--vault` at the scope you actually intend to extract and say
+which scope the number came from. `extraction-cost.md` §2d records this as the
+third time that document has published a wrong rate, and the first time the
+instrument built to prevent it was the one that produced it.
 """
 
 from __future__ import annotations
@@ -187,7 +202,15 @@ def main() -> int:
     per_call = total / calls
     print(f"\nprovider      : {provider.capabilities.name}")
     print(f"model         : {extractor.model_id()}")
-    print(f"spans         : {len(per_span)}")
+    # Print the population, not only the provider and the model. A rate is
+    # meaningless without it: the 1.7 s/call this script once reported came
+    # from spans averaging a few hundred characters, and nothing in the
+    # output said so. Mean span length makes that visible on the line the
+    # reader is about to paste somewhere.
+    chars = [len(sp.text) for sp in spans]
+    print(f"spans         : {len(per_span)}  "
+          f"({statistics.mean(chars):.0f} chars mean, "
+          f"{min(chars)}-{max(chars)} range)")
     print(f"calls         : {calls}  ({calls / len(per_span):.1f} per span)")
     print(f"total         : {total:.1f}s (model time; throttle waits excluded)")
     print(f"per call      : {per_call:.1f}s")
