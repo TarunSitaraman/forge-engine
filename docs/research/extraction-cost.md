@@ -522,8 +522,21 @@ and they do **not** agree on a threshold:
 | Run | Pacing | Calls before sustained 429 |
 |---|---|---:|
 | 2026-09-09 (config.py preset note) | ~40 s/call | ~10 |
-| 2026-09-16 | none | ~30 |
+| 2026-09-16 | none (see below) | ~30 |
 | 2026-09-17 | `--sleep 40` | ~60 |
+
+**How the unpaced run ran at all is itself a defect worth recording.**
+`concept_extraction_eval.py` refuses any `--sleep` below the computed floor,
+and that guard landed 2026-09-15, the day before. It did not fire, because
+`_pacing_floor` reads **`FORGE_CLOUD_PRESET`** while the vendor is selected by
+**`FORGE_CLOUD_VENDOR`**, and that run set only the latter. With no preset the
+budget lookup returns nothing, `_pacing_floor` returns `None`, and
+`if floor and args.sleep < floor` skips silently. **Configure the vendor
+without the preset and the rate-limit guard disables itself**, which is the
+same "a guard that existed was not on the path that needed it" shape as the
+chunker defect above and as the two recorded in this repository's `CLAUDE.md`.
+Not fixed here; it wants either a shared resolution path or a refusal when a
+cloud vendor is configured with no budget on record.
 
 An earlier draft of this section read those last two as "both died at the same
 place" and bounded the window at ~60 calls. **That is withdrawn**: 10, 30 and
